@@ -2,9 +2,9 @@
 
 - 更新时间：2026-11-24
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
-- 当前分支：`main`（PR #1 已合并；`v0.2.0` 已发布）
+- 当前分支：`main`（PR #1 已合并；`v0.2.1` 已发布）
 - 基线 HEAD：`a93c096 Merge pull request #1 from CClishan/codex/p1-palette-remote`
-- 状态：P0 完成，P1 功能完成，P2 5/5；原生删除和 AI 会话结束已补齐；2026-11-24 完成总览、项目页和分类收口；本地 Release DMG 已重新打包（未上传），landing 继续使用已发布下载入口；旧 `https://fizzdeck.pages.dev` 保留可用。
+- 状态：P0 完成，P1 功能完成，P2 5/5；原生删除和 AI 会话结束已补齐；2026-11-24 完成总览、项目页和分类收口；`v0.2.1` Release DMG 已上传并验证，landing 已更新为 v0.2.1；旧 `https://fizzdeck.pages.dev` 保留可用。
 
 ## 新对话开场提示
 
@@ -13,7 +13,7 @@
 ```text
 继续 FizzDeck 原生 macOS 项目，仓库在 /Users/a003/dsh-workspace/repo-dashboard。
 
-先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 main 已完成 P0、P1 功能和 P2 5/5；v0.2.0 已发布，app 从 `https://github.com/CClishan/Fizzdeck/releases/latest` 下载。下一步优先补 P1 的真实 Git 错误路径、菜单栏/通知直测，或继续质量与性能任务。删除项目只能用临时目录验证，不要对用户真实项目点击确认。
+先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 main 已完成 P0、P1 功能和 P2 5/5；v0.2.1 已发布，app 从 `https://github.com/CClishan/Fizzdeck/releases/latest` 下载。下一步优先补 P1 的真实 Git 错误路径、菜单栏/通知直测，或继续质量与性能任务。删除项目只能用临时目录验证，不要对用户真实项目点击确认。
 
 不要在没有明确确认时再发版、签名、公证或部署。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
 
@@ -27,10 +27,10 @@
 | 项目 | 当前状态 |
 |---|---|
 | 原生 app | P0 完成，P1 功能完成，P2 5/5；`swift build`、`swift test` 通过（32 例）；AI 会话列表/过滤/恢复/结束 CLI 可用 |
-| 原生分发 | `v0.2.0` arm64 DMG 已发布，ad-hoc 签名；未做 Developer ID、公证和自动更新 |
+| 原生分发 | `v0.2.1` arm64 DMG 已发布，ad-hoc 签名；未做 Developer ID、公证和自动更新 |
 | Web UI | 保留在 `src/` + `server.mjs`，不是当前主入口 |
-| Landing | `https://koroo.top/fizzdeck` 已上线并显示 macOS 下载；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
-| 仓库 | PR #1 已合并到 `main`；v0.2.0 Release 和 landing 下载入口已发布 |
+| Landing | `https://koroo.top/fizzdeck` 已上线并显示 `v0.2.1` macOS 下载；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
+| 仓库 | PR #1 已合并到 `main`；v0.2.1 Release 和 landing 下载入口已发布 |
 | 验证基线 | Swift test 32 例、ESLint、TypeScript、34 页生产构建、Vercel 生产部署、线上 CTA 与 DMG SHA-256 一致 |
 | 任务进度 | P0 5/5；P1 5/5（功能完成，2 项真实环境直测待补）；P2 5/5；发布与交付 1/3；质量与性能 0/4 |
 
@@ -485,10 +485,16 @@ CUA 实测：
 - 底部运行/测试操作区：启动/测试及 7 个操作项全部带名字，统一 66×24，使用原生 `.buttonStyle(.glass)`；状态在左，保留外层胶囊玻璃。
 - 踩坑：macOS 26 + `.toolbar(removing: .title)` 下，`ToolbarItemGroup(.confirmationAction)`、`.primaryAction` 和 `ToolbarSpacer(.flexible)` 没有把子视图操作项稳定推到右侧；最终改用内容标题行 `HStack`，不要再盲目试 placement。
 - 验证：`swift test --package-path macos` 32/32；`swift build --package-path macos -c release`；CUA 实测卡片墙/极简列表切换、项目页 hero、六页签、底部七项操作区；`git diff --check` 通过。
-- 本地分发：`macos/dist/FizzDeck-0.2.0-arm64-local.dmg`，Release 二进制，ad-hoc 签名，SHA-256 `c762750a5c86ea1b9553f61326f9b2e90212a90cda0758be3f60d439162f99e4`；未上传 GitHub Release，未做 Developer ID/公证。
+- 分发：`FizzDeck-0.2.1-arm64.dmg`，Release 二进制，ad-hoc 签名，SHA-256 `5b0b4e2da4636c1e93416cf8317ecf9db55f35ec57f0b89af0a79b53abe14de7`；已上传 GitHub Release，未做 Developer ID/公证。
 
 ## 发布记录
 
+- v0.2.1：`https://github.com/CClishan/Fizzdeck/releases/tag/v0.2.1`
+- v0.2.1 安装包：`FizzDeck-0.2.1-arm64.dmg`，2,135,011 bytes，Apple Silicon，ad-hoc 签名，未公证
+- v0.2.1 SHA-256：`5b0b4e2da4636c1e93416cf8317ecf9db55f35ec57f0b89af0a79b53abe14de7`
+- v0.2.1 源码提交：`b2ae507 Polish overview, project hero, and action dock` + `577d7e7 Release FizzDeck 0.2.1`
+- v0.2.1 landing 提交：`4c1a938 feat: update FizzDeck download to 0.2.1`
+- v0.2.1 线上验收：`https://koroo.top/fizzdeck` 返回 200，显示“原生版 v0.2.1”；`releases/latest` 302 到 v0.2.1；下载文件 SHA-256 与 Release asset 一致，`hdiutil verify` 通过
 - FizzDeck PR #1：`https://github.com/CClishan/Fizzdeck/pull/1`，已合并为 `a93c096`
 - FizzDeck 推送：`origin/main`，`680f842..a93c096`
 - 原生 Release：`https://github.com/CClishan/Fizzdeck/releases/tag/v0.2.0`
@@ -502,25 +508,25 @@ CUA 实测：
 - koroo 下载入口提交：`089168d feat: add FizzDeck macOS download`
 - Vercel 生产部署：deployment `8026894649`，状态 `success`
 - 旧入口：`https://fizzdeck.pages.dev/` 仍返回 200；未做 301 重定向
-- 线上验收：`/fizzdeck` 返回 200；HTML 含“下载 macOS 版”、`releases/latest` 和“原生版 v0.2.0”
+- 线上验收（v0.2.0 历史）：`/fizzdeck` 返回 200；HTML 含“下载 macOS 版”、`releases/latest` 和“原生版 v0.2.0”
 - 分发限制：前端仍使用 ad-hoc 签名，未做 Developer ID 签名、公证或自动更新。
 
 ## 工作区现状（重要）
 
-- 当前发布分支是 `main`；PR #1 已合并，`v0.2.0` tag 已创建。
+- 当前发布分支是 `main`；PR #1 已合并，`v0.2.1` tag 已创建。
 - 本轮发布记录提交后工作区应为空；`~/.repodeck` 的 `roots.json`、`state.json` 未因打包改动。
-- 可分发安装包是 `macos/dist/FizzDeck-0.2.0-arm64.dmg`；`macos/dist/FizzDeck.app` 仍只是本机构建产物。
-- koroo 下载入口已在 `089168d` 提交并部署到 `https://koroo.top/fizzdeck`。
+- 可分发安装包是 `macos/dist/FizzDeck-0.2.1-arm64.dmg`；`macos/dist/FizzDeck.app` 仍只是本机构建产物。
+- koroo 下载入口已在 `4c1a938` 提交并部署到 `https://koroo.top/fizzdeck`。
 - 不要回滚 `server.mjs`、`vite.config.js`、`public/`、`landing.html`、`src/landing/`、`src/stageshow/` 的已发布内容；需要修改时单独开任务。
 
 ## 待增加能力（移交清单）
 
 ### 发布与交付
 
-- [x] 原生安装包：`v0.2.0` arm64 DMG 已发布，landing 已接入下载；校验 SHA-256、镜像和 ad-hoc 签名均通过。
+- [x] 原生安装包：`v0.2.1` arm64 DMG 已发布，landing 已接入下载；校验 SHA-256、镜像和 ad-hoc 签名均通过。
 - [ ] 正式签名与公证：补 Developer ID、公证、自动更新和干净 Mac 安装验收。相关文件：`macos/script/build_and_run.sh`、`macos/Package.swift`、两份 README。验收：`spctl --assess` 通过、公证成功，并在干净 Mac 上安装运行。
 - [ ] 旧域名收敛：把 `https://fizzdeck.pages.dev` 301 到 `https://koroo.top/fizzdeck`，保留 Cloudflare Pages 项目作为回滚。验收：旧路径 301、canonical/OG 不重复、静态资源不丢。
-- [x] 文档同步：README、`macos/README.md`、HANDOFF 已补充 v0.2.0 下载地址、签名限制和发布记录。
+- [x] 文档同步：README、`macos/README.md`、HANDOFF 已补充 v0.2.1 下载地址、签名限制和发布记录。
 
 ### P1（收尾）
 
@@ -549,7 +555,7 @@ CUA 实测：
 1. 先跑基线：`swift build --package-path macos`、`swift test --package-path macos`、`./macos/script/build_and_run.sh --verify`。
 2. P1 功能已完成；下一步补真实凭据失效/网络中断和菜单栏/通知直测。
 3. P2 已完成；删除只可用临时目录验证，不要对真实项目点击确认。
-4. `v0.2.0` 已发布；下一版再做 Developer ID 签名、公证和自动更新，旧域名 301 仍需单独确认。
+4. `v0.2.1` 已发布；下一版再做 Developer ID 签名、公证和自动更新，旧域名 301 仍需单独确认。
 
 ### 不做
 
