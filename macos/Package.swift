@@ -17,5 +17,13 @@ let package = Package(
                 .swiftLanguageMode(.v5),
             ]
         ),
+        .testTarget(
+            name: "FizzDeckTests",
+            dependencies: ["FizzDeck"],
+            path: "Tests/FizzDeckTests",
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+            ]
+        ),
     ]
 )

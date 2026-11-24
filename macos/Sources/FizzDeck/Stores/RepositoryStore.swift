@@ -7,6 +7,8 @@ import Observation
 final class RepositoryStore {
     static let homeSelection = "__repodeck_home__"
     static let filterPrefix = "__repodeck_filter__:"
+    private static let recentProjectsKey = "fizzdeck.recentProjects"
+    private static let recentActionsKey = "fizzdeck.recentActions"
 
     enum Phase: Equatable {
         case idle
@@ -17,16 +19,36 @@ final class RepositoryStore {
 
     var projects: [RepoProject] = []
     var roots: [String] = []
-    var selectedPath: String? = homeSelection
+    var selectedPath: String? = homeSelection {
+        didSet {
+            guard let selectedPath,
+                  selectedPath != Self.homeSelection,
+                  !selectedPath.hasPrefix(Self.filterPrefix),
+                  projects.contains(where: { $0.path == selectedPath })
+            else { return }
+            recordRecentProject(selectedPath)
+        }
+    }
     var query = ""
     var phase: Phase = .idle
     var scannedAt: Date?
     var scanDuration: TimeInterval = 0
     var requestedTab: ProjectTab?
     var isCommandPalettePresented = false
+    private(set) var remotes: [String: GitRemote] = [:]
+    private(set) var missingRemotes: Set<String> = []
+    private(set) var recentProjectPaths: [String] = []
+    private(set) var recentActionIDs: [String] = []
 
     private var metadata: [String: ProjectMeta] = [:]
+    private var remoteTasks: [String: Task<GitRemote?, Never>] = [:]
     private var didPrepare = false
+
+    init() {
+        recentProjectPaths = UserDefaults.standard.stringArray(forKey: Self.recentProjectsKey) ?? []
+        recentActionIDs = (UserDefaults.standard.stringArray(forKey: Self.recentActionsKey) ?? [])
+            .filter { !$0.hasPrefix("project.") }
+    }
 
     var filteredProjects: [RepoProject] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -79,6 +101,7 @@ final class RepositoryStore {
         scannedAt = output.scannedAt
         scanDuration = output.duration
         phase = .ready
+        pruneRemotes(for: output.projects)
 
         if selectedPath == Self.homeSelection
             || selectedPath?.hasPrefix(Self.filterPrefix) == true {
@@ -88,6 +111,26 @@ final class RepositoryStore {
             return
         }
         selectedPath = Self.homeSelection
+    }
+
+    func rescanProjects(_ projects: [RepoProject]) async {
+        let paths = projects.map(\.path)
+        guard !paths.isEmpty else { return }
+
+        let started = Date()
+        let scanned = await RepositoryScanner.scan(paths: paths, meta: metadata)
+        let replacements = Dictionary(
+            scanned.map { ($0.path, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        self.projects = self.projects.map { replacements[$0.path] ?? $0 }
+        scanDuration = Date().timeIntervalSince(started)
+        scannedAt = Date()
+
+        let refreshed = Set(paths)
+        remotes = remotes.filter { !refreshed.contains($0.key) }
+        missingRemotes.subtract(refreshed)
+        remoteTasks = remoteTasks.filter { !refreshed.contains($0.key) }
     }
 
     func addRoot() async {
@@ -120,10 +163,148 @@ final class RepositoryStore {
         await scan()
     }
 
+    func removeProject(
+        _ project: RepoProject,
+        mode: ProjectRemovalMode,
+        confirmation: String,
+        testRunning: Bool
+    ) async -> ProjectRemovalResult {
+        let roots = RootStore.load()
+        let result = await Task.detached(priority: .userInitiated) {
+            ProjectRemovalService.remove(
+                path: project.path,
+                mode: mode,
+                confirmation: confirmation,
+                managedRoots: roots,
+                testRunning: testRunning,
+                devServerRunning: project.port == .running
+            )
+        }.value
+        guard result.success else { return result }
+
+        self.roots.removeAll { $0 == project.path }
+        try? RootStore.save(self.roots)
+
+        metadata.removeValue(forKey: project.path)
+        try? MetaStore.save(metadata)
+
+        projects.removeAll { $0.path == project.path }
+        remotes.removeValue(forKey: project.path)
+        missingRemotes.remove(project.path)
+        remoteTasks[project.path]?.cancel()
+        remoteTasks[project.path] = nil
+        recentProjectPaths.removeAll { $0 == project.path }
+        UserDefaults.standard.set(recentProjectPaths, forKey: Self.recentProjectsKey)
+
+        if selectedPath == project.path {
+            selectedPath = Self.homeSelection
+            requestedTab = nil
+        }
+        return result
+    }
+
     func openProject(_ project: RepoProject, tab: ProjectTab? = nil) {
         selectedPath = project.path
         requestedTab = tab
         isCommandPalettePresented = false
+    }
+
+    func recordRecentProject(_ path: String) {
+        guard path != Self.homeSelection, !path.hasPrefix(Self.filterPrefix) else { return }
+        var list = recentProjectPaths.filter { $0 != path }
+        list.insert(path, at: 0)
+        let next = Array(list.prefix(8))
+        guard next != recentProjectPaths else { return }
+        recentProjectPaths = next
+        UserDefaults.standard.set(next, forKey: Self.recentProjectsKey)
+    }
+
+    func recordPaletteAction(_ id: String) {
+        guard !id.hasPrefix("project.") else { return }
+        var list = recentActionIDs.filter { $0 != id }
+        list.insert(id, at: 0)
+        let next = Array(list.prefix(6))
+        guard next != recentActionIDs else { return }
+        recentActionIDs = next
+        UserDefaults.standard.set(next, forKey: Self.recentActionsKey)
+    }
+
+    func cachedRemote(for path: String) -> GitRemote? {
+        remotes[path]
+    }
+
+    func hasResolvedRemote(for path: String) -> Bool {
+        remotes[path] != nil || missingRemotes.contains(path)
+    }
+
+    func remote(for project: RepoProject) async -> GitRemote? {
+        let path = project.path
+        if let cached = remotes[path] { return cached }
+        if missingRemotes.contains(path) { return nil }
+        if let task = remoteTasks[path] { return await task.value }
+
+        let directory = URL(fileURLWithPath: path)
+        let task = Task { await GitService.remote(directory) }
+        remoteTasks[path] = task
+        let value = await task.value
+        remoteTasks[path] = nil
+        if let value {
+            remotes[path] = value
+        } else {
+            missingRemotes.insert(path)
+        }
+        return value
+    }
+
+    func loadRemotes(for projects: [RepoProject], limit: Int = 80) async {
+        let candidates = projects
+            .filter { remotes[$0.path] == nil && !missingRemotes.contains($0.path) }
+            .prefix(limit)
+            .map(\.path)
+        guard !candidates.isEmpty else { return }
+
+        let results = await withTaskGroup(
+            of: (String, GitRemote?).self,
+            returning: [(String, GitRemote?)].self
+        ) { group in
+            var index = 0
+            let maxConcurrent = 4
+            while index < min(maxConcurrent, candidates.count) {
+                let path = candidates[index]
+                group.addTask {
+                    (path, await GitService.remote(URL(fileURLWithPath: path)))
+                }
+                index += 1
+            }
+
+            var collected: [(String, GitRemote?)] = []
+            while let result = await group.next() {
+                collected.append(result)
+                if index < candidates.count {
+                    let path = candidates[index]
+                    group.addTask {
+                        (path, await GitService.remote(URL(fileURLWithPath: path)))
+                    }
+                    index += 1
+                }
+            }
+            return collected
+        }
+
+        for (path, remote) in results {
+            if let remote {
+                remotes[path] = remote
+            } else {
+                missingRemotes.insert(path)
+            }
+        }
+    }
+
+    private func pruneRemotes(for projects: [RepoProject]) {
+        let paths = Set(projects.map(\.path))
+        remotes = remotes.filter { paths.contains($0.key) }
+        missingRemotes.formIntersection(paths)
+        remoteTasks = remoteTasks.filter { paths.contains($0.key) }
     }
 
     func toggleCommandPalette() {
@@ -156,6 +337,22 @@ final class RepositoryStore {
         meta.note = trimmed
         metadata[project.path] = meta
         try? MetaStore.save(metadata)
+    }
+
+    func setGroup(_ group: String?, for project: RepoProject) {
+        guard let index = projects.firstIndex(where: { $0.path == project.path }) else { return }
+        let trimmed = group?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = trimmed?.isEmpty == false ? trimmed : nil
+        projects[index].group = value ?? ProjectGrouping.detected(for: project.path)
+
+        var meta = metadata[project.path] ?? ProjectMeta()
+        meta.group = value
+        metadata[project.path] = meta
+        try? MetaStore.save(metadata)
+    }
+
+    var knownGroups: [String] {
+        ProjectGrouping.ordered(projects.map(\.group))
     }
 
     func setPort(_ state: PortState, for path: String) {

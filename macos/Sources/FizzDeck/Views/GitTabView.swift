@@ -80,9 +80,34 @@ struct GitTabView: View {
                     Divider()
                         .padding(.vertical, 6)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("远程")
-                            .font(.caption)
+                        HStack(spacing: 6) {
+                            Text("远程")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 8)
+                            if let parsed = GitRemote(raw: remote), let url = parsed.webURL {
+                                Button {
+                                    SystemActions.openURL(url.absoluteString)
+                                } label: {
+                                    Image(systemName: "arrow.up.right.square")
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.secondary)
+                                .help("在浏览器中打开远程仓库")
+                                .accessibilityLabel("在浏览器中打开远程仓库")
+                            }
+                            Button {
+                                SystemActions.copy(remote)
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 10.5, weight: .medium))
+                            }
+                            .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
+                            .help("复制远程地址")
+                            .accessibilityLabel("复制远程地址")
+                        }
                         Text(verbatim: remote)
                             .font(.system(size: 11, design: .monospaced))
                             .textSelection(.enabled)

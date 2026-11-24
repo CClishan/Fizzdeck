@@ -211,3 +211,36 @@ struct ProjectQuickActions: View {
         }
     }
 }
+
+struct ProjectGroupingMenu: View {
+    @Environment(RepositoryStore.self) private var store
+    let project: RepoProject
+
+    var body: some View {
+        Menu("移动到分组") {
+            Button("恢复自动分类", systemImage: "arrow.uturn.backward") {
+                store.setGroup(nil, for: project)
+            }
+
+            Divider()
+
+            ForEach(store.knownGroups, id: \.self) { group in
+                Button {
+                    store.setGroup(group, for: project)
+                } label: {
+                    Label(
+                        group,
+                        systemImage: project.group == group ? "checkmark" : "circle.fill"
+                    )
+                }
+            }
+
+            Divider()
+
+            Button("新建分组…", systemImage: "plus") {
+                guard let name = SystemActions.promptForGroupName() else { return }
+                store.setGroup(name, for: project)
+            }
+        }
+    }
+}

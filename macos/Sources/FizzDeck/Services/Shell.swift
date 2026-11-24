@@ -3,6 +3,7 @@ import Foundation
 struct ShellOutput: Sendable {
     let status: Int32
     let text: String
+    var timedOut = false
 
     var succeeded: Bool { status == 0 }
 }
@@ -51,10 +52,12 @@ enum Shell {
                     return
                 }
 
+                let timeoutFlag = TimeoutFlag()
                 let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
                 timer.schedule(deadline: .now() + timeout)
                 timer.setEventHandler {
                     if process.isRunning {
+                        timeoutFlag.mark()
                         process.terminate()
                     }
                 }
@@ -65,7 +68,13 @@ enum Shell {
                 timer.cancel()
 
                 let text = String(data: data, encoding: .utf8) ?? ""
-                continuation.resume(returning: ShellOutput(status: process.terminationStatus, text: text))
+                continuation.resume(
+                    returning: ShellOutput(
+                        status: process.terminationStatus,
+                        text: text,
+                        timedOut: timeoutFlag.isMarked
+                    )
+                )
             }
         }
     }
@@ -80,5 +89,22 @@ enum Shell {
             return nil
         }
         return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private final class TimeoutFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var marked = false
+
+    func mark() {
+        lock.lock()
+        marked = true
+        lock.unlock()
+    }
+
+    var isMarked: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return marked
     }
 }

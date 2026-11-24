@@ -44,6 +44,19 @@ struct ProjectDetailView: View {
                 tabPicker
                     .padding(.top, 10)
             }
+            .padding(.bottom, showsActionDock ? 84 : 0)
+            .overlay(alignment: .bottom) {
+                if showsActionDock {
+                    ProjectActionDock(project: project)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 16)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(
+                FizzMotion.resolved(reduceMotion, FizzMotion.panel),
+                value: showsActionDock
+            )
         }
         .task(id: project.path) {
             noteDraft = project.note
@@ -68,6 +81,10 @@ struct ProjectDetailView: View {
 
     private var accent: Color {
         project.color?.color ?? ProjectGrouping.color(for: project.group)
+    }
+
+    private var showsActionDock: Bool {
+        project.run != nil || project.test != nil
     }
 
     private var tabPicker: some View {
@@ -199,10 +216,16 @@ private struct ProjectHero: View {
 
 private struct ProjectHeroActions: View {
     @Environment(RepositoryStore.self) private var store
+    @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let project: RepoProject
 
     @State private var hovering: Action?
+    @State private var remote: GitRemote?
+    @State private var remoteResolved = false
+    @State private var removalRequest: ProjectRemovalRequest?
+    @State private var removalError: String?
+    @State private var removalWorking = false
 
     private enum Action {
         case star
@@ -265,11 +288,43 @@ private struct ProjectHeroActions: View {
                             Button(color.label) { store.setColor(color, for: project) }
                         }
                     }
+                    ProjectGroupingMenu(project: project)
                     Divider()
                     Button {
                         SystemActions.copy(project.path)
                     } label: {
                         Label("复制路径", systemImage: "doc.on.doc")
+                    }
+
+                    Divider()
+
+                    if let remote {
+                        if let url = remote.webURL {
+                            Button {
+                                SystemActions.openURL(url.absoluteString)
+                            } label: {
+                                Label("在浏览器中打开远程仓库", systemImage: "arrow.up.right.square")
+                            }
+                        }
+                        Button {
+                            SystemActions.copy(remote.raw)
+                        } label: {
+                            Label("复制远程地址", systemImage: "link")
+                        }
+                    } else if remoteResolved {
+                        Button {} label: {
+                            Label("没有远程仓库", systemImage: "link.badge.plus")
+                        }
+                        .disabled(true)
+                    }
+
+                    Divider()
+
+                    Button("移入废纸篓…", role: .destructive) {
+                        removalRequest = ProjectRemovalRequest(mode: .trash)
+                    }
+                    Button("永久删除…", role: .destructive) {
+                        removalRequest = ProjectRemovalRequest(mode: .permanent)
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -292,6 +347,57 @@ private struct ProjectHeroActions: View {
         .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("项目操作")
+        .task(id: project.path) {
+            remote = store.cachedRemote(for: project.path)
+            remoteResolved = store.hasResolvedRemote(for: project.path)
+            remote = await store.remote(for: project)
+            remoteResolved = true
+        }
+        .sheet(item: $removalRequest) { request in
+            ProjectRemovalSheet(
+                project: project,
+                mode: request.mode,
+                blockedReason: removalBlockedReason,
+                onCancel: { removalRequest = nil },
+                onConfirm: { confirmation in
+                    removalRequest = nil
+                    removalWorking = true
+                    Task {
+                        let result = await store.removeProject(
+                            project,
+                            mode: request.mode,
+                            confirmation: confirmation,
+                            testRunning: actions.testRun(for: project.path)?.status == .running
+                        )
+                        removalWorking = false
+                        if !result.success {
+                            removalError = result.message
+                        }
+                    }
+                }
+            )
+        }
+        .alert(
+            "无法移除项目",
+            isPresented: Binding(
+                get: { removalError != nil },
+                set: { if !$0 { removalError = nil } }
+            )
+        ) {
+            Button("好") { removalError = nil }
+        } message: {
+            Text(removalError ?? "")
+        }
+    }
+
+    private var removalBlockedReason: String? {
+        if removalWorking { return "正在处理移除操作。" }
+        if project.port == .running { return "先停止运行中的开发服务。" }
+        if actions.testRun(for: project.path)?.status == .running {
+            return "先停止运行中的测试。"
+        }
+        if actions.isBusy(project.path) { return "正在启动或停止服务，稍后再试。" }
+        return nil
     }
 
     private var segmentShape: RoundedRectangle {
@@ -307,5 +413,70 @@ private struct ProjectHeroActions: View {
             .fill(FizzTheme.hairline)
             .frame(width: 1, height: 15)
             .padding(.horizontal, 2)
+    }
+}
+
+private struct ProjectRemovalRequest: Identifiable {
+    let mode: ProjectRemovalMode
+
+    var id: String { mode.rawValue }
+}
+
+private struct ProjectRemovalSheet: View {
+    let project: RepoProject
+    let mode: ProjectRemovalMode
+    let blockedReason: String?
+    let onCancel: () -> Void
+    let onConfirm: (String) -> Void
+
+    @State private var confirmation = ""
+
+    private var expectedName: String {
+        URL(fileURLWithPath: project.path).lastPathComponent
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                Image(systemName: mode.symbol)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.red)
+                Text("\(mode.title) \(project.displayName)")
+                    .font(.headline)
+            }
+
+            Text(mode.explanation)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let blockedReason {
+                Label(blockedReason, systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("输入目录名「\(expectedName)」确认")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField(expectedName, text: $confirmation)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            HStack {
+                Spacer()
+                Button("取消", role: .cancel) {
+                    onCancel()
+                }
+                Button(mode.actionTitle, role: .destructive) {
+                    onConfirm(confirmation)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(confirmation != expectedName || blockedReason != nil)
+            }
+        }
+        .padding(24)
+        .frame(width: 440)
     }
 }

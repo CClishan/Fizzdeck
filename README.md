@@ -2,7 +2,7 @@
 
 **A local-first project dashboard for macOS.** Scan selected folders, recognize your repositories, inspect Git and disk state, resume AI coding sessions, and launch development servers from one place.
 
-Live landing page: [fizzdeck.pages.dev](https://fizzdeck.pages.dev)
+Live landing page: [koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
 No account, no telemetry, no hosted backend. FizzDeck reads only local project metadata and keeps its state on your Mac.
 
@@ -17,7 +17,7 @@ FizzDeck ships in two forms that share the same local state:
 | **FizzDeck for macOS** (`macos/`) | The primary app. Pure SwiftUI, no Node.js runtime or HTTP server required. |
 | **FizzDeck Web UI** | A lightweight local dashboard powered by one Node.js process and a React/Vite SPA. |
 
-The web UI remains useful for browser-based work and destructive project cleanup. The native app is the faster day-to-day client.
+Both clients share local state. The native app is the faster day-to-day client, including confirmed project removal.
 
 ## Requirements
 
@@ -44,6 +44,12 @@ Build, launch, and verify the app:
 
 ```sh
 ./macos/script/build_and_run.sh --verify
+```
+
+Run the Swift test baseline:
+
+```sh
+swift test --package-path macos
 ```
 
 For local notification testing, use an ad-hoc signature:
@@ -88,20 +94,22 @@ On a fresh install, use **Scan folder** in the sidebar to discover and add proje
 | Area | Capability |
 |---|---|
 | Project discovery | Scans managed folders for repositories and project markers such as `.git`, `package.json`, `pom.xml`, and `go.mod`. Skips heavy generated folders such as `node_modules`, `Library`, `dist`, and `build`. |
-| Dashboard | Native overview with starred, changed, and running filters; collapsible project groups; dashboard, list, and gallery layouts. |
+| Dashboard | Native overview with starred, changed, and running filters; a half-width attention card beside four summary cards; collapsible project groups; dashboard and list layouts. |
+| Project grouping | Default groups are inferred from path keywords. Move any project to an existing or new group from its context menu, or restore automatic classification at any time. |
+| Batch actions | Filter by project group, then select projects across card or list views to rescan only those folders or copy one combined set of cleanup commands. Batch actions never delete files. |
 | Attention queue | Surfaces failing tests, behind-remote and unpushed commits, uncommitted files, and reclaimable disk. Ordered by urgency; each row opens the matching project tab and offers inline push, fast-forward pull, test rerun, or cleanup-command copy. Right-click a row to snooze or mute that project/type; silenced rules can be restored from the header. |
 | Menu bar | Keeps the pending-item count visible, opens the overview or a recent project, and sends local notifications when a dev server becomes ready or a test fails. |
-| Quick open | `⌘K` searches projects, branches, and actions. Run project commands and app actions without leaving the keyboard. |
-| Project actions | Open a project in Finder, Terminal, or an installed editor (Cursor, VS Code, Zed, and Xcode when a project target exists), or copy its path. `⌘⇧T` opens the current project in Terminal. |
-| AI sessions | Reads local Codex and Claude Code session metadata, matches sessions to projects, and copies `codex resume` / `claude --resume` commands. |
-| Git | Shows the current branch, ahead/behind state, dirty files, and recent commits. Supports branch switching plus confirmed fetch, fast-forward pull, and push with inline results; dirty worktrees are protected. |
-| Dev servers | Detects common dev scripts and ports, starts and stops project processes, waits for readiness, and opens the app in a browser. |
+| Quick open | `⌘K` searches projects, branches, remote URLs, and actions with recent items, fuzzy matching, and pinned commands. Run project commands and app actions without leaving the keyboard. |
+| Project actions | Open a project in Finder, Terminal, or an installed editor (Cursor, VS Code, Zed, Antigravity, JetBrains IDEs, and Xcode including nested targets), or copy its path. `⌘⇧T` opens the current project in Terminal. |
+| AI sessions | Lists matched Codex and Claude Code sessions with tool filters, shows the last user request, and copies `codex resume` / `claude --resume` commands. Dedicated CLI processes can be ended after confirmation; the shared Codex Desktop app-server is never terminated. |
+| Git | Shows the current branch, ahead/behind state, dirty files, recent commits, and the `origin` URL. Supports opening or copying the remote, branch switching, and confirmed fetch, fast-forward pull, and push with inline results; dirty worktrees are protected. |
+| Dev servers | Detects common dev scripts and ports; a floating Liquid Glass action dock provides run, test, logs, preview, and copy-command actions. |
 | Disk usage | Breaks down project size and reclaimable space across dependencies, build caches, artifacts, temporary files, and AI session history. |
 | Cleanup | Provides copy-only cleanup commands. It never executes destructive cleanup automatically. |
 | Docs | Discovers and renders project documentation such as `README`, `PRODUCT`, `HANDOFF`, and `AGENTS`. |
 | Tests | Detects `test`, `check`, `typecheck`, `mvn test`, and `go test`; streams output and duration. |
-| Organization | Stars, color tags, notes, display aliases, and grouped technology badges. |
-| Safe removal | The web UI supports remove-from-dashboard, move-to-Trash, and permanent deletion with backups and confirmation. |
+| Organization | Stars, color tags, notes, aliases, grouped technology badges, and automatic or manual project groups. |
+| Safe removal | Both clients support remove-from-dashboard. Native and web can move a project to Trash or permanently delete it after backing up to `~/.repodeck/trash`, blocking shallow paths and running services/tests, and requiring the directory name. |
 
 ## Local data and privacy
 
@@ -112,7 +120,7 @@ The shared data directory is `~/.repodeck`. The path is kept for compatibility w
 ```text
 ~/.repodeck/
 ├── roots.json        # managed folders and display aliases
-├── state.json        # stars, tags, notes, and UI state
+├── state.json        # stars, tags, groups, notes, and UI state
 ├── roots-cache.json  # scan cache
 └── logs/             # dev server logs
 ```
@@ -130,6 +138,8 @@ The shared data directory is `~/.repodeck`. The path is kept for compatibility w
 
 The native app is intentionally **not sandboxed**. It needs access to arbitrary user-selected project folders and must be able to run project scripts. Treat it as a local developer tool: only add folders you trust and review commands before running them.
 
+Project removal only accepts managed roots, refuses shallow or protected paths, is blocked while a dev server or test is running, and requires typing the directory name. Permanent deletion first copies the project to `~/.repodeck/trash`.
+
 ## Project structure
 
 ```text
@@ -146,11 +156,11 @@ scan-clean.mjs          CLI disk-usage report
 ## Current limitations
 
 - The native app requires macOS 26+. It is built from source and is not signed or notarized yet.
-- The native app focuses on inspection and daily project actions. Destructive project removal is currently handled by the web UI.
+- The native app focuses on inspection and daily project actions. Batch rescan and cleanup-command copy are native; destructive project removal remains in the web UI.
 - The native theme is intentionally light-only.
 - There are no background file watchers yet.
 - Local notifications require system permission. The `--sign-local` build uses an ad-hoc signature, which is enough to register with Notification Center for local testing; distribution still needs a Developer ID signature and notarization.
-- AI session integration currently covers Codex and Claude Code.
+- AI session integration currently covers Codex and Claude Code; ending a session from FizzDeck is not available.
 - Port detection is heuristic; unusual development setups may need a mapping in `server.mjs`.
 - Initial scans run `du`-style size checks and take roughly a few seconds per large folder. Later loads use the scan cache until a rescan.
 

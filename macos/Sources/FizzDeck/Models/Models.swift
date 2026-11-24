@@ -4,7 +4,7 @@ struct RepoProject: Identifiable, Sendable {
     let path: String
     let name: String
     let displayName: String
-    let group: String
+    var group: String
     var recent: Date?
     var branch: String?
     var lastCommit: Commit?
@@ -134,6 +134,7 @@ struct SessionSummary: Sendable, Hashable {
     var lastTool: String?
     var sessionCount: Int
     var byTool: [ToolSession]
+    var recentSessions: [SessionRecord]
 
     static let empty = SessionSummary(
         detected: [],
@@ -142,7 +143,8 @@ struct SessionSummary: Sendable, Hashable {
         lastSessionID: nil,
         lastTool: nil,
         sessionCount: 0,
-        byTool: []
+        byTool: [],
+        recentSessions: []
     )
 }
 
@@ -175,6 +177,7 @@ enum TagColor: String, CaseIterable, Codable, Sendable, Identifiable {
 struct ProjectMeta: Codable, Sendable {
     var starred = false
     var color: TagColor?
+    var group: String?
     var note = ""
     var attention: [String: AttentionPreference] = [:]
 }

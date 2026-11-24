@@ -8,8 +8,6 @@ struct SidebarView: View {
     @State private var expandedGroups: Set<String> = []
     @State private var disk: DiskCapacity?
 
-    private let groupOrder = ProjectGrouping.order
-
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -107,6 +105,7 @@ struct SidebarView: View {
                                     Button(color.label) { store.setColor(color, for: project) }
                                 }
                             }
+                            ProjectGroupingMenu(project: project)
                             Divider()
                             ProjectQuickActions(project: project)
                             Divider()
@@ -167,7 +166,7 @@ struct SidebarView: View {
     }
 
     private var groups: [SidebarGroup] {
-        groupOrder.compactMap { group in
+        ProjectGrouping.ordered(store.filteredProjects.map(\.group)).compactMap { group in
             let items = store.filteredProjects.filter { $0.group == group }
             return items.isEmpty ? nil : SidebarGroup(name: group, items: items)
         }

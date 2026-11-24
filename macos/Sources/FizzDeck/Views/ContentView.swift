@@ -28,7 +28,6 @@ struct ContentView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .tint(Color.black)
         .searchable(text: $store.query, prompt: "搜索项目、路径、技术栈")
         .toolbar(removing: .title)
         .toolbar(removing: .sidebarToggle)

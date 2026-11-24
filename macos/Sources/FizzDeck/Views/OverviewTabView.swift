@@ -2,7 +2,6 @@ import SwiftUI
 
 struct OverviewTabView: View {
     @Environment(RepositoryStore.self) private var store
-    @Environment(ProjectActions.self) private var actions
     let project: RepoProject
     @Binding var noteDraft: String
     let saveNote: () -> Void
@@ -24,21 +23,7 @@ struct OverviewTabView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if !project.intro.text.isEmpty {
-                    Panel(title: "简介", symbol: "text.quote") {
-                        VStack(alignment: .leading, spacing: 7) {
-                            Text(project.intro.text)
-                                .font(.callout)
-                                .foregroundStyle(.primary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if let source = project.intro.source {
-                                Text(source)
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                    }
-                }
+                projectSummaryPanel
 
                 GlassEffectContainer(spacing: 12) {
                     LazyVGrid(
@@ -95,15 +80,6 @@ struct OverviewTabView: View {
                     }
                 }
 
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 280), spacing: 20)],
-                    alignment: .leading,
-                    spacing: 20
-                ) {
-                    stackPanel
-                    runtimePanel
-                }
-
                 notePanel
 
                 if !project.weekly.isEmpty {
@@ -111,6 +87,55 @@ struct OverviewTabView: View {
                 }
             }
             .padding(24)
+        }
+    }
+
+    private var projectSummaryPanel: some View {
+        Panel(title: "项目", symbol: "text.quote") {
+            VStack(alignment: .leading, spacing: 12) {
+                if project.intro.text.isEmpty {
+                    Text("还没有项目简介")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(project.intro.text)
+                            .font(.callout)
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let source = project.intro.source {
+                            Text(source)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+
+                Divider()
+                    .opacity(0.55)
+
+                if project.stacks.isEmpty {
+                    Text("未识别技术栈")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(project.stacks) { group in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(group.label)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 54, alignment: .leading)
+                                FlowLayout(spacing: 5) {
+                                    ForEach(group.items, id: \.self) { item in
+                                        TagChip(text: item, tint: group.color)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -127,133 +152,6 @@ struct OverviewTabView: View {
         case .running: .green
         case .stopped: .orange
         case .noPreview: .secondary
-        }
-    }
-
-    private var stackPanel: some View {
-        Panel(title: "技术栈", symbol: "cpu") {
-            if project.stacks.isEmpty {
-                Text("未识别")
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(project.stacks) { group in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(group.label)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 54, alignment: .leading)
-                            FlowLayout(spacing: 5) {
-                                ForEach(group.items, id: \.self) { item in
-                                    TagChip(text: item, tint: group.color)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var runtimePanel: some View {
-        Panel(title: "运行与测试", symbol: "play.rectangle") {
-            VStack(alignment: .leading, spacing: 10) {
-                if let run = project.run {
-                    KeyValueRow(key: "启动", value: run.command, mono: true)
-                    KeyValueRow(
-                        key: "端口",
-                        value: run.port > 0 ? "\(run.port)" : "无",
-                        mono: true,
-                        tint: portColor
-                    )
-                    FlowLayout(spacing: 8) {
-                        if project.port == .running {
-                            Button {
-                                Task { await actions.stop(project, store: store) }
-                            } label: {
-                                Label(actions.isBusy(project.path) ? "停止中" : "停止", systemImage: "stop.fill")
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .disabled(actions.isBusy(project.path))
-
-                            if let url = run.previewURL {
-                                Button {
-                                    SystemActions.openURL(url)
-                                } label: {
-                                    Label("打开预览", systemImage: "safari")
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                            }
-                        } else {
-                            Button {
-                                Task { await actions.launch(project, store: store) }
-                            } label: {
-                                Label(actions.isBusy(project.path) ? "启动中" : "启动", systemImage: "play.fill")
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                            .disabled(actions.isBusy(project.path))
-                        }
-
-                        CopyButton(title: "复制命令", value: run.command)
-                        Button {
-                            SystemActions.openTerminal(project.path)
-                        } label: {
-                            Label("终端", systemImage: "terminal")
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        Button {
-                            actions.openLog(for: project)
-                        } label: {
-                            Label("日志", systemImage: "doc.text.magnifyingglass")
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                    if let message = actions.message(for: project.path) {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                } else {
-                    Text("未识别到 dev 脚本")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let test = project.test {
-                    Divider()
-                    KeyValueRow(key: "测试", value: test.command, mono: true)
-                    FlowLayout(spacing: 8) {
-                        CopyButton(title: "复制测试命令", value: test.command, symbol: "checkmark.seal")
-                        if let runState = actions.testRun(for: project.path) {
-                            Text(testStatusLabel(runState))
-                                .font(.caption)
-                                .foregroundStyle(testStatusColor(runState.status))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func testStatusLabel(_ run: TestRunState) -> String {
-        switch run.status {
-        case .running: "测试运行中…"
-        case .passed: "测试通过 · \(String(format: "%.1f", run.duration ?? 0))s"
-        case .failed: "测试失败"
-        }
-    }
-
-    private func testStatusColor(_ status: TestStatus) -> Color {
-        switch status {
-        case .running: .secondary
-        case .passed: .green
-        case .failed: .red
         }
     }
 

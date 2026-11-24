@@ -48,6 +48,68 @@ enum FileTools {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
+    @discardableResult
+    static func scanLinesFromEnd(
+        in url: URL,
+        chunkBytes: Int = 128 * 1024,
+        maxBytes: Int = 8 * 1024 * 1024,
+        _ body: (String) -> Bool
+    ) -> Bool {
+        guard chunkBytes > 0,
+              maxBytes > 0,
+              let attributes = try? manager.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber,
+              let handle = try? FileHandle(forReadingFrom: url)
+        else { return false }
+        defer { try? handle.close() }
+
+        var end = size.int64Value
+        var remaining = Int64(maxBytes)
+        var prefix = Data()
+
+        while end > 0, remaining > 0 {
+            let count = min(Int64(chunkBytes), end, remaining)
+            let start = end - count
+            do {
+                try handle.seek(toOffset: UInt64(start))
+            } catch {
+                return false
+            }
+            guard var data = try? handle.read(upToCount: Int(count)), !data.isEmpty else {
+                return false
+            }
+            if !prefix.isEmpty {
+                data.append(prefix)
+                prefix.removeAll(keepingCapacity: false)
+            }
+
+            var lineEnd = data.endIndex
+            while lineEnd > data.startIndex,
+                  let newline = data[data.startIndex..<lineEnd].lastIndex(of: 0x0A) {
+                let lineStart = data.index(after: newline)
+                if lineStart < lineEnd,
+                   let line = String(data: data[lineStart..<lineEnd], encoding: .utf8),
+                   body(line) {
+                    return true
+                }
+                lineEnd = newline
+            }
+            if lineEnd > data.startIndex {
+                prefix = Data(data[data.startIndex..<lineEnd])
+            }
+
+            end = start
+            remaining -= count
+        }
+
+        if !prefix.isEmpty,
+           let line = String(data: prefix, encoding: .utf8),
+           body(line) {
+            return true
+        }
+        return false
+    }
+
     static func modificationDate(_ url: URL) -> Date? {
         (try? manager.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
     }

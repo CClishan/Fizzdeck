@@ -34,6 +34,10 @@ enum MetaStore {
             if let color = raw["color"] as? String {
                 meta.color = TagColor(rawValue: color)
             }
+            if let group = raw["group"] as? String {
+                let trimmed = group.trimmingCharacters(in: .whitespacesAndNewlines)
+                meta.group = trimmed.isEmpty ? nil : trimmed
+            }
             meta.attention = parseAttention(raw["attention"])
             result[PathTools.normalize(path)] = meta
         }
@@ -48,6 +52,9 @@ enum MetaStore {
             ]
             if let color = entry.value.color {
                 raw["color"] = color.rawValue
+            }
+            if let group = entry.value.group, !group.isEmpty {
+                raw["group"] = group
             }
             if !entry.value.attention.isEmpty {
                 raw["attention"] = entry.value.attention.reduce(into: [String: [String: Any]]()) { result, rule in
