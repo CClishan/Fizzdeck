@@ -128,6 +128,7 @@ final class ProjectAttentionQueueTests: XCTestCase {
             run: nil,
             sessions: .empty,
             intro: .empty,
+            artwork: nil,
             test: nil,
             starred: false,
             color: nil,

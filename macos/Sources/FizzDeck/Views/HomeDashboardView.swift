@@ -14,7 +14,6 @@ struct HomeDashboardView: View {
     @State private var selectedPaths: Set<String> = []
     @State private var batchFeedback: String?
     @State private var batchRunning = false
-    @Namespace private var modeSelection
 
     private var mode: HomeViewMode {
         HomeViewMode(rawValue: modeRaw) ?? .cards
@@ -114,30 +113,34 @@ struct HomeDashboardView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(filter.title)
-                    .font(.system(size: 27, weight: .semibold))
-                Text(headerDetail)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(filter.title)
+                        .font(.system(size: 27, weight: .semibold))
+                    Text(headerDetail)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                .layoutPriority(1)
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
+                Spacer(minLength: 12)
+
+                HStack(spacing: 8) {
                     modePicker
                     filterMenu
-                    Spacer(minLength: 0)
                     selectionToggle
                 }
-
-                if hasFacets {
-                    activeFilterChips
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
+                .fixedSize()
+                .padding(.top, 2)
             }
-            .animation(FizzMotion.resolved(reduceMotion, FizzMotion.standard), value: hasFacets)
+
+            if hasFacets {
+                activeFilterChips
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.standard), value: hasFacets)
     }
 
     private var showsAttention: Bool {
@@ -179,31 +182,34 @@ struct HomeDashboardView: View {
     }
 
     private var modePicker: some View {
-        GlassEffectContainer(spacing: 2) {
-            HStack(spacing: 2) {
-                ForEach(HomeViewMode.allCases) { item in
-                    HomeModeButton(
-                        item: item,
-                        selected: mode == item,
-                        namespace: modeSelection,
-                        reduceMotion: reduceMotion
-                    ) {
-                        guard mode != item else { return }
-                        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.standard)) {
-                            modeRaw = item.rawValue
-                        }
+        Picker(
+            "布局",
+            selection: Binding(
+                get: { mode },
+                set: { item in
+                    guard mode != item else { return }
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.standard)) {
+                        modeRaw = item.rawValue
                     }
                 }
+            )
+        ) {
+            ForEach(HomeViewMode.allCases) { item in
+                Image(systemName: item.symbol)
+                    .tag(item)
+                    .help(item.title)
+                    .accessibilityLabel(item.title)
             }
-            .padding(3)
-            .glassEffect(.regular.interactive(), in: Capsule())
         }
-        .accessibilityElement(children: .contain)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .tint(FizzTheme.accent)
         .accessibilityLabel("布局")
     }
 
     private var filterMenu: some View {
-        Menu("筛选", systemImage: "line.3.horizontal.decrease") {
+        Menu {
             Section("排序") {
                 ForEach(HomeSort.allCases) { item in
                     Button {
@@ -305,6 +311,8 @@ struct HomeDashboardView: View {
                     Label("清除筛选", systemImage: "xmark.circle")
                 }
             }
+        } label: {
+            filterMenuLabel
         }
         .menuStyle(.button)
         .buttonStyle(.glass)
@@ -315,32 +323,38 @@ struct HomeDashboardView: View {
     }
 
     private var selectionToggle: some View {
-        GlassEffectContainer(spacing: 0) {
-            HStack(spacing: 0) {
-                Button {
-                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
-                        if selectionMode {
-                            endSelection()
-                        } else {
-                            selectionMode = true
-                        }
-                    }
-                } label: {
-                    Image(systemName: selectionMode ? "checkmark.circle.fill" : "checklist")
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(selectionMode ? FizzTheme.accent : Color.secondary)
-                        .frame(width: 30, height: 30)
-                        .contentShape(Circle())
+        Button {
+            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                if selectionMode {
+                    endSelection()
+                } else {
+                    selectionMode = true
                 }
-                .buttonStyle(.plain)
-                .help(selectionMode ? "退出批量选择" : "批量选择项目")
-                .accessibilityLabel(selectionMode ? "退出批量选择" : "批量选择项目")
-                .accessibilityAddTraits(selectionMode ? .isSelected : [])
             }
-            .padding(3)
-            .glassEffect(.regular.interactive(), in: Capsule())
+        } label: {
+            Image(systemName: selectionMode ? "checkmark.circle.fill" : "checklist")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(selectionMode ? FizzTheme.accent : Color.secondary)
+                .frame(width: 24, height: 24)
+                .contentShape(Circle())
         }
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .controlSize(.small)
+        .help(selectionMode ? "退出批量选择" : "批量选择项目")
+        .accessibilityLabel(selectionMode ? "退出批量选择" : "批量选择项目")
+        .accessibilityAddTraits(selectionMode ? .isSelected : [])
+    }
+
+    private var filterMenuLabel: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 11, weight: .semibold))
+            Text("筛选")
+                .font(.system(size: 11, weight: .medium))
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 2)
     }
 
     private var activeFilterChips: some View {
@@ -810,46 +824,6 @@ private enum HomeViewMode: String, CaseIterable, Identifiable {
         switch self {
         case .cards: "square.grid.2x2"
         case .list: "list.bullet"
-        }
-    }
-}
-
-private struct HomeModeButton: View {
-    let item: HomeViewMode
-    let selected: Bool
-    let namespace: Namespace.ID
-    let reduceMotion: Bool
-    let action: () -> Void
-
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: item.symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(selected ? FizzTheme.accent : Color.secondary)
-                .frame(width: 29, height: 24)
-                .background {
-                    if selected {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.white.opacity(0.92))
-                            .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
-                            .matchedGeometryEffect(id: "home-mode", in: namespace)
-                    } else if hovering {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.black.opacity(0.045))
-                    }
-                }
-                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .help(item.title)
-        .accessibilityLabel(item.title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .onHover { value in
-            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
-                hovering = value
-            }
         }
     }
 }

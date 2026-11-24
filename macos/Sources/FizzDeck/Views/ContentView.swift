@@ -6,7 +6,6 @@ struct ContentView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        @Bindable var store = store
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView()
                 .navigationSplitViewColumnWidth(228)
@@ -28,26 +27,54 @@ struct ContentView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .searchable(text: $store.query, prompt: "搜索项目、路径、技术栈")
         .toolbar(removing: .title)
         .toolbar(removing: .sidebarToggle)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    Task { await store.scan() }
-                } label: {
-                    Label("重新扫描", systemImage: "arrow.clockwise")
-                }
-                .help("重新扫描受管目录")
-                .disabled(store.phase == .scanning)
+            ToolbarItemGroup(placement: .navigation) {
+                if let project = store.selectedProject {
+                    Button {
+                        store.selectedPath = RepositoryStore.homeSelection
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .help("退出项目")
+                    .accessibilityLabel("退出项目")
 
-                Button {
-                    Task { await store.addRoot() }
-                } label: {
-                    Label("添加目录", systemImage: "plus")
+                    Button {
+                        Task { await store.rescanProjects([project]) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .help("重新扫描 \(project.displayName)")
+                    .accessibilityLabel("重新扫描项目")
+                    .disabled(store.phase == .scanning)
+                } else {
+                    Button {
+                        Task { await store.scan() }
+                    } label: {
+                        Label("重新扫描", systemImage: "arrow.clockwise")
+                    }
+                    .help("重新扫描受管目录")
+                    .disabled(store.phase == .scanning)
+
+                    Button {
+                        Task { await store.addRoot() }
+                    } label: {
+                        Label("添加目录", systemImage: "plus")
+                    }
+                    .help("把一个目录加入看板")
                 }
-                .help("把一个目录加入看板")
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    store.toggleCommandPalette()
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .help("搜索项目、分支、远程或动作（⌘K）")
+                .accessibilityLabel("搜索")
             }
         }
         .overlay {

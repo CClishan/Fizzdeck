@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ProjectDetailView: View {
@@ -13,38 +14,34 @@ struct ProjectDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             ProjectHero(project: project)
-            ZStack(alignment: .top) {
-                Group {
-                    switch tab {
-                    case .overview:
-                        OverviewTabView(
-                            project: project,
-                            noteDraft: $noteDraft,
-                            saveNote: { store.setNote(noteDraft, for: project) }
-                        )
-                    case .git:
-                        GitTabView(project: project, detail: detail, loading: loadingDetail) {
-                            await store.refreshGit(for: project.path)
-                            await reloadDetail()
-                        }
-                        .id(project.path)
-                    case .docs:
-                        DocsTabView(project: project, docs: detail.docs)
-                    case .sessions:
-                        SessionsTabView(project: project)
-                    case .tests:
-                        TestsTabView(project: project)
-                    case .cleanup:
-                        CleanupTabView(project: project)
+            Group {
+                switch tab {
+                case .overview:
+                    OverviewTabView(
+                        project: project,
+                        noteDraft: $noteDraft,
+                        saveNote: { store.setNote(noteDraft, for: project) }
+                    )
+                case .git:
+                    GitTabView(project: project, detail: detail, loading: loadingDetail) {
+                        await store.refreshGit(for: project.path)
+                        await reloadDetail()
                     }
+                    .id(project.path)
+                case .docs:
+                    DocsTabView(project: project, docs: detail.docs)
+                case .sessions:
+                    SessionsTabView(project: project)
+                case .tests:
+                    TestsTabView(project: project)
+                case .cleanup:
+                    CleanupTabView(project: project)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 54)
-
-                tabPicker
-                    .padding(.top, 10)
             }
-            .padding(.bottom, showsActionDock ? 84 : 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 8)
+            .padding(.bottom, showsActionDock ? 96 : 0)
+            .scrollEdgeEffectHidden(true, for: .bottom)
             .overlay(alignment: .bottom) {
                 if showsActionDock {
                     ProjectActionDock(project: project)
@@ -77,6 +74,13 @@ struct ProjectDetailView: View {
         .onChange(of: store.requestedTab) {
             applyRequestedTab()
         }
+        .toolbar {
+            ForEach(ProjectTab.allCases) { item in
+                ToolbarItem(id: "project-tab-\(item.rawValue)", placement: .principal) {
+                    projectTabButton(item)
+                }
+            }
+        }
     }
 
     private var accent: Color {
@@ -87,43 +91,19 @@ struct ProjectDetailView: View {
         project.run != nil || project.test != nil
     }
 
-    private var tabPicker: some View {
-        GlassEffectContainer(spacing: 0) {
-            HStack(spacing: 1) {
-                ForEach(ProjectTab.allCases) { item in
-                    Button {
-                        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
-                            tab = item
-                        }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: item.symbol)
-                                .font(.system(size: 10.5, weight: .medium))
-                            Text(item.title)
-                                .font(.system(size: 11.5, weight: tab == item ? .semibold : .medium))
-                        }
-                        .foregroundStyle(tab == item ? Color.primary : Color.secondary)
-                        .padding(.horizontal, 10)
-                        .frame(height: 28)
-                        .background {
-                            if tab == item {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.92))
-                                    .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
-                            }
-                        }
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .help(item.title)
-                    .accessibilityAddTraits(tab == item ? .isSelected : [])
-                    .accessibilityRemoveTraits(tab == item ? [] : .isSelected)
-                }
+    private func projectTabButton(_ item: ProjectTab) -> some View {
+        Button {
+            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                tab = item
             }
-            .padding(3)
-            .glassEffect(.regular.interactive(), in: Capsule())
+        } label: {
+            Text(item.title)
+                .font(.system(size: 11.5, weight: tab == item ? .semibold : .medium))
+                .foregroundStyle(tab == item ? FizzTheme.accent : Color.secondary)
         }
-        .shadow(color: .black.opacity(0.07), radius: 14, y: 5)
+        .help(item.title)
+        .accessibilityAddTraits(tab == item ? .isSelected : [])
+        .accessibilityRemoveTraits(tab == item ? [] : .isSelected)
     }
 
     private func applyRequestedTab() {
@@ -147,14 +127,27 @@ struct ProjectDetailView: View {
 
 private struct ProjectHero: View {
     let project: RepoProject
+    @State private var artwork: NSImage?
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
-            projectMark
+        ZStack(alignment: .bottomLeading) {
+            artworkBackground
+
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.32),
+                    .init(color: .black.opacity(0.34), location: 0.56),
+                    .init(color: .black.opacity(0.88), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(project.displayName)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(.white)
                     .lineLimit(1)
 
                 Button {
@@ -166,7 +159,7 @@ private struct ProjectHero: View {
                         Image(systemName: "doc.on.doc")
                             .font(.system(size: 8.5))
                     }
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.72))
                 }
                 .buttonStyle(.plain)
                 .help("复制完整路径")
@@ -187,26 +180,65 @@ private struct ProjectHero: View {
                     }
                 }
             }
-
-            Spacer(minLength: 12)
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             ProjectHeroActions(project: project)
+                .padding(18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         }
         .padding(.horizontal, 24)
-        .padding(.top, 20)
-        .padding(.bottom, 12)
+        .padding(.top, 8)
+        .frame(height: 300)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.08), radius: 18, y: 7)
+        .task(id: project.artwork) {
+            artwork = nil
+            guard let path = project.artwork else {
+                return
+            }
+            let data = await Task.detached(priority: .utility) {
+                try? Data(contentsOf: URL(fileURLWithPath: path))
+            }.value
+            guard !Task.isCancelled else { return }
+            artwork = data.flatMap(NSImage.init(data:))
+        }
     }
 
-    private var projectMark: some View {
-        Text(String(project.displayName.prefix(1)))
-            .font(.system(size: 22, weight: .semibold))
-            .foregroundStyle(accent)
-            .frame(width: 46, height: 46)
-            .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .strokeBorder(accent.opacity(0.16), lineWidth: 1)
+    private var artworkBackground: some View {
+        GeometryReader { proxy in
+            Group {
+                if let artwork {
+                    Image(nsImage: artwork)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFill()
+                } else {
+                    fallbackArtwork
+                }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var fallbackArtwork: some View {
+        ZStack {
+            LinearGradient(
+                colors: [accent.opacity(0.44), accent.opacity(0.18), .black.opacity(0.58)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Image(systemName: "rectangle.on.rectangle")
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(.white.opacity(0.5))
+        }
     }
 
     private var accent: Color {

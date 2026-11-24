@@ -90,6 +90,7 @@ enum RepositoryScanner {
         let weekly = await weeklyTask
         let sessions = SessionIndex.summary(for: directory, in: sessionIndex)
         let intro = IntroExtractor.extract(directory)
+        let artwork = ProjectArtwork.find(in: directory)
         let stacks = StackDetector.detect(directory)
         let run = RunDetector.runConfig(directory)
         let test = RunDetector.testCommand(directory)
@@ -114,6 +115,7 @@ enum RepositoryScanner {
             run: run,
             sessions: sessions,
             intro: intro,
+            artwork: artwork,
             test: test,
             starred: saved.starred,
             color: saved.color,

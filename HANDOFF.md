@@ -4,7 +4,7 @@
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
 - 当前分支：`main`（PR #1 已合并；`v0.2.0` 已发布）
 - 基线 HEAD：`a93c096 Merge pull request #1 from CClishan/codex/p1-palette-remote`
-- 状态：P0 完成，P1 功能完成，P2 5/5；原生删除和 AI 会话结束已补齐；本轮完成总览、项目页和分类收口；原生 app 已打包为 ad-hoc 签名 DMG，landing 已增加下载入口；旧 `https://fizzdeck.pages.dev` 保留可用。
+- 状态：P0 完成，P1 功能完成，P2 5/5；原生删除和 AI 会话结束已补齐；2026-11-24 完成总览、项目页和分类收口；本地 Release DMG 已重新打包（未上传），landing 继续使用已发布下载入口；旧 `https://fizzdeck.pages.dev` 保留可用。
 
 ## 新对话开场提示
 
@@ -476,6 +476,16 @@ CUA 实测：
 - “全部恢复”未单独触发；逐条恢复已验证。
 - 编辑器未实际启动：Xcode 与 Antigravity 只在菜单中确认，未点击打开；JetBrains 系列、Cursor、VS Code 和 Zed 未安装，未做真机打开。
 - 失败测试、清理命令实际执行仍依赖用户确认，原生版不自动删除。
+
+## 本轮 UI 收口（2026-11-24）
+
+- 总览：布局切换、筛选、批量选择实际落在标题行右端，不再单独占一行；布局只保留卡片墙/极简列表，改用原生 `Picker(.segmented)`；筛选使用原生 `Menu` + `.buttonStyle(.glass)`；批量选择使用原生玻璃按钮。
+- 项目页：hero 改为全宽 300，新增 `ProjectArtwork` 自动扫描（≥20 KB、≥640×300、宽高比 ≥1.2，优先 og/cover/home/hero）；标题、路径、标签叠在底部暗色渐变上；六个页签改为独立 `ToolbarItem(.principal)`；搜索保持独立图标；项目子页工具栏只保留退出、重扫、搜索。
+- 概览：项目简介与技术栈合并为同一张卡片并横向分栏；备注与本周提交同排。
+- 底部运行/测试操作区：启动/测试及 7 个操作项全部带名字，统一 66×24，使用原生 `.buttonStyle(.glass)`；状态在左，保留外层胶囊玻璃。
+- 踩坑：macOS 26 + `.toolbar(removing: .title)` 下，`ToolbarItemGroup(.confirmationAction)`、`.primaryAction` 和 `ToolbarSpacer(.flexible)` 没有把子视图操作项稳定推到右侧；最终改用内容标题行 `HStack`，不要再盲目试 placement。
+- 验证：`swift test --package-path macos` 32/32；`swift build --package-path macos -c release`；CUA 实测卡片墙/极简列表切换、项目页 hero、六页签、底部七项操作区；`git diff --check` 通过。
+- 本地分发：`macos/dist/FizzDeck-0.2.0-arm64-local.dmg`，Release 二进制，ad-hoc 签名，SHA-256 `c762750a5c86ea1b9553f61326f9b2e90212a90cda0758be3f60d439162f99e4`；未上传 GitHub Release，未做 Developer ID/公证。
 
 ## 发布记录
 

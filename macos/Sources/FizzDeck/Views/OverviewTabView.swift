@@ -80,10 +80,15 @@ struct OverviewTabView: View {
                     }
                 }
 
-                notePanel
-
                 if !project.weekly.isEmpty {
-                    weeklyPanel
+                    HStack(alignment: .top, spacing: 20) {
+                        notePanel
+                            .frame(maxWidth: .infinity)
+                        weeklyPanel
+                            .frame(maxWidth: .infinity)
+                    }
+                } else {
+                    notePanel
                 }
             }
             .padding(24)
@@ -92,44 +97,57 @@ struct OverviewTabView: View {
 
     private var projectSummaryPanel: some View {
         Panel(title: "项目", symbol: "text.quote") {
-            VStack(alignment: .leading, spacing: 12) {
-                if project.intro.text.isEmpty {
-                    Text("还没有项目简介")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                } else {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(project.intro.text)
-                            .font(.callout)
-                            .foregroundStyle(.primary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let source = project.intro.source {
-                            Text(source)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
+            HStack(alignment: .top, spacing: 24) {
+                projectIntro
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Rectangle()
+                    .fill(FizzTheme.hairline)
+                    .frame(width: 1)
+
+                projectStack
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var projectIntro: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            if project.intro.text.isEmpty {
+                Text("还没有项目简介")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(project.intro.text)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let source = project.intro.source {
+                    Text(source)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
+            }
+        }
+    }
 
-                Divider()
-                    .opacity(0.55)
-
-                if project.stacks.isEmpty {
-                    Text("未识别技术栈")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(project.stacks) { group in
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(group.label)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 54, alignment: .leading)
-                                FlowLayout(spacing: 5) {
-                                    ForEach(group.items, id: \.self) { item in
-                                        TagChip(text: item, tint: group.color)
-                                    }
+    private var projectStack: some View {
+        Group {
+            if project.stacks.isEmpty {
+                Text("未识别技术栈")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(project.stacks) { group in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(group.label)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 54, alignment: .leading)
+                            FlowLayout(spacing: 5) {
+                                ForEach(group.items, id: \.self) { item in
+                                    TagChip(text: item, tint: group.color)
                                 }
                             }
                         }

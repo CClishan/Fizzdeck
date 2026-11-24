@@ -19,6 +19,7 @@ struct RepoProject: Identifiable, Sendable {
     var run: RunConfig?
     var sessions: SessionSummary
     var intro: ProjectIntro
+    var artwork: String?
     var test: TestCommand?
     var starred: Bool
     var color: TagColor?

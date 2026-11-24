@@ -24,24 +24,67 @@ struct ProjectActionDock: View {
 
     var body: some View {
         GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 status
 
-                Spacer(minLength: 10)
+                Spacer(minLength: 8)
 
-                if run != nil {
+                if let run {
                     runButton
+                    if isRunning, let url = run.previewURL {
+                        dockButton(
+                            symbol: "safari",
+                            title: "打开预览",
+                            label: "打开预览"
+                        ) {
+                            SystemActions.openURL(url)
+                        }
+                    }
+                    dockButton(
+                        symbol: "terminal",
+                        title: "在 Terminal 中打开",
+                        label: "Terminal"
+                    ) {
+                        SystemActions.openTerminal(project.path)
+                    }
+                    dockButton(
+                        symbol: "doc.on.doc",
+                        title: "复制启动命令",
+                        label: "复制命令"
+                    ) {
+                        SystemActions.copy(run.command)
+                    }
+                    dockButton(
+                        symbol: "doc.text.magnifyingglass",
+                        title: "打开启动日志",
+                        label: "启动日志"
+                    ) {
+                        actions.openLog(for: project)
+                    }
                 }
-                if project.test != nil {
+                if let test = project.test {
                     testButton
+                    dockButton(
+                        symbol: "list.bullet.rectangle",
+                        title: "打开测试日志",
+                        label: "测试日志"
+                    ) {
+                        actions.openLog(for: project, test: true)
+                    }
+                    dockButton(
+                        symbol: "doc.on.clipboard",
+                        title: "复制测试命令",
+                        label: "复制测试"
+                    ) {
+                        SystemActions.copy(test.command)
+                    }
                 }
-                options
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
             .glassEffect(.regular, in: Capsule())
         }
-        .frame(maxWidth: 640)
+        .frame(maxWidth: 900)
         .shadow(color: .black.opacity(0.08), radius: 18, y: 7)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("运行与测试")
@@ -63,11 +106,16 @@ struct ProjectActionDock: View {
                     .lineLimit(1)
             }
         }
-        .frame(minWidth: 150, alignment: .leading)
+        .frame(minWidth: 132, maxWidth: 220, alignment: .leading)
     }
 
     private var runButton: some View {
-        Button {
+        dockButton(
+            symbol: isRunning ? "stop.fill" : "play.fill",
+            title: isRunning ? "停止开发服务" : "启动开发服务",
+            label: isRunning ? "停止服务" : "启动服务",
+            disabled: actions.isBusy(project.path)
+        ) {
             Task {
                 if isRunning {
                     await actions.stop(project, store: store)
@@ -75,95 +123,48 @@ struct ProjectActionDock: View {
                     await actions.launch(project, store: store)
                 }
             }
-        } label: {
-            Image(systemName: isRunning ? "stop.fill" : "play.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 26, height: 24)
-                .contentShape(Capsule())
         }
-        .buttonStyle(.glass)
-        .controlSize(.small)
-        .disabled(actions.isBusy(project.path))
-        .help(isRunning ? "停止开发服务" : "启动开发服务")
-        .accessibilityLabel(isRunning ? "停止开发服务" : "启动开发服务")
     }
 
     private var testButton: some View {
-        Button {
+        dockButton(
+            symbol: testSymbol,
+            title: isTestRunning ? "停止测试" : "运行测试",
+            label: isTestRunning ? "停止测试" : "运行测试"
+        ) {
             if isTestRunning {
                 actions.stopTests(project)
             } else {
                 actions.runTests(project, store: store)
             }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: testSymbol)
-                    .font(.system(size: 10.5, weight: .semibold))
-                Text(testButtonTitle)
-                    .font(.system(size: 11.5, weight: .medium))
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 4)
         }
-        .buttonStyle(.glass)
-        .controlSize(.small)
-        .help(isTestRunning ? "停止测试" : "运行测试")
-        .accessibilityLabel(isTestRunning ? "停止测试" : "运行测试")
     }
 
-    private var options: some View {
-        Menu {
-            if let run {
-                Button {
-                    SystemActions.openTerminal(project.path)
-                } label: {
-                    Label("在 Terminal 中打开", systemImage: "terminal")
-                }
-                Button {
-                    SystemActions.copy(run.command)
-                } label: {
-                    Label("复制启动命令", systemImage: "doc.on.doc")
-                }
-                if isRunning, let url = run.previewURL {
-                    Button {
-                        SystemActions.openURL(url)
-                    } label: {
-                        Label("打开预览", systemImage: "safari")
-                    }
-                }
-                Button {
-                    actions.openLog(for: project)
-                } label: {
-                    Label("打开启动日志", systemImage: "doc.text.magnifyingglass")
-                }
+    private func dockButton(
+        symbol: String,
+        title: String,
+        label: String,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: symbol)
+                    .font(.system(size: 10.5, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .lineLimit(1)
             }
-
-            if let test = project.test {
-                if run != nil { Divider() }
-                Button {
-                    actions.openLog(for: project, test: true)
-                } label: {
-                    Label("打开测试日志", systemImage: "doc.text.magnifyingglass")
-                }
-                Button {
-                    SystemActions.copy(test.command)
-                } label: {
-                    Label("复制测试命令", systemImage: "doc.on.doc")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 11.5, weight: .semibold))
-                .frame(width: 24, height: 24)
-                .contentShape(Circle())
+            .foregroundStyle(.primary)
+            .frame(width: 66, height: 24)
+            .contentShape(Capsule())
         }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
         .buttonStyle(.glass)
+        .buttonBorderShape(.capsule)
         .controlSize(.small)
-        .help("更多运行与测试操作")
-        .accessibilityLabel("更多运行与测试操作")
+        .disabled(disabled)
+        .help(title)
+        .accessibilityLabel(title)
     }
 
     private var statusTitle: String {
@@ -201,13 +202,8 @@ struct ProjectActionDock: View {
         return run == nil ? .secondary : .orange
     }
 
-    private var testButtonTitle: String {
-        if isTestRunning { return "停止" }
-        return testRun == nil ? "测试" : "重测"
-    }
-
     private var testSymbol: String {
-        guard let testRun else { return "play.fill" }
+        guard let testRun else { return "testtube.2" }
         switch testRun.status {
         case .running: return "stop.fill"
         case .passed: return "checkmark.circle"
