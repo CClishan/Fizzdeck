@@ -25,6 +25,12 @@ Build, launch, and verify:
 ./script/build_and_run.sh --verify
 ```
 
+Run the Swift test baseline:
+
+```sh
+swift test
+```
+
 The app bundle is written to `dist/FizzDeck.app`.
 
 Other entry points:
@@ -47,7 +53,7 @@ To work in Xcode, open `Package.swift`.
 - Menu bar pending count with quick access to the overview and recent projects
 - Local notifications when a dev server becomes ready or a test fails
 - `⌘K` command palette for projects, branches, and actions
-- Finder, Terminal, and editor quick actions, including `⌘⇧T` for Terminal
+- Finder, Terminal, and editor quick actions for Cursor, VS Code, Zed, Antigravity, JetBrains IDEs, and top-level or nested Xcode targets, including `⌘⇧T` for Terminal
 - Collapsible project groups and search
 - Dashboard, list, and gallery layouts
 - Group filtering plus multi-select batch rescan and cleanup-command copy across all three layouts

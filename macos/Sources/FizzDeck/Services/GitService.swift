@@ -44,6 +44,11 @@ struct GitRemote: Sendable, Hashable {
     }
 }
 
+struct GitTrackingCounts: Equatable, Sendable {
+    var behind = 0
+    var ahead = 0
+}
+
 enum GitService {
     private static let fieldSeparator = "\u{1f}"
     private static let recordSeparator = "\u{1e}"
@@ -83,22 +88,14 @@ enum GitService {
         let lines = statusLines(status)
         let untracked = lines.filter { $0.hasPrefix("??") }.count
         let changes = ChangeStats(tracked: lines.count - untracked, untracked: untracked, total: lines.count)
-        var ahead = 0
-        var behind = 0
-        if let tracking, tracking.contains("\t") {
-            let parts = tracking.split(separator: "\t").compactMap { Int($0) }
-            if parts.count == 2 {
-                behind = parts[0]
-                ahead = parts[1]
-            }
-        }
+        let counts = trackingCounts(tracking)
 
         return GitSummary(
             branch: branch ?? "HEAD",
             lastCommit: parseLastCommit(log),
             changes: changes,
-            ahead: ahead,
-            behind: behind
+            ahead: counts.ahead,
+            behind: counts.behind
         )
     }
 
@@ -137,22 +134,14 @@ enum GitService {
 
         let branchList = parseBranches(branches)
         let files = parseChangedFiles(status)
-        var aheadCount = 0
-        var behindCount = 0
-        if let ahead, ahead.contains("\t") {
-            let parts = ahead.split(separator: "\t").compactMap { Int($0) }
-            if parts.count == 2 {
-                behindCount = parts[0]
-                aheadCount = parts[1]
-            }
-        }
+        let counts = trackingCounts(ahead)
 
         let summary = GitDetail(
             branches: Array(branchList.prefix(40)),
             files: Array(files.prefix(200)),
             remote: remote,
-            ahead: aheadCount,
-            behind: behindCount,
+            ahead: counts.ahead,
+            behind: counts.behind,
             stashCount: stash?.split(separator: "\n").filter { !$0.isEmpty }.count ?? 0,
             lastTag: tag,
             changedCount: files.count
@@ -202,6 +191,13 @@ enum GitService {
             subject: String(fields[2]),
             author: String(fields[3])
         )
+    }
+
+    static func trackingCounts(_ output: String?) -> GitTrackingCounts {
+        guard let output else { return GitTrackingCounts() }
+        let parts = output.split(whereSeparator: \.isWhitespace).compactMap { Int($0) }
+        guard parts.count == 2 else { return GitTrackingCounts() }
+        return GitTrackingCounts(behind: parts[0], ahead: parts[1])
     }
 
     private static func parseBranches(_ output: String?) -> [BranchInfo] {

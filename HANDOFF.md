@@ -2,9 +2,9 @@
 
 - 更新时间：2026-11-24
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
-- 当前分支：`codex/p1-palette-remote`（PR #1，等待合并；已含批量操作）
+- 当前分支：`codex/p1-palette-remote`（PR #1，等待合并；已含批量操作、编辑器覆盖和 Swift 测试）
 - 基线 HEAD：`732ef39 Add remote repository actions and palette search`
-- 状态：P0 完成，P1 功能完成，P2 进行中；分组筛选与批量操作已完成；原生 app 可本地构建和 ad-hoc 运行；landing 主入口为 `https://koroo.top/fizzdeck`，旧 `https://fizzdeck.pages.dev` 保留可用。
+- 状态：P0 完成，P1 功能完成，P2 3/5；分组筛选/批量操作、编辑器覆盖和 Swift 测试已完成；原生 app 可本地构建和 ad-hoc 运行；landing 主入口为 `https://koroo.top/fizzdeck`，旧 `https://fizzdeck.pages.dev` 保留可用。
 
 ## 新对话开场提示
 
@@ -13,7 +13,7 @@
 ```text
 继续 FizzDeck 原生 macOS 项目，仓库在 /Users/a003/dsh-workspace/repo-dashboard。
 
-先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 P0 完成，P1 功能完成，P2 进行中；分组筛选与批量操作已完成。下一步优先补 P1 的真实 Git 错误路径、菜单栏/通知直测，或从 HANDOFF.md 的“待增加能力”选择 P2 任务，先汇报改动文件和验收方式，再动手。
+先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 P0 完成，P1 功能完成，P2 3/5；分组筛选/批量操作、编辑器覆盖和 Swift 测试已完成。下一步优先补 P1 的真实 Git 错误路径、菜单栏/通知直测，或继续 P2 的 AI 会话管理；原生删除属于破坏性能力，先确认再动。
 
 不要合并 PR、签名、公证或部署，除非我明确确认；本阶段已授权提交、推送和更新 PR。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
 
@@ -24,13 +24,13 @@
 
 | 项目 | 当前状态 |
 |---|---|
-| 原生 app | P0 完成，P1 功能完成，P2 1/5；`swift build` 通过；ad-hoc 签名可本地运行 |
+| 原生 app | P0 完成，P1 功能完成，P2 3/5；`swift build`、`swift test` 通过；ad-hoc 签名可本地运行 |
 | 原生分发 | 未做 Developer ID 签名、公证、安装包和自动更新 |
 | Web UI | 保留在 `src/` + `server.mjs`，不是当前主入口 |
 | Landing | `https://koroo.top/fizzdeck` 已上线；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
-| 仓库 | 本轮 P1 与 P2 批量操作已提交到 `codex/p1-palette-remote`，PR #1 等待合并 |
-| 验证基线 | Swift build、GitSync 本地 6 项、CUA 远程动作；ESLint、TypeScript、34 页生产构建、1440/390/320 浏览器验收、reduced motion 通过 |
-| 任务进度 | P0 5/5；P1 5/5（功能完成，2 项真实环境直测待补）；P2 1/5；发布与交付 0/3；质量与性能 0/4 |
+| 仓库 | 本轮 P1 与 P2 改动已提交到 `codex/p1-palette-remote`，PR #1 等待合并 |
+| 验证基线 | Swift build、Swift test 15 例、GitSync 本地 6 项、CUA 远程动作；ESLint、TypeScript、34 页生产构建、1440/390/320 浏览器验收、reduced motion 通过 |
+| 任务进度 | P0 5/5；P1 5/5（功能完成，2 项真实环境直测待补）；P2 3/5；发布与交付 0/3；质量与性能 0/4 |
 
 ## 项目是什么
 
@@ -86,7 +86,7 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - 统一 `ProjectQuickActions`，已接入首页卡片右键、列表右键、侧栏右键、详情页头部和概览运行面板。
 - Finder：定位并选中项目目录。
 - Terminal：在项目目录打开新 Terminal 窗口。
-- 编辑器：自动检测 Cursor、VS Code、Zed、Xcode；Xcode 只对存在 `.xcworkspace`、`.xcodeproj` 或 `Package.swift` 的项目显示。
+- 编辑器：自动检测 Cursor、VS Code、Zed、Antigravity、JetBrains 系列和 Xcode；Xcode 支持顶层与最多 3 层的嵌套 workspace、project 或 `Package.swift`。
 - 复制项目完整路径。
 - `⌘⇧T` 在当前项目打开 Terminal。
 
@@ -254,6 +254,33 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - `macos/Sources/FizzDeck/Stores/RepositoryStore.swift`
 - `macos/Sources/FizzDeck/Views/HomeDashboardView.swift`
 
+### 2. 编辑器覆盖
+
+- 保留 Cursor、VS Code、Zed 和 Xcode，新增 Antigravity 与 JetBrains 系列：IntelliJ IDEA、WebStorm、PyCharm、GoLand、RustRover、CLion、PhpStorm、RubyMine、DataGrip。
+- JetBrains 同时识别 Ultimate / Community 的 bundle ID，并保留 `/Applications` 回退路径；只显示已安装的编辑器。
+- Xcode 目标不再只看顶层：优先顶层 workspace / project / `Package.swift`，否则在最多 3 层目录内找嵌套 workspace、project 或 `Package.swift`。
+- 嵌套搜索跳过 `node_modules`、`Pods`、`build`、`dist`、`DerivedData`、`vendor`、隐藏目录和符号链接，避免扫描生成目录。
+
+相关文件：
+
+- `macos/Sources/FizzDeck/Support/SystemActions.swift`
+- `macos/Sources/FizzDeck/Views/Components.swift`
+- `macos/Sources/FizzDeck/Views/CommandPaletteView.swift`
+
+### 3. Swift 测试基线
+
+- 新增 SwiftPM `FizzDeckTests` target，可直接运行 `swift test --package-path macos`。
+- 覆盖待处理队列的五类优先级、最近项目 tie-break、1 GB 清理阈值和静默到期判断。
+- 覆盖 Git tracking 的 behind/ahead 解析、缺失 upstream、格式异常和 SSH remote 转换。
+- 覆盖编辑器嵌套 Xcode 目标：嵌套 workspace、顶层优先、嵌套 Package 回退、生成目录跳过。
+
+相关文件：
+
+- `macos/Package.swift`
+- `macos/Tests/FizzDeckTests/ProjectAttentionQueueTests.swift`
+- `macos/Tests/FizzDeckTests/GitServiceTests.swift`
+- `macos/Tests/FizzDeckTests/ProjectEditorTests.swift`
+
 ## 验证记录
 
 已通过：
@@ -335,6 +362,21 @@ P2 分组筛选与批量操作：
 - 批量操作前后 `~/.repodeck/roots.json` 与 `state.json` 的 SHA-256 与操作前快照一致。
 - 未实测：所选目录不存在、部分目录在扫描前消失的提示未用真实缺失目录触发；代码会在重扫前过滤非目录并回显数量。
 
+P2 编辑器覆盖：
+
+- `swift build --package-path macos` 通过。
+- 单测覆盖嵌套 workspace、顶层目标优先、嵌套 `Package.swift` 回退、`node_modules` 跳过。
+- CUA 实测：repo-dashboard 的快捷操作同时出现“用 Xcode 打开”和“用 Antigravity 打开”。
+- CUA 实测：项目详情“打开方式 → 在编辑器中打开”列出 Xcode 与 Antigravity；未实际启动编辑器。
+- JetBrains 系列当前机器未安装，仅完成 bundle ID / 路径映射与编译验证，未做真机打开。
+
+P2 Swift 测试基线：
+
+- `swift test --package-path macos` 通过，15 例 0 失败。
+- `GitServiceTests` 5 例：behind/ahead 顺序、零值、无 upstream、异常格式、SSH remote URL。
+- `ProjectAttentionQueueTests` 4 例：五类优先级、最近项目 tie-break、1 GB 阈值、静默到期。
+- `ProjectEditorTests` 6 例：嵌套 workspace、顶层目标优先、顶层/嵌套 Package 回退、嵌套 workspace 优先于 Package、生成目录跳过。
+
 CUA 实测：
 
 - 首页队列显示 18 个项目 / 24 项。
@@ -356,14 +398,14 @@ CUA 实测：
 - 本地通知已验证授权与通知中心落库；banner 视觉、声音和点击跳转未逐项截图验证。
 - 稍后提醒没有实际等待 1 小时到期；到期重算依赖每 60 秒时间刷新。
 - “全部恢复”未单独触发；逐条恢复已验证。
-- 编辑器打开未实操：当前扫描项目没有顶层 Xcode 工程目标，机器也未安装 Cursor / VS Code / Zed。
+- 编辑器未实际启动：Xcode 与 Antigravity 只在菜单中确认，未点击打开；JetBrains 系列、Cursor、VS Code 和 Zed 未安装，未做真机打开。
 - 失败测试、清理命令实际执行仍依赖用户确认，原生版不自动删除。
 
 ## 发布记录
 
 - FizzDeck 上次 `main` 发布：`00c678b Record FizzDeck landing deployment`
 - FizzDeck 推送：`origin/main`，`4133ff2..00c678b`
-- 本轮 P1 / P2 PR：`https://github.com/CClishan/Fizzdeck/pull/1`（未合并；含命令面板、远程仓库、Git 错误文案、分组筛选和批量操作）
+- 本轮 P1 / P2 PR：`https://github.com/CClishan/Fizzdeck/pull/1`（未合并；含命令面板、远程仓库、Git 错误文案、分组筛选/批量操作、编辑器覆盖和 Swift 测试）
 - 分支 `codex/p1-palette-remote` 起始提交：`732ef39 Add remote repository actions and palette search`
 - Landing 主入口：`https://koroo.top/fizzdeck`
 - koroo 路由提交：`f4a1b4f feat: mount FizzDeck landing at /fizzdeck`
@@ -374,8 +416,8 @@ CUA 实测：
 
 ## 工作区现状（重要）
 
-- `codex/p1-palette-remote` 当前包含 P1 以及 P2 批量操作；PR #1 等待用户合并，未合并到 `main`。
-- 批量操作提交后工作区应为空；`~/.repodeck` 的 `roots.json`、`state.json` 未因验收改动。
+- `codex/p1-palette-remote` 当前包含 P1 以及 P2 的批量操作、编辑器覆盖和 Swift 测试；PR #1 等待用户合并，未合并到 `main`。
+- P2 提交后工作区应为空；`~/.repodeck` 的 `roots.json`、`state.json` 未因验收改动。
 - `macos/dist/FizzDeck.app` 是本机 ad-hoc 构建产物，不是发行包；不要把它当作可分发版本。
 - koroo 仓库的 motion/article 改动已在 `cff192b` 提交；本交接不再依赖未提交改动。
 - 不要回滚 `server.mjs`、`vite.config.js`、`public/`、`landing.html`、`src/landing/`、`src/stageshow/` 的已发布内容；需要修改时单独开任务。
@@ -399,8 +441,8 @@ CUA 实测：
 
 - [ ] 原生删除项目：对齐网页版的备份、移入废纸篓、浅路径保护、目录名确认和测试运行时拦截。相关文件：`RepositoryStore.swift`、`ProjectDetailView.swift`、新增删除服务。验收：不自动永久删除；失败不改变目录；备份可恢复。
 - [x] 批量操作：批量重扫、批量复制清理命令、按组筛选。相关文件：`HomeDashboardView.swift`、`RepositoryStore.swift`、`RepositoryScanner.swift`。验收：选择态清晰、部分失败可回显、无误触破坏性操作；目录存在性预检和数量回显已实现。
-- [ ] 编辑器覆盖：JetBrains 系列、Antigravity、嵌套 Xcode 工程。相关文件：`SystemActions.swift`、`Models.swift`。验收：安装/未安装、工程/普通目录分别显示正确。
-- [ ] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行。
+- [x] 编辑器覆盖：JetBrains 系列、Antigravity、嵌套 Xcode 工程。相关文件：`SystemActions.swift`、`CommandPaletteView.swift`、`Components.swift`。验收：安装/未安装、工程/普通目录分别显示正确；本机已验证 Xcode 与 Antigravity，JetBrains 映射待安装后直测。
+- [x] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行，15 例通过。
 - [ ] AI 会话管理：会话列表、恢复、结束、按项目过滤；仍只读本地元数据。相关文件：Services 与 Views 下的会话相关实现。验收：Codex/Claude 两类会话、无会话空态、复制命令正确。
 
 ### 质量与性能
@@ -412,9 +454,9 @@ CUA 实测：
 
 ### 建议接手顺序
 
-1. 先跑基线：`swift build --package-path macos`、`./macos/script/build_and_run.sh --verify`。
+1. 先跑基线：`swift build --package-path macos`、`swift test --package-path macos`、`./macos/script/build_and_run.sh --verify`。
 2. P1 功能已完成；下一步补真实凭据失效/网络中断和菜单栏/通知直测。
-3. 批量操作已完成；P2 下一项优先原生删除（带备份和确认），再做编辑器覆盖、Swift 测试基线和 AI 会话管理。
+3. 批量操作、编辑器覆盖和 Swift 测试已完成；P2 下一项优先 AI 会话管理。原生删除带破坏性，需先明确备份、废纸篓和确认方案再实施。
 4. 最后做 Developer ID 分发；用户已明确跳过签名、公证和旧域名 301。
 
 ### 不做
@@ -434,6 +476,9 @@ CUA 实测：
 - `GitRemote` 只负责把 remote 转成浏览器地址，不改变原始 remote；打开/复制都不发起网络写操作。
 - `ShellOutput.timedOut` 是 Git 同步超时文案的依据；新增后台命令时不要只看退出码。
 - `GitService.summary` 多跑一次 `git rev-list --count --left-right @{upstream}...HEAD`；无 upstream 时返回 0/0。
+- `GitService.trackingCounts` 是 ahead/behind 的唯一解析入口，输出顺序是 behind、ahead；新增调用不要重复解析。
+- `ProjectEditor.available` 只返回已安装且能定位打开目标的编辑器；Xcode 嵌套搜索最多 3 层，并跳过生成目录。
+- `FizzDeckTests` 直接依赖 executable target；新增可测逻辑保持 internal，不要为了测试改成 public。
 - 首页队列只在总览、无搜索、无筛选时显示。
 - 队列的 `ProjectAttentionKind.priority` 是唯一排序来源，新增类型时改这里。
 - 窗口可见性校正只在窗口不可达时触发，不会强行覆盖用户正常摆放。
@@ -455,6 +500,7 @@ CUA 实测：
 cd /Users/a003/dsh-workspace/repo-dashboard
 
 swift build --package-path macos
+swift test --package-path macos
 ./macos/script/build_and_run.sh --verify
 ./macos/script/build_and_run.sh --sign-local
 ./macos/script/build_and_run.sh --logs

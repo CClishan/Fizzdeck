@@ -46,6 +46,12 @@ Build, launch, and verify the app:
 ./macos/script/build_and_run.sh --verify
 ```
 
+Run the Swift test baseline:
+
+```sh
+swift test --package-path macos
+```
+
 For local notification testing, use an ad-hoc signature:
 
 ```sh
@@ -93,7 +99,7 @@ On a fresh install, use **Scan folder** in the sidebar to discover and add proje
 | Attention queue | Surfaces failing tests, behind-remote and unpushed commits, uncommitted files, and reclaimable disk. Ordered by urgency; each row opens the matching project tab and offers inline push, fast-forward pull, test rerun, or cleanup-command copy. Right-click a row to snooze or mute that project/type; silenced rules can be restored from the header. |
 | Menu bar | Keeps the pending-item count visible, opens the overview or a recent project, and sends local notifications when a dev server becomes ready or a test fails. |
 | Quick open | `⌘K` searches projects, branches, remote URLs, and actions with recent items, fuzzy matching, and pinned commands. Run project commands and app actions without leaving the keyboard. |
-| Project actions | Open a project in Finder, Terminal, or an installed editor (Cursor, VS Code, Zed, and Xcode when a project target exists), or copy its path. `⌘⇧T` opens the current project in Terminal. |
+| Project actions | Open a project in Finder, Terminal, or an installed editor (Cursor, VS Code, Zed, Antigravity, JetBrains IDEs, and Xcode including nested targets), or copy its path. `⌘⇧T` opens the current project in Terminal. |
 | AI sessions | Reads local Codex and Claude Code session metadata, matches sessions to projects, and copies `codex resume` / `claude --resume` commands. |
 | Git | Shows the current branch, ahead/behind state, dirty files, recent commits, and the `origin` URL. Supports opening or copying the remote, branch switching, and confirmed fetch, fast-forward pull, and push with inline results; dirty worktrees are protected. |
 | Dev servers | Detects common dev scripts and ports, starts and stops project processes, waits for readiness, and opens the app in a browser. |
