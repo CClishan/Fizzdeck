@@ -2,6 +2,8 @@
 
 **A local-first project dashboard for macOS.** Scan selected folders, recognize your repositories, inspect Git and disk state, resume AI coding sessions, and launch development servers from one place.
 
+Live landing page: [fizzdeck.pages.dev](https://fizzdeck.pages.dev)
+
 No account, no telemetry, no hosted backend. FizzDeck reads only local project metadata and keeps its state on your Mac.
 
 [中文说明](README.zh-CN.md)

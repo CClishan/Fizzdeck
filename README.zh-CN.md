@@ -2,6 +2,8 @@
 
 **本地优先的 macOS 项目看板。** 扫描指定目录、识别工程、查看 Git 与磁盘状态、恢复 AI 编程会话，并从一个界面启动开发服务。
 
+线上 landing：[fizzdeck.pages.dev](https://fizzdeck.pages.dev)
+
 不需要账号，不上传遥测，也没有托管后端。FizzDeck 只读取本机项目元数据，状态保存在本机。
 
 [English](README.md)

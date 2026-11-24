@@ -3,8 +3,8 @@
 更新时间：2026-11-24  
 仓库：`/Users/a003/dsh-workspace/repo-dashboard`  
 当前分支：`main`  
-当前 HEAD：`b38b6d3 Initial FizzDeck release`  
-状态：P0 / P1 改动均未提交、未推送
+当前 HEAD：`4133ff2 Ship native dashboard and public landing page`  
+状态：P0 / P1 已提交并推送到 `origin/main`；landing 已部署到 `https://fizzdeck.pages.dev`
 
 ## 新对话开场提示
 
@@ -271,6 +271,16 @@ CUA 实测：
 - 编辑器打开未实操：当前扫描项目没有顶层 Xcode 工程目标，机器也未安装 Cursor / VS Code / Zed。
 - 失败测试、清理命令实际执行仍依赖用户确认，原生版不自动删除。
 
+## 发布记录
+
+- 提交：`4133ff2 Ship native dashboard and public landing page`
+- 推送：`origin/main`，`b38b6d3..4133ff2`
+- Cloudflare Pages 项目：`fizzdeck`
+- 生产地址：`https://fizzdeck.pages.dev/`
+- 本次部署：`780ed1fd.fizzdeck.pages.dev`（生产域名已验证，部署域名在当前代理下 TLS 握手失败）
+- 线上验收：`/` 返回 200，landing 的 JS、CSS、logo 资源均返回 200；滚动到 CTA 后文案、命令和 GitHub 按钮正常显示。
+- 原生 app 仍为本地 ad-hoc 构建，未做 Developer ID 签名、公证或分发。
+
 ## 工作区现状（重要）
 
 本任务产生的改动：
@@ -315,8 +325,9 @@ P1 验证期间继续检测到 `src/landing/FizzDeckStage.jsx`、`src/landing/fi
 
 ### 待确认
 
-- [ ] 提交并推送 P0。需用户明确确认；建议新建 `codex/` 分支，不直接推 `main`。
-- [ ] 如需发布，补签名、公证和版本号。
+- [x] 提交并推送 P0 / P1。
+- [x] 部署 landing 到 Cloudflare Pages。
+- [ ] 如需公开分发原生 app，补 Developer ID 签名、公证和版本号。
 
 ### P1（建议按顺序）
 
