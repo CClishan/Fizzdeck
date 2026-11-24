@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+macos/.build/
+macos/.swiftpm/
+macos/.manual-build/
+macos/dist/
+output/

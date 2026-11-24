@@ -1,0 +1,29 @@
+{
+  "name": "fizzdeck",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "FizzDeck: 本地优先的 macOS 项目看板，含原生 SwiftUI 与轻量网页版",
+  "scripts": {
+    "dev": "node server.mjs",
+    "build": "node build.mjs",
+    "start": "node start.mjs",
+    "serve": "node server.mjs",
+    "clean-report": "node scan-clean.mjs"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.9.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.78.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@vitejs/plugin-react": "^6.3.0",
+    "tailwindcss": "^4.3.5",
+    "vite": "^8.3.8"
+  }
+}
