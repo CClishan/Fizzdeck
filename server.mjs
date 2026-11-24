@@ -923,7 +923,11 @@ const server = http.createServer(async (req, res) => {
       }
       return send(res, 200, { ok: true });
     }
-    const rel = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\//, '');
+    const rel = url.pathname === '/'
+      ? 'index.html'
+      : url.pathname === '/landing' || url.pathname === '/landing/'
+        ? 'landing.html'
+        : url.pathname.replace(/^\//, '');
     const file = path.join(PUBLIC, rel);
     if (!path.resolve(file).startsWith(path.resolve(PUBLIC))) return send(res, 403, 'forbidden', 'text/plain');
     if (!fs.existsSync(file)) return send(res, 404, 'not found', 'text/plain');

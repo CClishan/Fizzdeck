@@ -44,6 +44,12 @@ Build, launch, and verify the app:
 ./macos/script/build_and_run.sh --verify
 ```
 
+For local notification testing, use an ad-hoc signature:
+
+```sh
+./macos/script/build_and_run.sh --sign-local
+```
+
 The app bundle is written to `macos/dist/FizzDeck.app`. To work in Xcode, open `macos/Package.swift`.
 
 On a fresh install, use **Add project folder** to select the first directory to manage.
@@ -81,8 +87,12 @@ On a fresh install, use **Scan folder** in the sidebar to discover and add proje
 |---|---|
 | Project discovery | Scans managed folders for repositories and project markers such as `.git`, `package.json`, `pom.xml`, and `go.mod`. Skips heavy generated folders such as `node_modules`, `Library`, `dist`, and `build`. |
 | Dashboard | Native overview with starred, changed, and running filters; collapsible project groups; dashboard, list, and gallery layouts. |
+| Attention queue | Surfaces failing tests, behind-remote and unpushed commits, uncommitted files, and reclaimable disk. Ordered by urgency; each row opens the matching project tab and offers inline push, fast-forward pull, test rerun, or cleanup-command copy. Right-click a row to snooze or mute that project/type; silenced rules can be restored from the header. |
+| Menu bar | Keeps the pending-item count visible, opens the overview or a recent project, and sends local notifications when a dev server becomes ready or a test fails. |
+| Quick open | `⌘K` searches projects, branches, and actions. Run project commands and app actions without leaving the keyboard. |
+| Project actions | Open a project in Finder, Terminal, or an installed editor (Cursor, VS Code, Zed, and Xcode when a project target exists), or copy its path. `⌘⇧T` opens the current project in Terminal. |
 | AI sessions | Reads local Codex and Claude Code session metadata, matches sessions to projects, and copies `codex resume` / `claude --resume` commands. |
-| Git | Shows the current branch, dirty files, and recent commits. Supports branch switching and remote sync; dirty worktrees are protected. |
+| Git | Shows the current branch, ahead/behind state, dirty files, and recent commits. Supports branch switching plus confirmed fetch, fast-forward pull, and push with inline results; dirty worktrees are protected. |
 | Dev servers | Detects common dev scripts and ports, starts and stops project processes, waits for readiness, and opens the app in a browser. |
 | Disk usage | Breaks down project size and reclaimable space across dependencies, build caches, artifacts, temporary files, and AI session history. |
 | Cleanup | Provides copy-only cleanup commands. It never executes destructive cleanup automatically. |
@@ -136,7 +146,8 @@ scan-clean.mjs          CLI disk-usage report
 - The native app requires macOS 26+. It is built from source and is not signed or notarized yet.
 - The native app focuses on inspection and daily project actions. Destructive project removal is currently handled by the web UI.
 - The native theme is intentionally light-only.
-- There are no background file watchers or menu bar agents yet.
+- There are no background file watchers yet.
+- Local notifications require system permission. The `--sign-local` build uses an ad-hoc signature, which is enough to register with Notification Center for local testing; distribution still needs a Developer ID signature and notarization.
 - AI session integration currently covers Codex and Claude Code.
 - Port detection is heuristic; unusual development setups may need a mapping in `server.mjs`.
 - Initial scans run `du`-style size checks and take roughly a few seconds per large folder. Later loads use the scan cache until a rescan.

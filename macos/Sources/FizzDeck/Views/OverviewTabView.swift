@@ -199,6 +199,13 @@ struct OverviewTabView: View {
 
                         CopyButton(title: "复制命令", value: run.command)
                         Button {
+                            SystemActions.openTerminal(project.path)
+                        } label: {
+                            Label("终端", systemImage: "terminal")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        Button {
                             actions.openLog(for: project)
                         } label: {
                             Label("日志", systemImage: "doc.text.magnifyingglass")

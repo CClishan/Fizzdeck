@@ -92,7 +92,7 @@ struct CleanupTabView: View {
             Spacer(minLength: 8)
 
             Button {
-                SystemActions.copy("rm -rf \(shellQuote(item.path))")
+                SystemActions.copy(project.cleanup.removalCommand(for: item))
             } label: {
                 Image(systemName: "doc.on.doc")
             }
@@ -151,7 +151,4 @@ struct CleanupTabView: View {
         }
     }
 
-    private func shellQuote(_ value: String) -> String {
-        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
 }

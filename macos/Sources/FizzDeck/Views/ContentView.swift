@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(RepositoryStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
@@ -50,6 +51,17 @@ struct ContentView: View {
                 .help("把一个目录加入看板")
             }
         }
+        .overlay {
+            if store.isCommandPalettePresented {
+                CommandPaletteView()
+                    .transition(.opacity.combined(with: .scale(scale: 0.985, anchor: .top)))
+                    .zIndex(10)
+            }
+        }
+        .animation(
+            FizzMotion.resolved(reduceMotion, FizzMotion.panel),
+            value: store.isCommandPalettePresented
+        )
     }
 }
 

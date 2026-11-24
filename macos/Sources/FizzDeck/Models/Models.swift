@@ -10,6 +10,8 @@ struct RepoProject: Identifiable, Sendable {
     var lastCommit: Commit?
     var dirtyCount: Int
     var changes: ChangeStats
+    var ahead: Int
+    var behind: Int
     var weekly: [String: Int]
     var stacks: [StackGroup]
     var size: SizeInfo
@@ -82,6 +84,18 @@ struct CleanupInfo: Sendable, Hashable {
     var items: [CleanupItem]
 
     static let empty = CleanupInfo(reusableBytes: 0, items: [])
+
+    var removalCommand: String {
+        items.map(removalCommand(for:)).joined(separator: "\n")
+    }
+
+    func removalCommand(for item: CleanupItem) -> String {
+        "rm -rf \(Self.shellQuote(item.path))"
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
 }
 
 struct RunConfig: Sendable, Hashable {
@@ -162,6 +176,12 @@ struct ProjectMeta: Codable, Sendable {
     var starred = false
     var color: TagColor?
     var note = ""
+    var attention: [String: AttentionPreference] = [:]
+}
+
+struct AttentionPreference: Codable, Hashable, Sendable {
+    var muted = false
+    var snoozedUntil: Date?
 }
 
 struct DocFile: Identifiable, Sendable, Hashable {
@@ -213,6 +233,8 @@ struct GitSummary: Sendable {
     var branch: String
     var lastCommit: Commit?
     var changes: ChangeStats
+    var ahead: Int
+    var behind: Int
 }
 
 struct ScanOutput: Sendable {

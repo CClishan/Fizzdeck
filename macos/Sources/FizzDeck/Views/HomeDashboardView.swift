@@ -2,12 +2,14 @@ import SwiftUI
 
 struct HomeDashboardView: View {
     @Environment(RepositoryStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let filter: HomeFilter
 
     @AppStorage("fizzdeck.home.viewMode") private var modeRaw = HomeViewMode.cards.rawValue
     @AppStorage("fizzdeck.home.sort") private var sortRaw = HomeSort.recent.rawValue
     @State private var colorFilter: TagColor?
     @State private var toolFilter: String?
+    @Namespace private var modeSelection
 
     private var mode: HomeViewMode {
         HomeViewMode(rawValue: modeRaw) ?? .cards
@@ -61,6 +63,9 @@ struct HomeDashboardView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         header
+                        if showsAttention {
+                            AttentionQueueView()
+                        }
                         summary
 
                         if matchingProjects.isEmpty {
@@ -74,13 +79,15 @@ struct HomeDashboardView: View {
             }
         }
         .onChange(of: filter) {
-            colorFilter = nil
-            toolFilter = nil
+            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                colorFilter = nil
+                toolFilter = nil
+            }
         }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(filter.title)
                     .font(.system(size: 27, weight: .semibold))
@@ -89,29 +96,24 @@ struct HomeDashboardView: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 8) {
-                modePicker
-                sortMenu
-                colorMenu
-                toolMenu
-
-                if hasFacets {
-                    Button {
-                        withAnimation(.snappy(duration: 0.2)) {
-                            colorFilter = nil
-                            toolFilter = nil
-                        }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("清除颜色和工具筛选")
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    modePicker
+                    filterMenu
+                    Spacer(minLength: 0)
                 }
 
-                Spacer(minLength: 0)
+                if hasFacets {
+                    activeFilterChips
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
+            .animation(FizzMotion.resolved(reduceMotion, FizzMotion.standard), value: hasFacets)
         }
+    }
+
+    private var showsAttention: Bool {
+        filter == .all && store.query.isEmpty && !hasFacets
     }
 
     private var headerDetail: String {
@@ -133,110 +135,145 @@ struct HomeDashboardView: View {
     }
 
     private var modePicker: some View {
-        HStack(spacing: 2) {
-            ForEach(HomeViewMode.allCases) { item in
-                Button {
-                    withAnimation(.snappy(duration: 0.22)) {
-                        modeRaw = item.rawValue
-                    }
-                } label: {
-                    Image(systemName: item.symbol)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(mode == item ? FizzTheme.accent : Color.secondary)
-                        .frame(width: 29, height: 24)
-                        .background {
-                            if mode == item {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(Color.white.opacity(0.9))
-                                    .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
-                            }
+        GlassEffectContainer(spacing: 2) {
+            HStack(spacing: 2) {
+                ForEach(HomeViewMode.allCases) { item in
+                    HomeModeButton(
+                        item: item,
+                        selected: mode == item,
+                        namespace: modeSelection,
+                        reduceMotion: reduceMotion
+                    ) {
+                        guard mode != item else { return }
+                        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.standard)) {
+                            modeRaw = item.rawValue
                         }
+                    }
                 }
-                .buttonStyle(.plain)
-                .help(item.title)
-                .accessibilityLabel(item.title)
-                .accessibilityAddTraits(mode == item ? .isSelected : [])
             }
+            .padding(3)
+            .glassEffect(.regular.interactive(), in: Capsule())
         }
-        .padding(3)
-        .glassEffect(.regular, in: Capsule())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("布局")
     }
 
-    private var sortMenu: some View {
+    private var filterMenu: some View {
         Menu {
-            ForEach(HomeSort.allCases) { item in
+            Section("排序") {
+                ForEach(HomeSort.allCases) { item in
+                    Button {
+                        setSort(item)
+                    } label: {
+                        Label(item.title, systemImage: item == sort ? "checkmark" : item.symbol)
+                    }
+                }
+            }
+
+            Menu {
                 Button {
-                    sortRaw = item.rawValue
+                    setColorFilter(nil)
                 } label: {
-                    Label(item.title, systemImage: item == sort ? "checkmark" : item.symbol)
+                    Label("全部颜色", systemImage: colorFilter == nil ? "checkmark" : "circle")
                 }
-            }
-        } label: {
-            Label(sort.title, systemImage: "arrow.up.arrow.down")
-        }
-        .menuStyle(.button)
-        .buttonStyle(.glass)
-        .controlSize(.small)
-        .help("排序方式")
-    }
 
-    private var colorMenu: some View {
-        Menu {
-            Button {
-                colorFilter = nil
+                Divider()
+
+                ForEach(TagColor.allCases) { color in
+                    Button {
+                        setColorFilter(color)
+                    } label: {
+                        Label(
+                            "\(color.label) · \(colorCount(color))",
+                            systemImage: colorFilter == color ? "checkmark" : "circle.fill"
+                        )
+                    }
+                }
             } label: {
-                Label("全部颜色", systemImage: colorFilter == nil ? "checkmark" : "circle")
+                Label(colorFilter.map { "颜色 · \($0.label)" } ?? "颜色", systemImage: "paintpalette")
             }
 
-            Divider()
-
-            ForEach(TagColor.allCases) { color in
+            Menu {
                 Button {
-                    colorFilter = color
+                    setToolFilter(nil)
                 } label: {
-                    Label(
-                        "\(color.label) · \(colorCount(color))",
-                        systemImage: colorFilter == color ? "checkmark" : "circle.fill"
-                    )
+                    Label("全部工具", systemImage: toolFilter == nil ? "checkmark" : "sparkles")
+                }
+
+                Divider()
+
+                ForEach(availableTools, id: \.self) { tool in
+                    Button {
+                        setToolFilter(tool)
+                    } label: {
+                        Label(
+                            "\(toolTitle(tool)) · \(toolCount(tool))",
+                            systemImage: toolFilter == tool ? "checkmark" : toolSymbol(tool)
+                        )
+                    }
+                }
+            } label: {
+                Label(
+                    toolFilter.map { "AI · \(toolTitle($0))" } ?? "AI 工具",
+                    systemImage: "sparkles"
+                )
+            }
+            .disabled(availableTools.isEmpty)
+
+            if hasFacets {
+                Divider()
+                Button(role: .destructive) {
+                    clearFacets()
+                } label: {
+                    Label("清除筛选", systemImage: "xmark.circle")
                 }
             }
         } label: {
-            Label(colorFilter?.label ?? "颜色", systemImage: "paintpalette")
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("筛选")
+                    .font(.system(size: 12, weight: .medium))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7.5, weight: .bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(hasFacets ? FizzTheme.accent : Color.secondary)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .contentShape(Capsule())
+            .fixedSize()
         }
         .menuStyle(.button)
         .buttonStyle(.glass)
         .controlSize(.small)
-        .help("按标签颜色筛选")
+        .help("排序与筛选")
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: hasFacets)
     }
 
-    private var toolMenu: some View {
-        Menu {
-            Button {
-                toolFilter = nil
-            } label: {
-                Label("全部工具", systemImage: toolFilter == nil ? "checkmark" : "sparkles")
-            }
-
-            Divider()
-
-            ForEach(availableTools, id: \.self) { tool in
-                Button {
-                    toolFilter = tool
-                } label: {
-                    Label(
-                        "\(toolTitle(tool)) · \(toolCount(tool))",
-                        systemImage: toolFilter == tool ? "checkmark" : toolSymbol(tool)
-                    )
+    private var activeFilterChips: some View {
+        HStack(spacing: 6) {
+            if let colorFilter {
+                ActiveFilterChip(text: colorFilter.label, tint: colorFilter.color) {
+                    setColorFilter(nil)
                 }
             }
-        } label: {
-            Label(toolFilter.map(toolTitle) ?? "AI 工具", systemImage: "sparkles")
+            if let toolFilter {
+                ActiveFilterChip(text: toolTitle(toolFilter), tint: .purple) {
+                    setToolFilter(nil)
+                }
+            }
+
+            Button("清除") {
+                clearFacets()
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.leading, 2)
         }
-        .menuStyle(.button)
-        .buttonStyle(.glass)
-        .controlSize(.small)
-        .disabled(availableTools.isEmpty)
-        .help(availableTools.isEmpty ? "还没有检测到 AI 会话" : "按 AI 工具筛选")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("活动筛选")
     }
 
     private var summary: some View {
@@ -353,8 +390,7 @@ struct HomeDashboardView: View {
         } actions: {
             if hasFacets || !store.query.isEmpty {
                 Button("清除筛选") {
-                    colorFilter = nil
-                    toolFilter = nil
+                    clearFacets()
                     store.query = ""
                 }
                 .buttonStyle(.bordered)
@@ -405,11 +441,49 @@ struct HomeDashboardView: View {
     }
 
     private func colorCount(_ color: TagColor) -> Int {
-        matchingProjects.filter { $0.color == color }.count
+        matchingProjects.filter { project in
+            guard project.color == color else { return false }
+            if let toolFilter, !project.sessions.detected.contains(toolFilter) {
+                return false
+            }
+            return true
+        }.count
     }
 
     private func toolCount(_ tool: String) -> Int {
-        matchingProjects.filter { $0.sessions.detected.contains(tool) }.count
+        matchingProjects.filter { project in
+            guard project.sessions.detected.contains(tool) else { return false }
+            if let colorFilter, project.color != colorFilter {
+                return false
+            }
+            return true
+        }.count
+    }
+
+    private func setSort(_ value: HomeSort) {
+        guard sort != value else { return }
+        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+            sortRaw = value.rawValue
+        }
+    }
+
+    private func setColorFilter(_ value: TagColor?) {
+        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+            colorFilter = value
+        }
+    }
+
+    private func setToolFilter(_ value: String?) {
+        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+            toolFilter = value
+        }
+    }
+
+    private func clearFacets() {
+        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.standard)) {
+            colorFilter = nil
+            toolFilter = nil
+        }
     }
 }
 
@@ -434,6 +508,82 @@ private enum HomeViewMode: String, CaseIterable, Identifiable {
         case .list: "list.bullet"
         case .gallery: "rectangle.split.3x1"
         }
+    }
+}
+
+private struct HomeModeButton: View {
+    let item: HomeViewMode
+    let selected: Bool
+    let namespace: Namespace.ID
+    let reduceMotion: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: item.symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(selected ? FizzTheme.accent : Color.secondary)
+                .frame(width: 29, height: 24)
+                .background {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.white.opacity(0.92))
+                            .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+                            .matchedGeometryEffect(id: "home-mode", in: namespace)
+                    } else if hovering {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.black.opacity(0.045))
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(item.title)
+        .accessibilityLabel(item.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .onHover { value in
+            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                hovering = value
+            }
+        }
+    }
+}
+
+private struct ActiveFilterChip: View {
+    let text: String
+    let tint: Color
+    let remove: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: remove) {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(tint)
+                    .frame(width: 5, height: 5)
+                Text(text)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .lineLimit(1)
+                Image(systemName: "xmark")
+                    .font(.system(size: 7.5, weight: .bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 7)
+            .frame(height: 20)
+            .background(
+                Color.black.opacity(hovering ? 0.07 : 0.035),
+                in: Capsule()
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("移除 \(text) 筛选")
+        .accessibilityLabel("移除 \(text) 筛选")
     }
 }
 
@@ -507,6 +657,7 @@ private struct HomeSummaryMetric: View {
 
 private struct ProjectFolderCard: View {
     @Environment(RepositoryStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let project: RepoProject
 
     @State private var hovering = false
@@ -599,7 +750,7 @@ private struct ProjectFolderCard: View {
         }
         .buttonStyle(.plain)
         .onHover { value in
-            withAnimation(.snappy(duration: 0.18)) {
+            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
                 hovering = value
             }
         }
@@ -616,8 +767,7 @@ private struct ProjectFolderCard: View {
                 }
             }
             Divider()
-            Button("在 Finder 中显示") { SystemActions.reveal(project.path) }
-            Button("复制路径") { SystemActions.copy(project.path) }
+            ProjectQuickActions(project: project)
         }
     }
 
@@ -712,6 +862,9 @@ private struct ProjectListRow: View {
             hovering = value
         }
         .help("打开 \(project.displayName)")
+        .contextMenu {
+            ProjectQuickActions(project: project)
+        }
     }
 
     private var secondaryText: String {

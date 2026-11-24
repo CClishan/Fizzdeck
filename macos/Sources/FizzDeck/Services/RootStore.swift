@@ -34,6 +34,7 @@ enum MetaStore {
             if let color = raw["color"] as? String {
                 meta.color = TagColor(rawValue: color)
             }
+            meta.attention = parseAttention(raw["attention"])
             result[PathTools.normalize(path)] = meta
         }
         return result
@@ -48,8 +49,34 @@ enum MetaStore {
             if let color = entry.value.color {
                 raw["color"] = color.rawValue
             }
+            if !entry.value.attention.isEmpty {
+                raw["attention"] = entry.value.attention.reduce(into: [String: [String: Any]]()) { result, rule in
+                    var value: [String: Any] = ["muted": rule.value.muted]
+                    if let until = rule.value.snoozedUntil {
+                        value["snoozedUntil"] = until.timeIntervalSince1970
+                    }
+                    result[rule.key] = value
+                }
+            }
             result[entry.key] = raw
         }
         try FileTools.writeJSON(object, to: AppPaths.metaFile)
+    }
+
+    private static func parseAttention(_ raw: Any?) -> [String: AttentionPreference] {
+        guard let values = raw as? [String: [String: Any]] else { return [:] }
+        var result: [String: AttentionPreference] = [:]
+
+        for (kind, value) in values {
+            var preference = AttentionPreference()
+            preference.muted = value["muted"] as? Bool ?? false
+            if let until = value["snoozedUntil"] as? NSNumber {
+                preference.snoozedUntil = Date(timeIntervalSince1970: until.doubleValue)
+            }
+            if preference.muted || preference.snoozedUntil != nil {
+                result[kind] = preference
+            }
+        }
+        return result
     }
 }

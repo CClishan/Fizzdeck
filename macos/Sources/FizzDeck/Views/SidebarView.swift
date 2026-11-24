@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Environment(RepositoryStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var expandedGroups: Set<String> = []
     @State private var disk: DiskCapacity?
@@ -79,7 +80,7 @@ struct SidebarView: View {
                     group: group,
                     expanded: expandedGroups.contains(group.name)
                 ) {
-                    withAnimation(.snappy(duration: 0.18)) {
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
                         if expandedGroups.contains(group.name) {
                             expandedGroups.removeAll()
                         } else {
@@ -107,8 +108,7 @@ struct SidebarView: View {
                                 }
                             }
                             Divider()
-                            Button("在 Finder 中显示") { SystemActions.reveal(project.path) }
-                            Button("复制路径") { SystemActions.copy(project.path) }
+                            ProjectQuickActions(project: project)
                             Divider()
                             Button("从看板移除") {
                                 Task { await store.removeFromBoard(project) }
@@ -175,7 +175,7 @@ struct SidebarView: View {
 
     private func revealSelection() {
         guard let group = store.selectedProject?.group else { return }
-        withAnimation(.snappy(duration: 0.18)) {
+        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
             expandedGroups = [group]
         }
     }

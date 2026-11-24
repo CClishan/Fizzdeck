@@ -96,6 +96,8 @@ enum RepositoryScanner {
             lastCommit: git?.lastCommit,
             dirtyCount: git?.changes.total ?? 0,
             changes: git?.changes ?? .zero,
+            ahead: git?.ahead ?? 0,
+            behind: git?.behind ?? 0,
             weekly: weekly ?? [:],
             stacks: stacks,
             size: size,

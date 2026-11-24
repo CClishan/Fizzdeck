@@ -18,16 +18,32 @@ enum GitService {
             cwd: directory
         )
         async let statusTask = Shell.output("git", ["status", "--porcelain", "-uall"], cwd: directory, timeout: 30)
+        async let trackingTask = Shell.output(
+            "git",
+            ["rev-list", "--count", "--left-right", "@{upstream}...HEAD"],
+            cwd: directory
+        )
 
-        let (branch, log, status) = await (branchTask, logTask, statusTask)
+        let (branch, log, status, tracking) = await (branchTask, logTask, statusTask, trackingTask)
         let lines = statusLines(status)
         let untracked = lines.filter { $0.hasPrefix("??") }.count
         let changes = ChangeStats(tracked: lines.count - untracked, untracked: untracked, total: lines.count)
+        var ahead = 0
+        var behind = 0
+        if let tracking, tracking.contains("\t") {
+            let parts = tracking.split(separator: "\t").compactMap { Int($0) }
+            if parts.count == 2 {
+                behind = parts[0]
+                ahead = parts[1]
+            }
+        }
 
         return GitSummary(
             branch: branch ?? "HEAD",
             lastCommit: parseLastCommit(log),
-            changes: changes
+            changes: changes,
+            ahead: ahead,
+            behind: behind
         )
     }
 

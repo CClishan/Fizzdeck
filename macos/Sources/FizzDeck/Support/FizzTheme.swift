@@ -14,6 +14,16 @@ enum FizzTheme {
     static let mutedFill = Color.black.opacity(0.035)
 }
 
+enum FizzMotion {
+    static let quick = Animation.snappy(duration: 0.16)
+    static let standard = Animation.snappy(duration: 0.22)
+    static let panel = Animation.easeOut(duration: 0.12)
+
+    static func resolved(_ reduceMotion: Bool, _ animation: Animation) -> Animation? {
+        reduceMotion ? nil : animation
+    }
+}
+
 enum FizzAsset {
     static let logo: NSImage? = {
         if let url = Bundle.main.url(forResource: "FizzDeck_logo", withExtension: "png"),

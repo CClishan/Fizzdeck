@@ -31,27 +31,35 @@ Other entry points:
 
 ```sh
 ./script/build_and_run.sh          # build and launch
+./script/build_and_run.sh --sign-local  # ad-hoc sign, then launch for local notification testing
 ./script/build_and_run.sh --logs   # launch and stream app logs
 ./script/build_and_run.sh --debug  # launch the binary under LLDB
 ```
+
+`--sign-local` is an ad-hoc signature for local testing only. It is not a distribution signature and is never applied by the default `run` or `--verify` modes.
 
 To work in Xcode, open `Package.swift`.
 
 ## What is implemented
 
 - Native overview with starred, changed, and running filters
+- Attention queue for failing tests, unpushed or behind commits, uncommitted files, and reclaimable disk, with inline actions plus per-project snooze, mute, and restore
+- Menu bar pending count with quick access to the overview and recent projects
+- Local notifications when a dev server becomes ready or a test fails
+- `⌘K` command palette for projects, branches, and actions
+- Finder, Terminal, and editor quick actions, including `⌘⇧T` for Terminal
 - Collapsible project groups and search
 - Dashboard, list, and gallery layouts
 - Folder scanning and managed roots
 - Disk usage and cleanup suggestions
-- Git status, dirty files, and recent commits
-- Branch switching and remote sync
+- Git status, ahead/behind state, dirty files, and recent commits
+- Branch switching, confirmed fetch, fast-forward pull, and push with inline results
 - Project documentation discovery and reading
 - Codex and Claude Code session matching
 - Start/stop controls for development servers
 - Port readiness checks and log access
 - Background test execution with live output
-- Stars, color tags, notes, and Finder reveal
+- Stars, color tags, and notes
 - Fixed light appearance with a floating Liquid Glass detail toolbar
 
 ## Shared state
@@ -73,6 +81,8 @@ The app is a local developer tool. It is **not sandboxed**, because it needs acc
 
 FizzDeck itself does not upload project data. Commands launched for a project may make their own network requests.
 
+Local notifications require system permission. The `--sign-local` build uses an ad-hoc signature, which is enough to register with Notification Center for local testing; distribution still needs a Developer ID signature and notarization.
+
 Destructive project removal is intentionally not exposed in the native app yet. Use the web UI for its multi-step backup and confirmation flow.
 
 ## Project layout
@@ -91,7 +101,5 @@ script/build_and_run.sh      Build and launch entry point
 ## Not implemented yet
 
 - Project deletion inside the native app
-- Menu bar presence
 - Background file watching
-- Notification when a dev server becomes ready
 - Code signing and notarization

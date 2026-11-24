@@ -37,6 +37,7 @@ final class ProjectActions {
     @ObservationIgnored private var devLogs: [String: FileHandle] = [:]
     @ObservationIgnored private var testProcesses: [String: Process] = [:]
     @ObservationIgnored private var testLogs: [String: FileHandle] = [:]
+    @ObservationIgnored private var cancelledTestPaths: Set<String> = []
 
     func isBusy(_ path: String) -> Bool {
         busy[path] != nil
@@ -123,6 +124,12 @@ final class ProjectActions {
             if PortProbe.isOpen(run.port) {
                 store.setPort(.running, for: project.path)
                 messages[project.path] = "已启动 \(run.command) · localhost:\(run.port)"
+                Task {
+                    await LocalNotifications.send(
+                        title: "开发服务已就绪",
+                        body: "\(project.displayName) · localhost:\(run.port)"
+                    )
+                }
                 return
             }
             if !process.isRunning { break }
@@ -188,6 +195,7 @@ final class ProjectActions {
             return
         }
         guard testRuns[project.path]?.status != .running else { return }
+        cancelledTestPaths.remove(project.path)
 
         let logURL = URL(fileURLWithPath: logPath(for: project, prefix: "test-"))
         let header = "\n--- \(Date().ISO8601Format()) \(test.command)\n"
@@ -245,12 +253,13 @@ final class ProjectActions {
         }
         process.terminationHandler = { [weak self] finished in
             Task { @MainActor [weak self] in
-                self?.finishTest(project.path, exitCode: finished.terminationStatus)
+                self?.finishTest(project, exitCode: finished.terminationStatus)
             }
         }
     }
 
     func stopTests(_ project: RepoProject) {
+        cancelledTestPaths.insert(project.path)
         testProcesses[project.path]?.interrupt()
     }
 
@@ -348,16 +357,25 @@ final class ProjectActions {
         }
     }
 
-    private func finishTest(_ path: String, exitCode: Int32) {
-        guard var state = testRuns[path] else { return }
+    private func finishTest(_ project: RepoProject, exitCode: Int32) {
+        guard var state = testRuns[project.path] else { return }
+        let wasStopped = cancelledTestPaths.remove(project.path) != nil
         state.status = exitCode == 0 ? .passed : .failed
         state.exitCode = exitCode
         state.duration = Date().timeIntervalSince(state.startedAt)
-        testRuns[path] = state
-        testProcesses[path] = nil
-        if let log = testLogs[path] {
+        testRuns[project.path] = state
+        testProcesses[project.path] = nil
+        if let log = testLogs[project.path] {
             try? log.close()
-            testLogs[path] = nil
+            testLogs[project.path] = nil
+        }
+        if state.status == .failed, !wasStopped {
+            Task {
+                await LocalNotifications.send(
+                    title: "测试失败",
+                    body: "\(project.displayName) · \(state.command)"
+                )
+            }
         }
     }
 }

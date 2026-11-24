@@ -60,15 +60,29 @@ struct GlassStatCard: View {
     }
 }
 
-struct Panel<Content: View>: View {
+struct Panel<Content: View, Accessory: View>: View {
     let title: String
     let symbol: String
     let content: Content
+    let accessory: Accessory
 
-    init(title: String, symbol: String, @ViewBuilder content: () -> Content) {
+    init(title: String, symbol: String, @ViewBuilder content: () -> Content) where Accessory == EmptyView {
         self.title = title
         self.symbol = symbol
         self.content = content()
+        self.accessory = EmptyView()
+    }
+
+    init(
+        title: String,
+        symbol: String,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder accessory: () -> Accessory
+    ) {
+        self.title = title
+        self.symbol = symbol
+        self.content = content()
+        self.accessory = accessory()
     }
 
     var body: some View {
@@ -80,6 +94,8 @@ struct Panel<Content: View>: View {
                     .frame(width: 16)
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
+                Spacer(minLength: 12)
+                accessory
             }
 
             content
@@ -150,6 +166,48 @@ struct StatusDot: View {
         case .running: "端口运行中"
         case .stopped: "端口未启动"
         case .noPreview: "无预览端口"
+        }
+    }
+}
+
+struct ProjectQuickActions: View {
+    let project: RepoProject
+
+    private var editors: [ProjectEditor] {
+        ProjectEditor.available(for: project.path)
+    }
+
+    var body: some View {
+        Button {
+            SystemActions.reveal(project.path)
+        } label: {
+            Label("在 Finder 中显示", systemImage: "folder")
+        }
+
+        Button {
+            SystemActions.openTerminal(project.path)
+        } label: {
+            Label("在 Terminal 中打开", systemImage: "terminal")
+        }
+
+        if !editors.isEmpty {
+            Menu {
+                ForEach(editors) { editor in
+                    Button(editor.title) {
+                        SystemActions.open(project.path, in: editor)
+                    }
+                }
+            } label: {
+                Label("在编辑器中打开", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+        }
+
+        Divider()
+
+        Button {
+            SystemActions.copy(project.path)
+        } label: {
+            Label("复制路径", systemImage: "doc.on.doc")
         }
     }
 }

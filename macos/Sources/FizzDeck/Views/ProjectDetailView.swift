@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProjectDetailView: View {
     @Environment(RepositoryStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let project: RepoProject
 
     @State private var tab: ProjectTab = .overview
@@ -22,7 +23,11 @@ struct ProjectDetailView: View {
                             saveNote: { store.setNote(noteDraft, for: project) }
                         )
                     case .git:
-                        GitTabView(project: project, detail: detail, loading: loadingDetail)
+                        GitTabView(project: project, detail: detail, loading: loadingDetail) {
+                            await store.refreshGit(for: project.path)
+                            await reloadDetail()
+                        }
+                        .id(project.path)
                     case .docs:
                         DocsTabView(project: project, docs: detail.docs)
                     case .sessions:
@@ -53,6 +58,12 @@ struct ProjectDetailView: View {
         .onChange(of: project.note) { _, value in
             if noteDraft != value { noteDraft = value }
         }
+        .onAppear {
+            applyRequestedTab()
+        }
+        .onChange(of: store.requestedTab) {
+            applyRequestedTab()
+        }
     }
 
     private var accent: Color {
@@ -64,7 +75,7 @@ struct ProjectDetailView: View {
             HStack(spacing: 1) {
                 ForEach(ProjectTab.allCases) { item in
                     Button {
-                        withAnimation(.snappy(duration: 0.18)) {
+                        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
                             tab = item
                         }
                     } label: {
@@ -89,6 +100,7 @@ struct ProjectDetailView: View {
                     .buttonStyle(.plain)
                     .help(item.title)
                     .accessibilityAddTraits(tab == item ? .isSelected : [])
+                    .accessibilityRemoveTraits(tab == item ? [] : .isSelected)
                 }
             }
             .padding(3)
@@ -96,10 +108,27 @@ struct ProjectDetailView: View {
         }
         .shadow(color: .black.opacity(0.07), radius: 14, y: 5)
     }
+
+    private func applyRequestedTab() {
+        guard let requested = store.requestedTab else { return }
+        tab = requested
+        Task { @MainActor in
+            await Task.yield()
+            if store.requestedTab == requested {
+                store.requestedTab = nil
+            }
+        }
+    }
+
+    private func reloadDetail() async {
+        let target = project.path
+        let value = await store.detail(for: project)
+        guard !Task.isCancelled, target == project.path else { return }
+        detail = value
+    }
 }
 
 private struct ProjectHero: View {
-    @Environment(RepositoryStore.self) private var store
     let project: RepoProject
 
     var body: some View {
@@ -144,48 +173,7 @@ private struct ProjectHero: View {
 
             Spacer(minLength: 12)
 
-            VStack(alignment: .trailing, spacing: 8) {
-                HStack(spacing: 8) {
-                    Button {
-                        store.toggleStar(project)
-                    } label: {
-                        Image(systemName: project.starred ? "star.fill" : "star")
-                            .foregroundStyle(project.starred ? .yellow : .secondary)
-                    }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.circle)
-                    .controlSize(.small)
-                    .help(project.starred ? "取消星标" : "设为星标")
-                    .accessibilityLabel(project.starred ? "取消星标" : "设为星标")
-
-                    Menu {
-                        Button("无标签") { store.setColor(nil, for: project) }
-                        ForEach(TagColor.allCases) { color in
-                            Button(color.label) { store.setColor(color, for: project) }
-                        }
-                    } label: {
-                        Image(systemName: "tag")
-                    }
-                    .menuStyle(.button)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .help("设置标签颜色")
-                    .accessibilityLabel("标签颜色")
-
-                    Button {
-                        SystemActions.reveal(project.path)
-                    } label: {
-                        Image(systemName: "folder")
-                    }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.circle)
-                    .controlSize(.small)
-                    .help("在 Finder 中显示")
-                    .accessibilityLabel("在 Finder 中显示")
-                }
-
-                runtimeStatus
-            }
+            ProjectHeroActions(project: project)
         }
         .padding(.horizontal, 24)
         .padding(.top, 20)
@@ -204,32 +192,120 @@ private struct ProjectHero: View {
             }
     }
 
-    @ViewBuilder
-    private var runtimeStatus: some View {
-        if let run = project.run {
-            Button {
-                if project.port == .running, let url = run.previewURL {
-                    SystemActions.openURL(url)
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    StatusDot(state: project.port)
-                    Text(verbatim: run.port > 0 ? "localhost:\(run.port)" : run.command)
-                        .font(.system(size: 10, design: .monospaced))
-                }
-                .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .disabled(project.port != .running)
-            .help(project.port == .running ? "打开本地预览" : "端口未启动")
-        } else {
-            Text("未识别运行命令")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-    }
-
     private var accent: Color {
         project.color?.color ?? ProjectGrouping.color(for: project.group)
+    }
+}
+
+private struct ProjectHeroActions: View {
+    @Environment(RepositoryStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let project: RepoProject
+
+    @State private var hovering: Action?
+
+    private enum Action {
+        case star
+        case open
+        case more
+    }
+
+    var body: some View {
+        GlassEffectContainer(spacing: 0) {
+            HStack(spacing: 0) {
+                Button {
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                        store.toggleStar(project)
+                    }
+                } label: {
+                    Image(systemName: project.starred ? "star.fill" : "star")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(project.starred ? Color.yellow : Color.secondary)
+                        .frame(width: 30, height: 30)
+                        .background(segmentBackground(.star), in: segmentShape)
+                        .contentShape(segmentShape)
+                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                }
+                .buttonStyle(.plain)
+                .help(project.starred ? "取消星标" : "设为星标")
+                .accessibilityLabel(project.starred ? "取消星标" : "设为星标")
+                .onHover { hovering = $0 ? .star : nil }
+
+                segmentDivider
+
+                Menu {
+                    ProjectQuickActions(project: project)
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 12, weight: .medium))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .foregroundStyle(.secondary)
+                    .frame(width: 39, height: 30)
+                    .background(segmentBackground(.open), in: segmentShape)
+                    .contentShape(segmentShape)
+                    .accessibilityElement(children: .ignore)
+                }
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+                .help("打开方式")
+                .accessibilityLabel("打开方式")
+                .onHover { hovering = $0 ? .open : nil }
+
+                segmentDivider
+
+                Menu {
+                    Menu("标签颜色") {
+                        Button("无标签") { store.setColor(nil, for: project) }
+                        ForEach(TagColor.allCases) { color in
+                            Button(color.label) { store.setColor(color, for: project) }
+                        }
+                    }
+                    Divider()
+                    Button {
+                        SystemActions.copy(project.path)
+                    } label: {
+                        Label("复制路径", systemImage: "doc.on.doc")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 30)
+                        .background(segmentBackground(.more), in: segmentShape)
+                        .contentShape(segmentShape)
+                }
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+                .help("更多")
+                .accessibilityLabel("更多")
+                .onHover { hovering = $0 ? .more : nil }
+            }
+            .padding(3)
+            .glassEffect(.regular.interactive(), in: Capsule())
+        }
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("项目操作")
+    }
+
+    private var segmentShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+    }
+
+    private func segmentBackground(_ action: Action) -> Color {
+        hovering == action ? Color.black.opacity(0.05) : .clear
+    }
+
+    private var segmentDivider: some View {
+        Rectangle()
+            .fill(FizzTheme.hairline)
+            .frame(width: 1, height: 15)
+            .padding(.horizontal, 2)
     }
 }

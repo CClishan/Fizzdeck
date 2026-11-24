@@ -67,8 +67,16 @@ open_app() {
   /usr/bin/open -n "$APP_BUNDLE"
 }
 
+sign_local() {
+  codesign --force --deep --sign - --identifier "$BUNDLE_ID" "$APP_BUNDLE"
+}
+
 case "$MODE" in
   run)
+    open_app
+    ;;
+  --sign-local|sign-local)
+    sign_local
     open_app
     ;;
   --debug|debug)
@@ -88,7 +96,7 @@ case "$MODE" in
     pgrep -x "$APP_NAME" >/dev/null
     ;;
   *)
-    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|--sign-local|--debug|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

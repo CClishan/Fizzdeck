@@ -22,6 +22,8 @@ final class RepositoryStore {
     var phase: Phase = .idle
     var scannedAt: Date?
     var scanDuration: TimeInterval = 0
+    var requestedTab: ProjectTab?
+    var isCommandPalettePresented = false
 
     private var metadata: [String: ProjectMeta] = [:]
     private var didPrepare = false
@@ -111,8 +113,21 @@ final class RepositoryStore {
         var roots = RootStore.load()
         roots.removeAll { $0 == project.path }
         try? RootStore.save(roots)
-        if selectedPath == project.path { selectedPath = Self.homeSelection }
+        if selectedPath == project.path {
+            selectedPath = Self.homeSelection
+            requestedTab = nil
+        }
         await scan()
+    }
+
+    func openProject(_ project: RepoProject, tab: ProjectTab? = nil) {
+        selectedPath = project.path
+        requestedTab = tab
+        isCommandPalettePresented = false
+    }
+
+    func toggleCommandPalette() {
+        isCommandPalettePresented.toggle()
     }
 
     func toggleStar(_ project: RepoProject) {
@@ -165,6 +180,75 @@ final class RepositoryStore {
         let (git, commits) = await gitTask
         let docs = await docsTask.value
         return ProjectDetail(git: git, commits: commits, docs: docs)
+    }
+
+    func refreshGit(for path: String) async {
+        let directory = URL(fileURLWithPath: path)
+        guard let git = await GitService.summary(directory) else { return }
+        guard let index = projects.firstIndex(where: { $0.path == path }) else { return }
+
+        projects[index].branch = git.branch
+        projects[index].lastCommit = git.lastCommit
+        projects[index].dirtyCount = git.changes.total
+        projects[index].changes = git.changes
+        projects[index].ahead = git.ahead
+        projects[index].behind = git.behind
+        projects[index].recent = [
+            git.lastCommit?.date,
+            projects[index].sessions.lastSessionAt,
+        ].compactMap { $0 }.max()
+    }
+
+    func isAttentionSuppressed(
+        for project: RepoProject,
+        kind: ProjectAttentionKind,
+        at date: Date = Date()
+    ) -> Bool {
+        attentionPreference(for: project, kind: kind)?.suppresses(at: date) ?? false
+    }
+
+    func attentionPreference(
+        for project: RepoProject,
+        kind: ProjectAttentionKind
+    ) -> AttentionPreference? {
+        metadata[project.path]?.attention[kind.rawValue]
+    }
+
+    func snoozeAttention(
+        for project: RepoProject,
+        kind: ProjectAttentionKind,
+        until date: Date
+    ) {
+        guard date > Date() else { return }
+        var meta = metadata[project.path] ?? ProjectMeta()
+        meta.attention[kind.rawValue] = AttentionPreference(snoozedUntil: date)
+        metadata[project.path] = meta
+        try? MetaStore.save(metadata)
+    }
+
+    func muteAttention(for project: RepoProject, kind: ProjectAttentionKind) {
+        var meta = metadata[project.path] ?? ProjectMeta()
+        meta.attention[kind.rawValue] = AttentionPreference(muted: true)
+        metadata[project.path] = meta
+        try? MetaStore.save(metadata)
+    }
+
+    func restoreAttention(for project: RepoProject, kind: ProjectAttentionKind) {
+        restoreAttention(for: [(project.path, kind.rawValue)])
+    }
+
+    func restoreAttention(for rules: [(String, String)]) {
+        var changed = false
+        for (path, kind) in rules {
+            guard var meta = metadata[path], meta.attention.removeValue(forKey: kind) != nil else {
+                continue
+            }
+            metadata[path] = meta
+            changed = true
+        }
+        if changed {
+            try? MetaStore.save(metadata)
+        }
     }
 
     func reloadProjectDetailMetadata() {}

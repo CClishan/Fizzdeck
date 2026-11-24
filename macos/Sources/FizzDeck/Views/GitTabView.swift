@@ -4,6 +4,11 @@ struct GitTabView: View {
     let project: RepoProject
     let detail: ProjectDetail
     let loading: Bool
+    let onSyncCompleted: () async -> Void
+
+    @State private var pendingAction: GitSyncAction?
+    @State private var runningAction: GitSyncAction?
+    @State private var feedback: GitSyncFeedback?
 
     var body: some View {
         if loading {
@@ -19,6 +24,16 @@ struct GitTabView: View {
                 }
                 .padding(24)
             }
+            .alert(item: $pendingAction) { action in
+                Alert(
+                    title: Text("\(action.title) \(project.displayName)？"),
+                    message: Text(action.confirmation),
+                    primaryButton: .cancel(Text("取消")),
+                    secondaryButton: .default(Text(action.title)) {
+                        Task { await perform(action) }
+                    }
+                )
+            }
         } else {
             ContentUnavailableView(
                 "不是 Git 仓库",
@@ -29,32 +44,123 @@ struct GitTabView: View {
     }
 
     private func statusPanel(_ git: GitDetail) -> some View {
-        Panel(title: "状态", symbol: "point.3.connected.trianglepath.dotted") {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 240), spacing: 20)],
-                alignment: .leading,
-                spacing: 8
-            ) {
-                KeyValueRow(key: "当前分支", value: project.branch ?? "—", mono: true)
-                KeyValueRow(key: "未提交", value: "\(git.changedCount) 个改动", tint: git.changedCount > 0 ? .orange : .secondary)
-                KeyValueRow(key: "领先 / 落后", value: "↑ \(git.ahead)  ↓ \(git.behind)", mono: true)
-                KeyValueRow(key: "Stash", value: "\(git.stashCount)")
-                KeyValueRow(key: "最近标签", value: git.lastTag ?? "—", mono: true)
-                KeyValueRow(key: "分支数", value: "\(git.branches.count)")
+        Panel(
+            title: "状态",
+            symbol: "point.3.connected.trianglepath.dotted",
+            content: {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 240), spacing: 20)],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    KeyValueRow(key: "当前分支", value: project.branch ?? "—", mono: true)
+                    KeyValueRow(key: "未提交", value: "\(git.changedCount) 个改动", tint: git.changedCount > 0 ? .orange : .secondary)
+                    KeyValueRow(key: "领先 / 落后", value: "↑ \(git.ahead)  ↓ \(git.behind)", mono: true)
+                    KeyValueRow(key: "Stash", value: "\(git.stashCount)")
+                    KeyValueRow(key: "最近标签", value: git.lastTag ?? "—", mono: true)
+                    KeyValueRow(key: "分支数", value: "\(git.branches.count)")
+                }
+                if let feedback {
+                    Divider()
+                        .padding(.vertical, 6)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: feedback.failed ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                            .foregroundStyle(feedback.failed ? Color.red : Color.green)
+                        Text(feedback.message)
+                            .font(.caption)
+                            .foregroundStyle(feedback.failed ? Color.red : Color.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Text(Format.relative(feedback.date))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                if let remote = git.remote {
+                    Divider()
+                        .padding(.vertical, 6)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("远程")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(verbatim: remote)
+                            .font(.system(size: 11, design: .monospaced))
+                            .textSelection(.enabled)
+                            .lineLimit(2)
+                    }
+                }
+            },
+            accessory: {
+                syncControls
             }
-            if let remote = git.remote {
-                Divider()
-                    .padding(.vertical, 6)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("远程")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(verbatim: remote)
-                        .font(.system(size: 11, design: .monospaced))
-                        .textSelection(.enabled)
-                        .lineLimit(2)
+        )
+    }
+
+    private var syncControls: some View {
+        GlassEffectContainer(spacing: 2) {
+            HStack(spacing: 1) {
+                ForEach(GitSyncAction.allCases) { action in
+                    Button {
+                        pendingAction = action
+                    } label: {
+                        Group {
+                            if runningAction == action {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            } else {
+                                Image(systemName: symbol(for: action))
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(tint(for: action))
+                            }
+                        }
+                        .frame(width: 28, height: 26)
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(runningAction != nil || loading)
+                    .help(action.title)
+                    .accessibilityLabel(action.title)
                 }
             }
+            .padding(3)
+            .glassEffect(.regular.interactive(), in: Capsule())
+        }
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
+    }
+
+    private func perform(_ action: GitSyncAction) async {
+        guard runningAction == nil else { return }
+        runningAction = action
+        feedback = nil
+
+        let result = await GitSyncService.run(
+            action,
+            in: URL(fileURLWithPath: project.path)
+        )
+        feedback = GitSyncFeedback(
+            message: result.message,
+            failed: !result.succeeded,
+            date: Date()
+        )
+        if result.succeeded {
+            await onSyncCompleted()
+        }
+        runningAction = nil
+    }
+
+    private func symbol(for action: GitSyncAction) -> String {
+        switch action {
+        case .fetch: "arrow.triangle.2.circlepath"
+        case .pull: "arrow.down"
+        case .push: "arrow.up"
+        }
+    }
+
+    private func tint(for action: GitSyncAction) -> Color {
+        switch action {
+        case .fetch: .blue
+        case .pull: .teal
+        case .push: .purple
         }
     }
 
@@ -166,4 +272,10 @@ struct GitTabView: View {
         if code.contains("M") { return .orange }
         return .secondary
     }
+}
+
+private struct GitSyncFeedback {
+    let message: String
+    let failed: Bool
+    let date: Date
 }
