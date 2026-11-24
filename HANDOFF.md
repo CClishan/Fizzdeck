@@ -436,7 +436,8 @@ CUA 实测：
 
 - FizzDeck 上次 `main` 发布：`00c678b Record FizzDeck landing deployment`
 - FizzDeck 推送：`origin/main`，`4133ff2..00c678b`
-- 本轮 P1 / P2 PR：`https://github.com/CClishan/Fizzdeck/pull/1`（未合并；含命令面板、远程仓库、Git 错误文案、分组筛选/批量操作、编辑器覆盖和 Swift 测试）
+- 本轮 P1 / P2 PR：`https://github.com/CClishan/Fizzdeck/pull/1`（未合并；含命令面板、远程仓库、Git 错误文案、分组筛选/批量操作、编辑器覆盖、Swift 测试、AI 会话列表和原生筛选修复）
+- 本轮会话 / 筛选提交：`55c0a20 Add AI session list and native filter menu`
 - 分支 `codex/p1-palette-remote` 起始提交：`732ef39 Add remote repository actions and palette search`
 - Landing 主入口：`https://koroo.top/fizzdeck`
 - koroo 路由提交：`f4a1b4f feat: mount FizzDeck landing at /fizzdeck`
