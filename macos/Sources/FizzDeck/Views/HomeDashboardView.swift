@@ -9,6 +9,11 @@ struct HomeDashboardView: View {
     @AppStorage("fizzdeck.home.sort") private var sortRaw = HomeSort.recent.rawValue
     @State private var colorFilter: TagColor?
     @State private var toolFilter: String?
+    @State private var groupFilter: String?
+    @State private var selectionMode = false
+    @State private var selectedPaths: Set<String> = []
+    @State private var batchFeedback: String?
+    @State private var batchRunning = false
     @Namespace private var modeSelection
 
     private var mode: HomeViewMode {
@@ -26,11 +31,26 @@ struct HomeDashboardView: View {
     private var visibleProjects: [RepoProject] {
         sort.sort(
             matchingProjects.filter { project in
+                if let groupFilter, project.group != groupFilter { return false }
                 if let colorFilter, project.color != colorFilter { return false }
                 if let toolFilter, !project.sessions.detected.contains(toolFilter) { return false }
                 return true
             }
         )
+    }
+
+    private var selectedProjects: [RepoProject] {
+        visibleProjects.filter { selectedPaths.contains($0.path) }
+    }
+
+    private var availableGroups: [String] {
+        let detected = Set(matchingProjects.map(\.group))
+        return ProjectGrouping.order.filter(detected.contains)
+            + detected.subtracting(ProjectGrouping.order).sorted()
+    }
+
+    private var allVisibleSelected: Bool {
+        !visibleProjects.isEmpty && visibleProjects.allSatisfy { selectedPaths.contains($0.path) }
     }
 
     private var availableTools: [String] {
@@ -52,7 +72,7 @@ struct HomeDashboardView: View {
     }
 
     private var hasFacets: Bool {
-        colorFilter != nil || toolFilter != nil
+        groupFilter != nil || colorFilter != nil || toolFilter != nil
     }
 
     var body: some View {
@@ -80,9 +100,16 @@ struct HomeDashboardView: View {
         }
         .onChange(of: filter) {
             withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                groupFilter = nil
                 colorFilter = nil
                 toolFilter = nil
+                selectionMode = false
+                selectedPaths.removeAll()
+                batchFeedback = nil
             }
+        }
+        .onChange(of: visibleProjects.map(\.path)) { _, paths in
+            selectedPaths.formIntersection(Set(paths))
         }
     }
 
@@ -101,6 +128,7 @@ struct HomeDashboardView: View {
                     modePicker
                     filterMenu
                     Spacer(minLength: 0)
+                    selectionToggle
                 }
 
                 if hasFacets {
@@ -169,6 +197,33 @@ struct HomeDashboardView: View {
                     }
                 }
             }
+
+            Menu {
+                Button {
+                    setGroupFilter(nil)
+                } label: {
+                    Label("全部分组", systemImage: groupFilter == nil ? "checkmark" : "square.grid.2x2")
+                }
+
+                Divider()
+
+                ForEach(availableGroups, id: \.self) { group in
+                    Button {
+                        setGroupFilter(group)
+                    } label: {
+                        Label(
+                            "\(group) · \(groupCount(group))",
+                            systemImage: groupFilter == group ? "checkmark" : "circle.fill"
+                        )
+                    }
+                }
+            } label: {
+                Label(
+                    groupFilter.map { "分组 · \($0)" } ?? "分组",
+                    systemImage: "square.grid.2x2"
+                )
+            }
+            .disabled(availableGroups.isEmpty)
 
             Menu {
                 Button {
@@ -251,8 +306,45 @@ struct HomeDashboardView: View {
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: hasFacets)
     }
 
+    private var selectionToggle: some View {
+        GlassEffectContainer(spacing: 0) {
+            HStack(spacing: 0) {
+                Button {
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                        if selectionMode {
+                            endSelection()
+                        } else {
+                            selectionMode = true
+                        }
+                    }
+                } label: {
+                    Image(systemName: selectionMode ? "checkmark.circle.fill" : "checklist")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(selectionMode ? FizzTheme.accent : Color.secondary)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help(selectionMode ? "退出批量选择" : "批量选择项目")
+                .accessibilityLabel(selectionMode ? "退出批量选择" : "批量选择项目")
+                .accessibilityAddTraits(selectionMode ? .isSelected : [])
+            }
+            .padding(3)
+            .glassEffect(.regular.interactive(), in: Capsule())
+        }
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
+    }
+
     private var activeFilterChips: some View {
         HStack(spacing: 6) {
+            if let groupFilter {
+                ActiveFilterChip(
+                    text: groupFilter,
+                    tint: ProjectGrouping.color(for: groupFilter)
+                ) {
+                    setGroupFilter(nil)
+                }
+            }
             if let colorFilter {
                 ActiveFilterChip(text: colorFilter.label, tint: colorFilter.color) {
                     setColorFilter(nil)
@@ -327,6 +419,11 @@ struct HomeDashboardView: View {
                 Spacer(minLength: 8)
             }
 
+            if selectionMode {
+                batchBar
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             switch mode {
             case .cards:
                 cards
@@ -336,6 +433,73 @@ struct HomeDashboardView: View {
                 gallery
             }
         }
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: selectionMode)
+    }
+
+    private var batchBar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle")
+                    .foregroundStyle(FizzTheme.accent)
+                Text("已选 \(selectedProjects.count) 个")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .monospacedDigit()
+
+                Spacer(minLength: 8)
+
+                Button("复制清理命令") {
+                    copyCleanupCommands()
+                }
+                .disabled(selectedProjects.isEmpty)
+
+                Button {
+                    Task { await rescanSelected() }
+                } label: {
+                    if batchRunning {
+                        ProgressView()
+                            .controlSize(.mini)
+                    } else {
+                        Text("重新扫描")
+                    }
+                }
+                .disabled(selectedProjects.isEmpty || batchRunning || store.phase == .scanning)
+
+                Button(allVisibleSelected ? "取消全选" : "全选") {
+                    toggleSelectAll()
+                }
+                .disabled(visibleProjects.isEmpty)
+
+                Button("清除") {
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                        selectedPaths.removeAll()
+                        batchFeedback = nil
+                    }
+                }
+                .disabled(selectedPaths.isEmpty)
+
+                Button("完成") {
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                        endSelection()
+                    }
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            if let batchFeedback {
+                HStack(spacing: 5) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(FizzTheme.accent)
+                    Text(batchFeedback)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .font(.caption2)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .fizzCard(radius: 12)
     }
 
     private var cards: some View {
@@ -344,7 +508,12 @@ struct HomeDashboardView: View {
             spacing: 12
         ) {
             ForEach(visibleProjects) { project in
-                ProjectFolderCard(project: project)
+                ProjectFolderCard(
+                    project: project,
+                    selecting: selectionMode,
+                    selected: selectedPaths.contains(project.path),
+                    toggleSelection: { toggleSelection(project) }
+                )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
@@ -353,7 +522,12 @@ struct HomeDashboardView: View {
     private var projectList: some View {
         VStack(spacing: 0) {
             ForEach(visibleProjects) { project in
-                ProjectListRow(project: project)
+                ProjectListRow(
+                    project: project,
+                    selecting: selectionMode,
+                    selected: selectedPaths.contains(project.path),
+                    toggleSelection: { toggleSelection(project) }
+                )
 
                 if project.id != visibleProjects.last?.id {
                     Divider()
@@ -370,7 +544,12 @@ struct HomeDashboardView: View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 12) {
                 ForEach(visibleProjects) { project in
-                    ProjectFolderCard(project: project)
+                    ProjectFolderCard(
+                        project: project,
+                        selecting: selectionMode,
+                        selected: selectedPaths.contains(project.path),
+                        toggleSelection: { toggleSelection(project) }
+                    )
                         .frame(width: 276)
                 }
             }
@@ -405,7 +584,7 @@ struct HomeDashboardView: View {
 
     private var emptyDescription: String {
         if hasFacets {
-            return "当前颜色或工具条件下没有项目，清除筛选后再试。"
+            return "当前分组、颜色或工具条件下没有项目，清除筛选后再试。"
         }
         if !store.query.isEmpty {
             return "没有找到包含“\(store.query)”的项目。"
@@ -443,6 +622,9 @@ struct HomeDashboardView: View {
     private func colorCount(_ color: TagColor) -> Int {
         matchingProjects.filter { project in
             guard project.color == color else { return false }
+            if let groupFilter, project.group != groupFilter {
+                return false
+            }
             if let toolFilter, !project.sessions.detected.contains(toolFilter) {
                 return false
             }
@@ -453,7 +635,23 @@ struct HomeDashboardView: View {
     private func toolCount(_ tool: String) -> Int {
         matchingProjects.filter { project in
             guard project.sessions.detected.contains(tool) else { return false }
+            if let groupFilter, project.group != groupFilter {
+                return false
+            }
             if let colorFilter, project.color != colorFilter {
+                return false
+            }
+            return true
+        }.count
+    }
+
+    private func groupCount(_ group: String) -> Int {
+        matchingProjects.filter { project in
+            guard project.group == group else { return false }
+            if let colorFilter, project.color != colorFilter {
+                return false
+            }
+            if let toolFilter, !project.sessions.detected.contains(toolFilter) {
                 return false
             }
             return true
@@ -464,6 +662,13 @@ struct HomeDashboardView: View {
         guard sort != value else { return }
         withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
             sortRaw = value.rawValue
+        }
+    }
+
+    private func setGroupFilter(_ value: String?) {
+        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+            groupFilter = value
+            batchFeedback = nil
         }
     }
 
@@ -481,10 +686,84 @@ struct HomeDashboardView: View {
 
     private func clearFacets() {
         withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.standard)) {
+            groupFilter = nil
             colorFilter = nil
             toolFilter = nil
+            batchFeedback = nil
         }
     }
+
+    private func toggleSelection(_ project: RepoProject) {
+        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+            if selectedPaths.contains(project.path) {
+                selectedPaths.remove(project.path)
+            } else {
+                selectedPaths.insert(project.path)
+            }
+            batchFeedback = nil
+        }
+    }
+
+    private func toggleSelectAll() {
+        let paths = Set(visibleProjects.map(\.path))
+        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+            if paths.isSubset(of: selectedPaths) {
+                selectedPaths.subtract(paths)
+            } else {
+                selectedPaths.formUnion(paths)
+            }
+            batchFeedback = nil
+        }
+    }
+
+    private func endSelection() {
+        selectionMode = false
+        selectedPaths.removeAll()
+        batchFeedback = nil
+    }
+
+    private func copyCleanupCommands() {
+        let projects = selectedProjects
+        let commands = projects.compactMap { project -> String? in
+            let command = project.cleanup.removalCommand
+            guard !command.isEmpty else { return nil }
+            return "# \(project.displayName)\n\(command)"
+        }
+        guard !commands.isEmpty else {
+            batchFeedback = "所选项目没有可清理项"
+            return
+        }
+
+        SystemActions.copy(commands.joined(separator: "\n"))
+        let skipped = projects.count - commands.count
+        batchFeedback = skipped == 0
+            ? "已复制 \(commands.count) 个项目的清理命令"
+            : "已复制 \(commands.count) 个；\(skipped) 个没有可清理项"
+    }
+
+    private func rescanSelected() async {
+        guard !batchRunning, store.phase != .scanning else { return }
+        let projects = selectedProjects
+        guard !projects.isEmpty else { return }
+
+        let existing = projects.filter {
+            FileTools.isDirectory(URL(fileURLWithPath: $0.path))
+        }
+        let missing = projects.count - existing.count
+        guard !existing.isEmpty else {
+            batchFeedback = "所选目录都不存在"
+            return
+        }
+
+        batchRunning = true
+        batchFeedback = nil
+        await store.rescanProjects(existing)
+        batchRunning = false
+        batchFeedback = missing == 0
+            ? "已重新扫描 \(existing.count) 个项目"
+            : "已重新扫描 \(existing.count) 个；\(missing) 个目录不存在"
+    }
+
 }
 
 private enum HomeViewMode: String, CaseIterable, Identifiable {
@@ -659,12 +938,19 @@ private struct ProjectFolderCard: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let project: RepoProject
+    var selecting = false
+    var selected = false
+    var toggleSelection: () -> Void = {}
 
     @State private var hovering = false
 
     var body: some View {
         Button {
-            store.selectedPath = project.path
+            if selecting {
+                toggleSelection()
+            } else {
+                store.selectedPath = project.path
+            }
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center, spacing: 10) {
@@ -737,9 +1023,24 @@ private struct ProjectFolderCard: View {
             .overlay {
                 RoundedRectangle(cornerRadius: 15, style: .continuous)
                     .strokeBorder(
-                        hovering ? accent.opacity(0.24) : FizzTheme.stroke,
-                        lineWidth: 1
+                        selected
+                            ? accent.opacity(0.55)
+                            : hovering ? accent.opacity(0.24) : FizzTheme.stroke,
+                        lineWidth: selected ? 1.5 : 1
                     )
+            }
+            .overlay(alignment: .topTrailing) {
+                if selecting {
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.88))
+                            .frame(width: 20, height: 20)
+                        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
+                    }
+                    .padding(8)
+                }
             }
             .shadow(
                 color: .black.opacity(hovering ? 0.07 : 0.025),
@@ -754,8 +1055,13 @@ private struct ProjectFolderCard: View {
                 hovering = value
             }
         }
-        .help("打开 \(project.displayName)")
-        .accessibilityLabel("打开 \(project.displayName)")
+        .help(selecting
+            ? (selected ? "取消选择 \(project.displayName)" : "选择 \(project.displayName)")
+            : "打开 \(project.displayName)")
+        .accessibilityLabel(selecting
+            ? (selected ? "取消选择 \(project.displayName)" : "选择 \(project.displayName)")
+            : "打开 \(project.displayName)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .contextMenu {
             Button(project.starred ? "取消星标" : "设为星标") {
                 store.toggleStar(project)
@@ -797,14 +1103,28 @@ private struct ProjectFolderCard: View {
 private struct ProjectListRow: View {
     @Environment(RepositoryStore.self) private var store
     let project: RepoProject
+    var selecting = false
+    var selected = false
+    var toggleSelection: () -> Void = {}
 
     @State private var hovering = false
 
     var body: some View {
         Button {
-            store.selectedPath = project.path
+            if selecting {
+                toggleSelection()
+            } else {
+                store.selectedPath = project.path
+            }
         } label: {
             HStack(spacing: 10) {
+                if selecting {
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
+                        .frame(width: 16)
+                }
+
                 FolderBadge(project: project, size: 28)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -850,9 +1170,21 @@ private struct ProjectListRow: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background {
-                if hovering {
+                if selected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(accent.opacity(0.10))
+                } else if hovering {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(FizzTheme.mutedFill)
+                }
+            }
+            .overlay {
+                if selected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(
+                            accent.opacity(0.28),
+                            lineWidth: 1
+                        )
                 }
             }
             .contentShape(Rectangle())
@@ -861,7 +1193,13 @@ private struct ProjectListRow: View {
         .onHover { value in
             hovering = value
         }
-        .help("打开 \(project.displayName)")
+        .help(selecting
+            ? (selected ? "取消选择 \(project.displayName)" : "选择 \(project.displayName)")
+            : "打开 \(project.displayName)")
+        .accessibilityLabel(selecting
+            ? (selected ? "取消选择 \(project.displayName)" : "选择 \(project.displayName)")
+            : "打开 \(project.displayName)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .contextMenu {
             ProjectQuickActions(project: project)
         }
@@ -871,6 +1209,10 @@ private struct ProjectListRow: View {
         if !project.note.isEmpty { return project.note }
         if let subject = project.lastCommit?.subject { return subject }
         return project.group
+    }
+
+    private var accent: Color {
+        project.color?.color ?? ProjectGrouping.color(for: project.group)
     }
 
     private var firstStack: (String, Color)? {

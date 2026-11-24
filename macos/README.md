@@ -50,6 +50,7 @@ To work in Xcode, open `Package.swift`.
 - Finder, Terminal, and editor quick actions, including `⌘⇧T` for Terminal
 - Collapsible project groups and search
 - Dashboard, list, and gallery layouts
+- Group filtering plus multi-select batch rescan and cleanup-command copy across all three layouts
 - Folder scanning and managed roots
 - Disk usage and cleanup suggestions
 - Git status, ahead/behind state, dirty files, and recent commits

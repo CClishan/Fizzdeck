@@ -89,6 +89,7 @@ On a fresh install, use **Scan folder** in the sidebar to discover and add proje
 |---|---|
 | Project discovery | Scans managed folders for repositories and project markers such as `.git`, `package.json`, `pom.xml`, and `go.mod`. Skips heavy generated folders such as `node_modules`, `Library`, `dist`, and `build`. |
 | Dashboard | Native overview with starred, changed, and running filters; collapsible project groups; dashboard, list, and gallery layouts. |
+| Batch actions | Filter by project group, then select projects across card, list, or gallery views to rescan only those folders or copy one combined set of cleanup commands. Batch actions never delete files. |
 | Attention queue | Surfaces failing tests, behind-remote and unpushed commits, uncommitted files, and reclaimable disk. Ordered by urgency; each row opens the matching project tab and offers inline push, fast-forward pull, test rerun, or cleanup-command copy. Right-click a row to snooze or mute that project/type; silenced rules can be restored from the header. |
 | Menu bar | Keeps the pending-item count visible, opens the overview or a recent project, and sends local notifications when a dev server becomes ready or a test fails. |
 | Quick open | `⌘K` searches projects, branches, remote URLs, and actions with recent items, fuzzy matching, and pinned commands. Run project commands and app actions without leaving the keyboard. |
@@ -146,7 +147,7 @@ scan-clean.mjs          CLI disk-usage report
 ## Current limitations
 
 - The native app requires macOS 26+. It is built from source and is not signed or notarized yet.
-- The native app focuses on inspection and daily project actions. Destructive project removal is currently handled by the web UI.
+- The native app focuses on inspection and daily project actions. Batch rescan and cleanup-command copy are native; destructive project removal remains in the web UI.
 - The native theme is intentionally light-only.
 - There are no background file watchers yet.
 - Local notifications require system permission. The `--sign-local` build uses an ad-hoc signature, which is enough to register with Notification Center for local testing; distribution still needs a Developer ID signature and notarization.

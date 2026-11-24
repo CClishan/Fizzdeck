@@ -6,11 +6,26 @@ enum RepositoryScanner {
 
     static func scan(roots: [String], meta: [String: ProjectMeta]) async -> ScanOutput {
         let started = Date()
+        let projects = await scan(paths: roots, meta: meta)
+        let result = ScanOutput(
+            projects: projects,
+            roots: roots,
+            scannedAt: Date(),
+            duration: Date().timeIntervalSince(started)
+        )
+        logger.info(
+            "scan roots=\(roots.count, privacy: .public) projects=\(projects.count, privacy: .public) durationMs=\(Int(result.duration * 1000), privacy: .public)"
+        )
+        return result
+    }
+
+    static func scan(paths: [String], meta: [String: ProjectMeta]) async -> [RepoProject] {
+        let uniquePaths = Array(Set(paths)).sorted()
         let sessionIndex = await Task.detached(priority: .utility) {
             SessionIndex.build()
         }.value
 
-        let rootURLs = roots.map { URL(fileURLWithPath: $0) }
+        let rootURLs = uniquePaths.map { URL(fileURLWithPath: $0) }
         var projects: [RepoProject] = []
 
         await withTaskGroup(of: RepoProject.self) { group in
@@ -24,6 +39,12 @@ enum RepositoryScanner {
             }
         }
 
+        projects = await applyPortStates(projects)
+        projects.sort { ($0.recent ?? .distantPast) > ($1.recent ?? .distantPast) }
+        return projects
+    }
+
+    private static func applyPortStates(_ projects: [RepoProject]) async -> [RepoProject] {
         var portStates: [String: PortState] = [:]
         await withTaskGroup(of: (String, PortState).self) { group in
             for project in projects {
@@ -40,23 +61,11 @@ enum RepositoryScanner {
             }
         }
 
-        projects = projects.map { project in
+        return projects.map { project in
             var project = project
             project.port = portStates[project.path] ?? .noPreview
             return project
         }
-        projects.sort { ($0.recent ?? .distantPast) > ($1.recent ?? .distantPast) }
-
-        let result = ScanOutput(
-            projects: projects,
-            roots: roots,
-            scannedAt: Date(),
-            duration: Date().timeIntervalSince(started)
-        )
-        logger.info(
-            "scan roots=\(roots.count, privacy: .public) projects=\(projects.count, privacy: .public) durationMs=\(Int(result.duration * 1000), privacy: .public)"
-        )
-        return result
     }
 
     private static func scanProject(

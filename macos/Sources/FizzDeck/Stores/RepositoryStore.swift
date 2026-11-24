@@ -113,6 +113,26 @@ final class RepositoryStore {
         selectedPath = Self.homeSelection
     }
 
+    func rescanProjects(_ projects: [RepoProject]) async {
+        let paths = projects.map(\.path)
+        guard !paths.isEmpty else { return }
+
+        let started = Date()
+        let scanned = await RepositoryScanner.scan(paths: paths, meta: metadata)
+        let replacements = Dictionary(
+            scanned.map { ($0.path, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        self.projects = self.projects.map { replacements[$0.path] ?? $0 }
+        scanDuration = Date().timeIntervalSince(started)
+        scannedAt = Date()
+
+        let refreshed = Set(paths)
+        remotes = remotes.filter { !refreshed.contains($0.key) }
+        missingRemotes.subtract(refreshed)
+        remoteTasks = remoteTasks.filter { !refreshed.contains($0.key) }
+    }
+
     func addRoot() async {
         let panel = NSOpenPanel()
         panel.title = "添加项目目录"

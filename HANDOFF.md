@@ -2,9 +2,9 @@
 
 - 更新时间：2026-11-24
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
-- 当前分支：`codex/p1-palette-remote`（PR #1，等待合并）
-- 基线 HEAD：`00c678b Record FizzDeck landing deployment`
-- 状态：P0 完成，P1 进行中；命令面板、远程仓库动作、Git 错误文案已完成；原生 app 可本地构建和 ad-hoc 运行；landing 主入口为 `https://koroo.top/fizzdeck`，旧 `https://fizzdeck.pages.dev` 保留可用。
+- 当前分支：`codex/p1-palette-remote`（PR #1，等待合并；已含批量操作）
+- 基线 HEAD：`732ef39 Add remote repository actions and palette search`
+- 状态：P0 完成，P1 功能完成，P2 进行中；分组筛选与批量操作已完成；原生 app 可本地构建和 ad-hoc 运行；landing 主入口为 `https://koroo.top/fizzdeck`，旧 `https://fizzdeck.pages.dev` 保留可用。
 
 ## 新对话开场提示
 
@@ -13,9 +13,9 @@
 ```text
 继续 FizzDeck 原生 macOS 项目，仓库在 /Users/a003/dsh-workspace/repo-dashboard。
 
-先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 P0 已完成，P1 进行中；命令面板、远程仓库动作和 Git 错误文案已完成。下一步优先补菜单栏/通知直测，或从 HANDOFF.md 的“待增加能力”选择任务，先汇报改动文件和验收方式，再动手。
+先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 P0 完成，P1 功能完成，P2 进行中；分组筛选与批量操作已完成。下一步优先补 P1 的真实 Git 错误路径、菜单栏/通知直测，或从 HANDOFF.md 的“待增加能力”选择 P2 任务，先汇报改动文件和验收方式，再动手。
 
-不要自动提交、推送、签名或部署，等我明确确认。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
+不要合并 PR、签名、公证或部署，除非我明确确认；本阶段已授权提交、推送和更新 PR。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
 
 界面要求：纯 SwiftUI、浅色 Liquid Glass，不做整套暗色和吉祥物；UI 不加多余标签，让布局自己解释。
 ```
@@ -24,13 +24,13 @@
 
 | 项目 | 当前状态 |
 |---|---|
-| 原生 app | P0 完成，P1 7/9；`swift build` 通过；ad-hoc 签名可本地运行 |
+| 原生 app | P0 完成，P1 功能完成，P2 1/5；`swift build` 通过；ad-hoc 签名可本地运行 |
 | 原生分发 | 未做 Developer ID 签名、公证、安装包和自动更新 |
 | Web UI | 保留在 `src/` + `server.mjs`，不是当前主入口 |
 | Landing | `https://koroo.top/fizzdeck` 已上线；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
-| 仓库 | `main` 与 `origin/main` 一致；本轮 P1 改动已提交到 `codex/p1-palette-remote`，PR #1 等待合并 |
+| 仓库 | 本轮 P1 与 P2 批量操作已提交到 `codex/p1-palette-remote`，PR #1 等待合并 |
 | 验证基线 | Swift build、GitSync 本地 6 项、CUA 远程动作；ESLint、TypeScript、34 页生产构建、1440/390/320 浏览器验收、reduced motion 通过 |
-| 任务进度 | P0 5/5；P1 7/9；P2 0/5；发布与交付 0/3；质量与性能 0/4 |
+| 任务进度 | P0 5/5；P1 5/5（功能完成，2 项真实环境直测待补）；P2 1/5；发布与交付 0/3；质量与性能 0/4 |
 
 ## 项目是什么
 
@@ -43,7 +43,7 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - 不使用大面积深色主题，不做吉祥物。
 - 默认中文、结论先行、短句。
 - 生产代码禁止 Mock。
-- 未经明确确认，不提交、不推送、不签名、不部署。
+- 本轮已授权提交、推送和更新 PR；合并、签名、公证、部署仍需明确确认。
 
 ## 已完成（P0）
 
@@ -237,6 +237,23 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - `macos/Sources/FizzDeck/Services/Shell.swift`
 - `macos/Sources/FizzDeck/Services/GitSyncService.swift`
 
+## 已完成（P2）
+
+### 1. 分组筛选与批量操作
+
+- 首页筛选菜单新增分组子菜单，分组数量会叠加当前颜色和 AI 工具条件；活动分组显示为可移除 chip。
+- 右上批量选择按钮进入选择模式；卡片、列表和画廊都支持选中态、全选、取消全选、清除和退出。
+- 批量重扫只读取选中目录并替换对应项目，保留其他项目顺序和状态；所选项目的 remote 缓存会失效。
+- 批量复制按项目加注释，一次复制合并后的清理命令；没有可清理项的项目会跳过并回显数量。
+- 批量操作不提供删除，不自动执行 `rm`；单点选择、全选和部分无清理项都有独立结果反馈。
+- 选中态用项目色描边或底色加勾选图标；辅助功能会暴露“选择 / 取消选择”和已选 traits。
+
+相关文件：
+
+- `macos/Sources/FizzDeck/Services/RepositoryScanner.swift`
+- `macos/Sources/FizzDeck/Stores/RepositoryStore.swift`
+- `macos/Sources/FizzDeck/Views/HomeDashboardView.swift`
+
 ## 验证记录
 
 已通过：
@@ -306,6 +323,18 @@ P1 命令面板 / 远程仓库 / Git 错误：
 - 临时仓库脚本编译实际 `Shell.swift` + `GitSyncService.swift`，6 项通过：push 成功、无 upstream、脏工作区 pull 拦截、非快进 pull、不可达远端 fetch、Shell 超时标记。
 - 未实测：无 `origin` 项目的禁用态没有在 CUA 中实际切换确认；代码路径已覆盖。
 
+P2 分组筛选与批量操作：
+
+- `swift build --package-path macos` 与 `git diff --check` 通过。
+- CUA 实测：筛选菜单显示 6 个分组及数量；“产品站”筛出 5 / 23 个项目，活动 chip 数量与汇总指标同步，移除 chip 后恢复 23 个。
+- CUA 实测：进入批量模式后卡片、列表、画廊都有勾选图标和选中描边；选中 2 个项目时批量栏显示“已选 2 个”。
+- CUA 实测：批量复制得到 zoopfizz 与 pixloading 两组清理命令，`pbpaste` 内容包含项目注释和绝对路径；未执行任何命令。
+- CUA 实测：对 2 个选中项目重扫后回显“已重新扫描 2 个项目”，其他 21 个项目仍在看板中；首页时间和体积汇总刷新。
+- CUA 实测：全选从 2 个变为 5 个，再次点击取消全选回到 0 个；“完成”退出后选择状态清空。
+- CUA 实测：最终构建中选中卡片在辅助功能树显示 `(selected)`，批量按钮显示“退出批量选择”。
+- 批量操作前后 `~/.repodeck/roots.json` 与 `state.json` 的 SHA-256 与操作前快照一致。
+- 未实测：所选目录不存在、部分目录在扫描前消失的提示未用真实缺失目录触发；代码会在重扫前过滤非目录并回显数量。
+
 CUA 实测：
 
 - 首页队列显示 18 个项目 / 24 项。
@@ -332,9 +361,10 @@ CUA 实测：
 
 ## 发布记录
 
-- FizzDeck 提交：`00c678b Record FizzDeck landing deployment`
+- FizzDeck 上次 `main` 发布：`00c678b Record FizzDeck landing deployment`
 - FizzDeck 推送：`origin/main`，`4133ff2..00c678b`
-- 本轮 P1 PR：`https://github.com/CClishan/Fizzdeck/pull/1`（未合并）
+- 本轮 P1 / P2 PR：`https://github.com/CClishan/Fizzdeck/pull/1`（未合并；含命令面板、远程仓库、Git 错误文案、分组筛选和批量操作）
+- 分支 `codex/p1-palette-remote` 起始提交：`732ef39 Add remote repository actions and palette search`
 - Landing 主入口：`https://koroo.top/fizzdeck`
 - koroo 路由提交：`f4a1b4f feat: mount FizzDeck landing at /fizzdeck`
 - koroo 当前 `main`：`cff192b`（motion/article 收尾提交）
@@ -344,8 +374,8 @@ CUA 实测：
 
 ## 工作区现状（重要）
 
-- 交接前 `git status --short` 为空，`main` 与 `origin/main` 一致。
-- P0 / P1 第一批代码、landing、README 和 HANDOFF 已提交；本轮新增命令面板、远程仓库、Git 错误文案和文档，提交在 `codex/p1-palette-remote`，PR #1 等待合并。
+- `codex/p1-palette-remote` 当前包含 P1 以及 P2 批量操作；PR #1 等待用户合并，未合并到 `main`。
+- 批量操作提交后工作区应为空；`~/.repodeck` 的 `roots.json`、`state.json` 未因验收改动。
 - `macos/dist/FizzDeck.app` 是本机 ad-hoc 构建产物，不是发行包；不要把它当作可分发版本。
 - koroo 仓库的 motion/article 改动已在 `cff192b` 提交；本交接不再依赖未提交改动。
 - 不要回滚 `server.mjs`、`vite.config.js`、`public/`、`landing.html`、`src/landing/`、`src/stageshow/` 的已发布内容；需要修改时单独开任务。
@@ -358,7 +388,7 @@ CUA 实测：
 - [ ] 旧域名收敛：把 `https://fizzdeck.pages.dev` 301 到 `https://koroo.top/fizzdeck`，保留 Cloudflare Pages 项目作为回滚。验收：旧路径 301、canonical/OG 不重复、静态资源不丢。
 - [ ] 文档同步：发布新版本时同步 README、`macos/README.md`、HANDOFF 的 live link、版本号和限制说明。
 
-### P1（下一阶段优先）
+### P1（收尾）
 
 - [x] 命令面板增强：最近项目、最近动作、模糊匹配、置顶命令，以及“打开远程仓库 / 复制远端地址”。相关文件：`CommandPaletteView.swift`、`RepositoryStore.swift`、`GitService.swift`。验收：`⌘K` 可搜项目、分支、远端 URL 和动作；无远端时明确不可用；上下键、回车、Esc 不回归。
 - [x] 远程仓库动作：从项目读取 `origin`，支持浏览器打开和复制 URL，不发起网络写操作。相关文件：`GitService.swift`、`ProjectDetailView.swift`。验收：有/无 origin、SSH/HTTPS 两种 URL 都正确。
@@ -368,7 +398,7 @@ CUA 实测：
 ### P2（产品能力）
 
 - [ ] 原生删除项目：对齐网页版的备份、移入废纸篓、浅路径保护、目录名确认和测试运行时拦截。相关文件：`RepositoryStore.swift`、`ProjectDetailView.swift`、新增删除服务。验收：不自动永久删除；失败不改变目录；备份可恢复。
-- [ ] 批量操作：批量重扫、批量复制清理命令、按组筛选。相关文件：`HomeDashboardView.swift`、`SidebarView.swift`、`AttentionQueueView.swift`。验收：选择态清晰、部分失败可回显、无误触破坏性操作。
+- [x] 批量操作：批量重扫、批量复制清理命令、按组筛选。相关文件：`HomeDashboardView.swift`、`RepositoryStore.swift`、`RepositoryScanner.swift`。验收：选择态清晰、部分失败可回显、无误触破坏性操作；目录存在性预检和数量回显已实现。
 - [ ] 编辑器覆盖：JetBrains 系列、Antigravity、嵌套 Xcode 工程。相关文件：`SystemActions.swift`、`Models.swift`。验收：安装/未安装、工程/普通目录分别显示正确。
 - [ ] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行。
 - [ ] AI 会话管理：会话列表、恢复、结束、按项目过滤；仍只读本地元数据。相关文件：Services 与 Views 下的会话相关实现。验收：Codex/Claude 两类会话、无会话空态、复制命令正确。
@@ -383,9 +413,9 @@ CUA 实测：
 ### 建议接手顺序
 
 1. 先跑基线：`swift build --package-path macos`、`./macos/script/build_and_run.sh --verify`。
-2. 命令面板和远程仓库动作已完成；下一步补真实凭据失效/网络中断和菜单栏/通知直测，降低日常使用噪声。
-3. 再评估 Git 错误路径是否还缺真实环境覆盖；缺则补测，不缺则进入 P2。
-4. 最后做原生删除、批量操作和 Developer ID 分发，避免在未稳定的交互上扩大破坏面。
+2. P1 功能已完成；下一步补真实凭据失效/网络中断和菜单栏/通知直测。
+3. 批量操作已完成；P2 下一项优先原生删除（带备份和确认），再做编辑器覆盖、Swift 测试基线和 AI 会话管理。
+4. 最后做 Developer ID 分发；用户已明确跳过签名、公证和旧域名 301。
 
 ### 不做
 
