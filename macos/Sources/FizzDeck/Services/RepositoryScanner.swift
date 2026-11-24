@@ -76,8 +76,8 @@ enum RepositoryScanner {
         let path = directory.path
         let name = directory.lastPathComponent
         let displayName = AppPaths.aliases[path] ?? name
-        let groupName = group(for: path)
         let saved = meta[path] ?? ProjectMeta()
+        let groupName = saved.group ?? ProjectGrouping.detected(for: path)
 
         async let sizeTask = SizeScanner.scan(directory)
         async let cleanupTask = CleanupScanner.scan(directory)
@@ -126,26 +126,4 @@ enum RepositoryScanner {
         values.compactMap { $0 }.max()
     }
 
-    private static func group(for path: String) -> String {
-        let name = (path as NSString).lastPathComponent.lowercased()
-        let value = path.lowercased()
-        if value.contains("workspace") || value.contains("cpa-manager") { return "工作区" }
-        if name.hasPrefix("tsys") { return "上屏管家" }
-        if value.contains("converter-tools")
-            || value.contains("alimama-cli")
-            || value.contains("cliproxyapi")
-            || value.contains("shipany") {
-            return "工具库"
-        }
-        if value.contains("noplan") { return "官网" }
-        if value.contains("zoopfizz")
-            || value.contains("video-tem")
-            || value.contains("pixloading")
-            || value.contains("cardfun")
-            || value.contains("a2o")
-            || value.contains("tapinchina") {
-            return "产品站"
-        }
-        return "其他"
-    }
 }

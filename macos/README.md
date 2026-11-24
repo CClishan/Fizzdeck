@@ -54,20 +54,21 @@ To work in Xcode, open `Package.swift`.
 - Local notifications when a dev server becomes ready or a test fails
 - `⌘K` command palette for projects, branches, and actions
 - Finder, Terminal, and editor quick actions for Cursor, VS Code, Zed, Antigravity, JetBrains IDEs, and top-level or nested Xcode targets, including `⌘⇧T` for Terminal
-- Collapsible project groups and search
-- Dashboard, list, and gallery layouts
-- Group filtering plus multi-select batch rescan and cleanup-command copy across all three layouts
+- Collapsible project groups with automatic path-based classification plus manual group assignment, new-group creation, and restore-to-automatic
+- Search across projects, paths, stacks, and branches
+- Dashboard and list layouts, with a half-width attention card beside four summary cards
+- Group filtering plus multi-select batch rescan and cleanup-command copy across both layouts
 - Folder scanning and managed roots
 - Disk usage and cleanup suggestions
 - Git status, ahead/behind state, dirty files, and recent commits
 - Branch switching, confirmed fetch, fast-forward pull, and push with inline results
 - Project documentation discovery and reading
-- Codex and Claude Code session list with tool filters, last user request, and resume commands
-- Start/stop controls for development servers
+- Codex and Claude Code session list with tool filters, last user request, resume commands, and confirmed ending of dedicated CLI processes
+- Start/stop and test controls in a floating Liquid Glass action dock
 - Port readiness checks and log access
 - Background test execution with live output
 - Stars, color tags, and notes
-- Fixed light appearance with a floating Liquid Glass detail toolbar
+- Fixed light appearance with native glass controls and a floating Liquid Glass action dock
 
 ## Shared state
 
@@ -76,7 +77,7 @@ FizzDeck keeps its state in `~/.repodeck`, a path retained for backward compatib
 | Path | Purpose |
 |---|---|
 | `roots.json` | Managed folders and display aliases |
-| `state.json` | Stars, tags, notes, and UI state |
+| `state.json` | Stars, tags, groups, notes, and UI state |
 | `roots-cache.json` | Scan cache |
 | `logs/` | Development server logs |
 
@@ -90,7 +91,7 @@ FizzDeck itself does not upload project data. Commands launched for a project ma
 
 Local notifications require system permission. The `--sign-local` build uses an ad-hoc signature, which is enough to register with Notification Center for local testing; distribution still needs a Developer ID signature and notarization.
 
-Destructive project removal is intentionally not exposed in the native app yet. Use the web UI for its multi-step backup and confirmation flow.
+Project removal only accepts managed roots, refuses shallow or protected paths, is blocked while a dev server or test is running, and requires typing the directory name. Move to Trash uses the system Trash; permanent deletion first copies the project to `~/.repodeck/trash`.
 
 ## Project layout
 
@@ -107,7 +108,6 @@ script/build_and_run.sh      Build and launch entry point
 
 ## Not implemented yet
 
-- Project deletion inside the native app
-- Ending AI sessions from the app
 - Background file watching
+- Ending Codex Desktop sessions; FizzDeck never terminates the shared app-server
 - Code signing and notarization

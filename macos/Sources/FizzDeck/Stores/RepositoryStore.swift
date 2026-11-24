@@ -163,6 +163,46 @@ final class RepositoryStore {
         await scan()
     }
 
+    func removeProject(
+        _ project: RepoProject,
+        mode: ProjectRemovalMode,
+        confirmation: String,
+        testRunning: Bool
+    ) async -> ProjectRemovalResult {
+        let roots = RootStore.load()
+        let result = await Task.detached(priority: .userInitiated) {
+            ProjectRemovalService.remove(
+                path: project.path,
+                mode: mode,
+                confirmation: confirmation,
+                managedRoots: roots,
+                testRunning: testRunning,
+                devServerRunning: project.port == .running
+            )
+        }.value
+        guard result.success else { return result }
+
+        self.roots.removeAll { $0 == project.path }
+        try? RootStore.save(self.roots)
+
+        metadata.removeValue(forKey: project.path)
+        try? MetaStore.save(metadata)
+
+        projects.removeAll { $0.path == project.path }
+        remotes.removeValue(forKey: project.path)
+        missingRemotes.remove(project.path)
+        remoteTasks[project.path]?.cancel()
+        remoteTasks[project.path] = nil
+        recentProjectPaths.removeAll { $0 == project.path }
+        UserDefaults.standard.set(recentProjectPaths, forKey: Self.recentProjectsKey)
+
+        if selectedPath == project.path {
+            selectedPath = Self.homeSelection
+            requestedTab = nil
+        }
+        return result
+    }
+
     func openProject(_ project: RepoProject, tab: ProjectTab? = nil) {
         selectedPath = project.path
         requestedTab = tab
@@ -297,6 +337,22 @@ final class RepositoryStore {
         meta.note = trimmed
         metadata[project.path] = meta
         try? MetaStore.save(metadata)
+    }
+
+    func setGroup(_ group: String?, for project: RepoProject) {
+        guard let index = projects.firstIndex(where: { $0.path == project.path }) else { return }
+        let trimmed = group?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = trimmed?.isEmpty == false ? trimmed : nil
+        projects[index].group = value ?? ProjectGrouping.detected(for: project.path)
+
+        var meta = metadata[project.path] ?? ProjectMeta()
+        meta.group = value
+        metadata[project.path] = meta
+        try? MetaStore.save(metadata)
+    }
+
+    var knownGroups: [String] {
+        ProjectGrouping.ordered(projects.map(\.group))
     }
 
     func setPort(_ state: PortState, for path: String) {

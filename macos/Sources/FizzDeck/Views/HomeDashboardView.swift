@@ -44,9 +44,7 @@ struct HomeDashboardView: View {
     }
 
     private var availableGroups: [String] {
-        let detected = Set(matchingProjects.map(\.group))
-        return ProjectGrouping.order.filter(detected.contains)
-            + detected.subtracting(ProjectGrouping.order).sorted()
+        ProjectGrouping.ordered(matchingProjects.map(\.group))
     }
 
     private var allVisibleSelected: Bool {
@@ -83,10 +81,7 @@ struct HomeDashboardView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         header
-                        if showsAttention {
-                            AttentionQueueView()
-                        }
-                        summary
+                        overviewTop
 
                         if matchingProjects.isEmpty {
                             emptyResults
@@ -110,6 +105,11 @@ struct HomeDashboardView: View {
         }
         .onChange(of: visibleProjects.map(\.path)) { _, paths in
             selectedPaths.formIntersection(Set(paths))
+        }
+        .onAppear {
+            if HomeViewMode(rawValue: modeRaw) == nil {
+                modeRaw = HomeViewMode.cards.rawValue
+            }
         }
     }
 
@@ -142,6 +142,22 @@ struct HomeDashboardView: View {
 
     private var showsAttention: Bool {
         filter == .all && store.query.isEmpty && !hasFacets
+    }
+
+    private var overviewTop: some View {
+        Group {
+            if showsAttention {
+                HStack(alignment: .top, spacing: 12) {
+                    AttentionQueueView()
+                        .frame(maxWidth: .infinity, alignment: .top)
+
+                    summaryCards
+                        .frame(maxWidth: .infinity)
+                }
+            } else {
+                summary
+            }
+        }
     }
 
     private var headerDetail: String {
@@ -360,6 +376,48 @@ struct HomeDashboardView: View {
         .accessibilityLabel("活动筛选")
     }
 
+    private var summaryCards: some View {
+        Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+            GridRow {
+                GlassStatCard(
+                    title: "项目",
+                    value: "\(visibleProjects.count)",
+                    detail: filter.title,
+                    symbol: "square.stack.3d.up",
+                    tint: FizzTheme.accent
+                )
+                GlassStatCard(
+                    title: "正在运行",
+                    value: "\(running.count)",
+                    detail: running.isEmpty ? "没有运行中的服务" : "端口已就绪",
+                    symbol: "play.circle",
+                    tint: .green
+                )
+            }
+            GridRow {
+                GlassStatCard(
+                    title: "磁盘占用",
+                    value: Format.bytes(totalBytes),
+                    detail: "已扫描 \(visibleProjects.count) 个项目",
+                    symbol: "internaldrive",
+                    tint: .blue
+                )
+                GlassStatCard(
+                    title: "可清理",
+                    value: Format.bytes(cleanupBytes),
+                    detail: "\(cleanupItemCount) 个目录",
+                    symbol: "trash.slash",
+                    tint: .orange
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var cleanupItemCount: Int {
+        visibleProjects.reduce(0) { $0 + $1.cleanup.items.count }
+    }
+
     private var summary: some View {
         HStack(spacing: 0) {
             HomeSummaryMetric(
@@ -421,8 +479,6 @@ struct HomeDashboardView: View {
                 cards
             case .list:
                 projectList
-            case .gallery:
-                gallery
             }
         }
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: selectionMode)
@@ -530,27 +586,6 @@ struct HomeDashboardView: View {
         }
         .padding(.vertical, 4)
         .fizzCard(radius: 16)
-    }
-
-    private var gallery: some View {
-        ScrollView(.horizontal) {
-            LazyHStack(spacing: 12) {
-                ForEach(visibleProjects) { project in
-                    ProjectFolderCard(
-                        project: project,
-                        selecting: selectionMode,
-                        selected: selectedPaths.contains(project.path),
-                        toggleSelection: { toggleSelection(project) }
-                    )
-                        .frame(width: 276)
-                }
-            }
-            .scrollTargetLayout()
-            .padding(.vertical, 2)
-        }
-        .scrollTargetBehavior(.viewAligned)
-        .scrollIndicators(.hidden)
-        .frame(height: 138)
     }
 
     private var emptyResults: some View {
@@ -761,7 +796,6 @@ struct HomeDashboardView: View {
 private enum HomeViewMode: String, CaseIterable, Identifiable {
     case cards
     case list
-    case gallery
 
     var id: String { rawValue }
 
@@ -769,7 +803,6 @@ private enum HomeViewMode: String, CaseIterable, Identifiable {
         switch self {
         case .cards: "卡片墙"
         case .list: "极简列表"
-        case .gallery: "横向画廊"
         }
     }
 
@@ -777,7 +810,6 @@ private enum HomeViewMode: String, CaseIterable, Identifiable {
         switch self {
         case .cards: "square.grid.2x2"
         case .list: "list.bullet"
-        case .gallery: "rectangle.split.3x1"
         }
     }
 }
@@ -1064,6 +1096,7 @@ private struct ProjectFolderCard: View {
                     Button(color.label) { store.setColor(color, for: project) }
                 }
             }
+            ProjectGroupingMenu(project: project)
             Divider()
             ProjectQuickActions(project: project)
         }
@@ -1193,6 +1226,7 @@ private struct ProjectListRow: View {
             : "打开 \(project.displayName)")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .contextMenu {
+            ProjectGroupingMenu(project: project)
             ProjectQuickActions(project: project)
         }
     }

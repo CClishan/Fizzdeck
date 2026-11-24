@@ -46,6 +46,25 @@ enum SystemActions {
         pasteboard.clearContents()
         pasteboard.setString(value, forType: .string)
     }
+
+    static func promptForGroupName(defaultValue: String = "") -> String? {
+        let alert = NSAlert()
+        alert.messageText = "移动到分组"
+        alert.informativeText = "输入已有分组名，或新建一个分组。"
+        alert.addButton(withTitle: "移动")
+        alert.addButton(withTitle: "取消")
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        field.stringValue = defaultValue
+        field.placeholderString = "分组名称"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        return String(value.prefix(24))
+    }
 }
 
 enum ProjectEditor: String, CaseIterable, Identifiable, Sendable {
