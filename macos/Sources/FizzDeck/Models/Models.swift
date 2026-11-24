@@ -134,6 +134,7 @@ struct SessionSummary: Sendable, Hashable {
     var lastTool: String?
     var sessionCount: Int
     var byTool: [ToolSession]
+    var recentSessions: [SessionRecord]
 
     static let empty = SessionSummary(
         detected: [],
@@ -142,7 +143,8 @@ struct SessionSummary: Sendable, Hashable {
         lastSessionID: nil,
         lastTool: nil,
         sessionCount: 0,
-        byTool: []
+        byTool: [],
+        recentSessions: []
     )
 }
 

@@ -1,16 +1,26 @@
 import Foundation
 
-struct SessionRecord: Sendable {
+struct SessionRecord: Sendable, Hashable {
     let tool: String
     let id: String
     let cwd: String?
     let startedAt: Date?
     let modified: Date
     let lastUser: String?
+
+    var stableID: String { "\(tool):\(id)" }
+
+    var resumeCommand: String? {
+        switch tool {
+        case "codex": "codex resume \(id)"
+        case "claude": "claude --resume \(id)"
+        default: nil
+        }
+    }
 }
 
 enum SessionIndex {
-    private static let tailBytes = 256 * 1024
+    private static let scanBytes = 8 * 1024 * 1024
 
     static func build() -> [SessionRecord] {
         var records: [SessionRecord] = []
@@ -34,10 +44,17 @@ enum SessionIndex {
 
     static func summary(for directory: URL, in index: [SessionRecord]) -> SessionSummary {
         let target = PathTools.normalize(directory.path)
-        let hits = index.filter { record in
-            guard let cwd = record.cwd else { return false }
-            return PathTools.normalize(cwd) == target
-        }
+        let hits = index
+            .filter { record in
+                guard let cwd = record.cwd else { return false }
+                return PathTools.normalize(cwd) == target
+            }
+            .sorted {
+                if $0.modified == $1.modified {
+                    return $0.stableID < $1.stableID
+                }
+                return $0.modified > $1.modified
+            }
 
         var byTool: [ToolSession] = []
         for hit in hits {
@@ -70,7 +87,8 @@ enum SessionIndex {
             lastSessionID: latest?.lastSessionID,
             lastTool: latest?.tool,
             sessionCount: hits.count,
-            byTool: byTool
+            byTool: byTool,
+            recentSessions: hits
         )
     }
 
@@ -111,13 +129,7 @@ enum SessionIndex {
             ?? (payload["id"] as? String)
             ?? file.deletingPathExtension().lastPathComponent
         let startedAt = (meta["timestamp"] as? String).flatMap(Format.isoDate)
-        let lastUser = lastUserMessage(in: FileTools.tail(file, bytes: tailBytes)) { object in
-            guard (object["type"] as? String) != "event_msg",
-                  let payload = object["payload"] as? [String: Any],
-                  payload["role"] as? String == "user"
-            else { return nil }
-            return payload["content"]
-        }
+        let lastUser = codexLastUserMessage(in: file)
 
         return SessionRecord(
             tool: "codex",
@@ -131,14 +143,13 @@ enum SessionIndex {
 
     private static func parseClaude(_ file: URL, directoryName: String) -> SessionRecord? {
         guard let modified = FileTools.modificationDate(file) else { return nil }
-        let tail = FileTools.tail(file, bytes: tailBytes)
         var cwd: String?
         var lastUser: String?
 
-        for line in tail.split(separator: "\n").reversed() where !line.isEmpty {
-            guard let data = String(line).data(using: .utf8),
+        FileTools.scanLinesFromEnd(in: file, maxBytes: scanBytes) { line in
+            guard let data = line.data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { continue }
+            else { return false }
             if cwd == nil, let value = object["cwd"] as? String { cwd = value }
             if lastUser == nil,
                object["type"] as? String == "user",
@@ -147,7 +158,7 @@ enum SessionIndex {
                 let cleaned = cleanUserText(text(from: message["content"]))
                 if !cleaned.isEmpty { lastUser = cleaned }
             }
-            if cwd != nil && lastUser != nil { break }
+            return cwd != nil && lastUser != nil
         }
 
         let fallbackCwd = directoryName.hasPrefix("-")
@@ -163,19 +174,41 @@ enum SessionIndex {
         )
     }
 
-    private static func lastUserMessage(
-        in tail: String,
-        extract: ([String: Any]) -> Any?
-    ) -> String? {
-        for line in tail.split(separator: "\n").reversed() where line.contains("\"user\"") {
-            guard let data = String(line).data(using: .utf8),
-                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let content = extract(object)
-            else { continue }
-            let text = cleanUserText(text(from: content))
-            if !text.isEmpty && !text.hasPrefix("<") { return text }
+    private static func codexLastUserMessage(in file: URL) -> String? {
+        var lastUser: String?
+        FileTools.scanLinesFromEnd(in: file, maxBytes: scanBytes) { line in
+            guard let message = codexUserMessage(in: line) else { return false }
+            lastUser = message
+            return true
         }
-        return nil
+        return lastUser
+    }
+
+    private static func codexUserMessage(in line: String) -> String? {
+        guard line.contains("\"UserMessage\"") || line.contains("\"user\"") else {
+            return nil
+        }
+        guard let data = line.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let payload = object["payload"] as? [String: Any]
+        else { return nil }
+
+        let content: Any?
+        if object["type"] as? String == "event_msg",
+           payload["type"] as? String == "item_completed",
+           let item = payload["item"] as? [String: Any],
+           item["type"] as? String == "UserMessage" {
+            content = item["content"]
+        } else if object["type"] as? String != "event_msg",
+                  payload["role"] as? String == "user" {
+            content = payload["content"]
+        } else {
+            return nil
+        }
+
+        let text = cleanUserText(text(from: content))
+        guard !text.isEmpty, !text.hasPrefix("<") else { return nil }
+        return text
     }
 
     private static func text(from content: Any?) -> String {

@@ -62,7 +62,7 @@ To work in Xcode, open `Package.swift`.
 - Git status, ahead/behind state, dirty files, and recent commits
 - Branch switching, confirmed fetch, fast-forward pull, and push with inline results
 - Project documentation discovery and reading
-- Codex and Claude Code session matching
+- Codex and Claude Code session list with tool filters, last user request, and resume commands
 - Start/stop controls for development servers
 - Port readiness checks and log access
 - Background test execution with live output
@@ -108,5 +108,6 @@ script/build_and_run.sh      Build and launch entry point
 ## Not implemented yet
 
 - Project deletion inside the native app
+- Ending AI sessions from the app
 - Background file watching
 - Code signing and notarization

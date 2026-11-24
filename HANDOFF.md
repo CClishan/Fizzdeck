@@ -2,9 +2,9 @@
 
 - 更新时间：2026-11-24
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
-- 当前分支：`codex/p1-palette-remote`（PR #1，等待合并；已含批量操作、编辑器覆盖和 Swift 测试）
-- 基线 HEAD：`732ef39 Add remote repository actions and palette search`
-- 状态：P0 完成，P1 功能完成，P2 3/5；分组筛选/批量操作、编辑器覆盖和 Swift 测试已完成；原生 app 可本地构建和 ad-hoc 运行；landing 主入口为 `https://koroo.top/fizzdeck`，旧 `https://fizzdeck.pages.dev` 保留可用。
+- 当前分支：`codex/p1-palette-remote`（PR #1，等待合并；已含批量操作、编辑器覆盖、Swift 测试和 AI 会话列表）
+- 基线 HEAD：`581b214 Add Swift tests and expand editor support`
+- 状态：P0 完成，P1 功能完成，P2 3/5；分组筛选/批量操作、编辑器覆盖和 Swift 测试已完成；AI 会话管理已完成列表、工具过滤和恢复命令，结束会话未做；原生 app 可本地构建和 ad-hoc 运行；landing 主入口为 `https://koroo.top/fizzdeck`，旧 `https://fizzdeck.pages.dev` 保留可用。
 
 ## 新对话开场提示
 
@@ -13,23 +13,25 @@
 ```text
 继续 FizzDeck 原生 macOS 项目，仓库在 /Users/a003/dsh-workspace/repo-dashboard。
 
-先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 P0 完成，P1 功能完成，P2 3/5；分组筛选/批量操作、编辑器覆盖和 Swift 测试已完成。下一步优先补 P1 的真实 Git 错误路径、菜单栏/通知直测，或继续 P2 的 AI 会话管理；原生删除属于破坏性能力，先确认再动。
+先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 P0 完成，P1 功能完成，P2 3/5；分组筛选/批量操作、编辑器覆盖和 Swift 测试已完成；AI 会话管理已完成列表、工具过滤和恢复命令，结束会话未做。下一步优先补 P1 的真实 Git 错误路径、菜单栏/通知直测，或继续质量与性能任务；原生删除属于破坏性能力，先确认再动。
 
 不要合并 PR、签名、公证或部署，除非我明确确认；本阶段已授权提交、推送和更新 PR。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
 
 界面要求：纯 SwiftUI、浅色 Liquid Glass，不做整套暗色和吉祥物；UI 不加多余标签，让布局自己解释。
+
+筛选按钮使用原生 `Menu`，配 `.menuStyle(.button)` + `.buttonStyle(.glass)`；不要改回自定义 HStack 或已废弃的 `.menuStyle(.borderlessButton)`。
 ```
 
 ## 移交摘要
 
 | 项目 | 当前状态 |
 |---|---|
-| 原生 app | P0 完成，P1 功能完成，P2 3/5；`swift build`、`swift test` 通过；ad-hoc 签名可本地运行 |
+| 原生 app | P0 完成，P1 功能完成，P2 3/5；`swift build`、`swift test` 通过；AI 会话列表/过滤/恢复可用；ad-hoc 签名可本地运行 |
 | 原生分发 | 未做 Developer ID 签名、公证、安装包和自动更新 |
 | Web UI | 保留在 `src/` + `server.mjs`，不是当前主入口 |
 | Landing | `https://koroo.top/fizzdeck` 已上线；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
 | 仓库 | 本轮 P1 与 P2 改动已提交到 `codex/p1-palette-remote`，PR #1 等待合并 |
-| 验证基线 | Swift build、Swift test 15 例、GitSync 本地 6 项、CUA 远程动作；ESLint、TypeScript、34 页生产构建、1440/390/320 浏览器验收、reduced motion 通过 |
+| 验证基线 | Swift build、Swift test 19 例、GitSync 本地 6 项、CUA 远程动作；ESLint、TypeScript、34 页生产构建、1440/390/320 浏览器验收、reduced motion 通过 |
 | 任务进度 | P0 5/5；P1 5/5（功能完成，2 项真实环境直测待补）；P2 3/5；发布与交付 0/3；质量与性能 0/4 |
 
 ## 项目是什么
@@ -185,7 +187,7 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 ### 5. 信息架构收敛（图 2 / 图 3）
 
 - 首页布局切换改为单个浅色玻璃分段控件，选中态用 `matchedGeometryEffect` 跟随，不再出现三组独立菜单。
-- 排序、颜色、AI 工具收进一个“筛选”菜单；活动筛选以可移除 chip 显示在控件下方，菜单图标在有筛选时使用强调色。
+- 排序、颜色、AI 工具收进一个原生“筛选”菜单；按钮使用 `.menuStyle(.button)` + `.buttonStyle(.glass)`，由系统提供玻璃外观和菜单指示器，活动筛选以可移除 chip 显示在控件下方。
 - 项目头部收成“星标 + 打开方式 + 更多”三段玻璃控件；Finder、Terminal、编辑器、复制路径在“打开方式”内。
 - localhost / 端口状态从项目头部移除，统一留在概览的“预览端口”卡片和“运行与测试”面板。
 - 新增 `FizzMotion` 统一 `quick` / `standard` / `panel` 三档节奏；原生视图统一接入 `accessibilityReduceMotion`，星标切换使用可关闭的 symbol transition。
@@ -273,6 +275,7 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - 覆盖待处理队列的五类优先级、最近项目 tie-break、1 GB 清理阈值和静默到期判断。
 - 覆盖 Git tracking 的 behind/ahead 解析、缺失 upstream、格式异常和 SSH remote 转换。
 - 覆盖编辑器嵌套 Xcode 目标：嵌套 workspace、顶层优先、嵌套 Package 回退、生成目录跳过。
+- 覆盖会话排序分组、cwd 规范化、恢复命令和跨分块反向扫描；当前共 19 例。
 
 相关文件：
 
@@ -280,6 +283,24 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - `macos/Tests/FizzDeckTests/ProjectAttentionQueueTests.swift`
 - `macos/Tests/FizzDeckTests/GitServiceTests.swift`
 - `macos/Tests/FizzDeckTests/ProjectEditorTests.swift`
+- `macos/Tests/FizzDeckTests/SessionIndexTests.swift`
+
+### 4. AI 会话管理（进行中）
+
+- 会话页展示当前项目匹配到的全部会话，按修改时间倒序、同一时间按稳定 ID 排序。
+- 新增“全部 / Codex / Claude”原生玻璃分段过滤；无匹配时显示对应空态，切换项目会重置过滤。
+- 每行显示工具、相对时间、最后一条用户需求和可复制的 `codex resume` / `claude --resume` 命令。
+- Codex 解析兼容现代 `event_msg/item_completed` 下的 `UserMessage` 和旧式 `payload.role == "user"`；Claude 从文件尾部反向读取。
+- 会话文件反向分块扫描最多 8 MiB，单次读取 128 KiB，能处理跨分块的行；不再受原先 256 KiB tail 限制。
+- 未实现“结束会话”：当前没有安全、稳定的本地接口，避免误杀用户正在使用的进程或伪造状态。
+
+相关文件：
+
+- `macos/Sources/FizzDeck/Models/Models.swift`
+- `macos/Sources/FizzDeck/Services/SessionIndex.swift`
+- `macos/Sources/FizzDeck/Services/FileTools.swift`
+- `macos/Sources/FizzDeck/Views/SessionsTabView.swift`
+- `macos/Tests/FizzDeckTests/SessionIndexTests.swift`
 
 ## 验证记录
 
@@ -332,6 +353,8 @@ P1 信息架构收敛：
 
 - `swift build --package-path macos` 通过；`./macos/script/build_and_run.sh --sign-local` 本地启动成功。
 - CUA 实测：首页只保留布局分段控件和一个“筛选”菜单；排序、颜色、AI 工具均可从该菜单进入。
+- CUA 实测：筛选按钮改为原生 `Menu` + `.menuStyle(.button)` + `.buttonStyle(.glass)`，菜单指示器由系统绘制；辅助功能树只暴露一个“筛选”菜单按钮。
+- CUA 实测：从原生菜单选择“产品站”后显示 `5 / 23` 个项目并生成活动 chip；点击“清除”恢复 23 个项目。
 - CUA 实测：选择紫色颜色后出现“紫 ×”chip 和“清除”，项目数变为 0；清除后恢复 23 个项目。
 - CUA 实测：卡片墙、极简列表、横向画廊三种布局切换正常。
 - CUA 实测：项目头部只剩星标、打开方式、更多三个控件；打开方式包含 Finder、Terminal、复制路径，星标可切换并恢复。
@@ -372,10 +395,18 @@ P2 编辑器覆盖：
 
 P2 Swift 测试基线：
 
-- `swift test --package-path macos` 通过，15 例 0 失败。
+- `swift test --package-path macos` 通过，19 例 0 失败。
 - `GitServiceTests` 5 例：behind/ahead 顺序、零值、无 upstream、异常格式、SSH remote URL。
 - `ProjectAttentionQueueTests` 4 例：五类优先级、最近项目 tie-break、1 GB 阈值、静默到期。
 - `ProjectEditorTests` 6 例：嵌套 workspace、顶层目标优先、顶层/嵌套 Package 回退、嵌套 workspace 优先于 Package、生成目录跳过。
+- `SessionIndexTests` 4 例：排序分组与稳定 ID、cwd 规范化、恢复命令、跨分块反向扫描。
+
+P2 AI 会话管理：
+
+- CUA 实测：repo-dashboard 会话页显示 2 个 Codex 会话，最新一条需求为当前对话文本，不再显示“未读取到最后一条用户消息”。
+- CUA 实测：切换到 Codex 保留 2 条；切换到 Claude 显示“没有 Claude 会话”；切回“全部”恢复两条。
+- CUA 实测：点击“复制恢复命令”后 `pbpaste` 为 `codex resume 01a20cb9-cfa6-7e42-be3a-5f1072992852`。
+- 未实测：真实 Claude 项目会话列表和恢复命令；本机匹配项目当前只有 Codex 会话，Claude 空态已验证。
 
 CUA 实测：
 
@@ -416,8 +447,8 @@ CUA 实测：
 
 ## 工作区现状（重要）
 
-- `codex/p1-palette-remote` 当前包含 P1 以及 P2 的批量操作、编辑器覆盖和 Swift 测试；PR #1 等待用户合并，未合并到 `main`。
-- P2 提交后工作区应为空；`~/.repodeck` 的 `roots.json`、`state.json` 未因验收改动。
+- `codex/p1-palette-remote` 当前包含 P1 以及 P2 的批量操作、编辑器覆盖、Swift 测试和 AI 会话列表；PR #1 等待用户合并，未合并到 `main`。
+- 本轮提交后工作区应为空；`~/.repodeck` 的 `roots.json`、`state.json` 未因验收改动。
 - `macos/dist/FizzDeck.app` 是本机 ad-hoc 构建产物，不是发行包；不要把它当作可分发版本。
 - koroo 仓库的 motion/article 改动已在 `cff192b` 提交；本交接不再依赖未提交改动。
 - 不要回滚 `server.mjs`、`vite.config.js`、`public/`、`landing.html`、`src/landing/`、`src/stageshow/` 的已发布内容；需要修改时单独开任务。
@@ -442,8 +473,8 @@ CUA 实测：
 - [ ] 原生删除项目：对齐网页版的备份、移入废纸篓、浅路径保护、目录名确认和测试运行时拦截。相关文件：`RepositoryStore.swift`、`ProjectDetailView.swift`、新增删除服务。验收：不自动永久删除；失败不改变目录；备份可恢复。
 - [x] 批量操作：批量重扫、批量复制清理命令、按组筛选。相关文件：`HomeDashboardView.swift`、`RepositoryStore.swift`、`RepositoryScanner.swift`。验收：选择态清晰、部分失败可回显、无误触破坏性操作；目录存在性预检和数量回显已实现。
 - [x] 编辑器覆盖：JetBrains 系列、Antigravity、嵌套 Xcode 工程。相关文件：`SystemActions.swift`、`CommandPaletteView.swift`、`Components.swift`。验收：安装/未安装、工程/普通目录分别显示正确；本机已验证 Xcode 与 Antigravity，JetBrains 映射待安装后直测。
-- [x] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行，15 例通过。
-- [ ] AI 会话管理：会话列表、恢复、结束、按项目过滤；仍只读本地元数据。相关文件：Services 与 Views 下的会话相关实现。验收：Codex/Claude 两类会话、无会话空态、复制命令正确。
+- [x] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行，19 例通过。
+- [ ] AI 会话管理：会话列表、按工具过滤、恢复命令已完成；结束会话未做。仍只读本地元数据。相关文件：`SessionIndex.swift`、`FileTools.swift`、`SessionsTabView.swift`。验收：Codex/Claude 两类会话、无会话空态、复制命令正确；结束会话需先确认安全接口。
 
 ### 质量与性能
 
@@ -456,7 +487,7 @@ CUA 实测：
 
 1. 先跑基线：`swift build --package-path macos`、`swift test --package-path macos`、`./macos/script/build_and_run.sh --verify`。
 2. P1 功能已完成；下一步补真实凭据失效/网络中断和菜单栏/通知直测。
-3. 批量操作、编辑器覆盖和 Swift 测试已完成；P2 下一项优先 AI 会话管理。原生删除带破坏性，需先明确备份、废纸篓和确认方案再实施。
+3. 批量操作、编辑器覆盖、Swift 测试和 AI 会话列表已完成；P2 下一项原生删除带破坏性，需先明确备份、废纸篓和确认方案再实施。
 4. 最后做 Developer ID 分发；用户已明确跳过签名、公证和旧域名 301。
 
 ### 不做

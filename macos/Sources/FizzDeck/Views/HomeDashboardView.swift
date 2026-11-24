@@ -187,7 +187,7 @@ struct HomeDashboardView: View {
     }
 
     private var filterMenu: some View {
-        Menu {
+        Menu("筛选", systemImage: "line.3.horizontal.decrease") {
             Section("排序") {
                 ForEach(HomeSort.allCases) { item in
                     Button {
@@ -202,7 +202,10 @@ struct HomeDashboardView: View {
                 Button {
                     setGroupFilter(nil)
                 } label: {
-                    Label("全部分组", systemImage: groupFilter == nil ? "checkmark" : "square.grid.2x2")
+                    Label(
+                        "全部分组",
+                        systemImage: groupFilter == nil ? "checkmark" : "square.grid.2x2"
+                    )
                 }
 
                 Divider()
@@ -245,7 +248,10 @@ struct HomeDashboardView: View {
                     }
                 }
             } label: {
-                Label(colorFilter.map { "颜色 · \($0.label)" } ?? "颜色", systemImage: "paintpalette")
+                Label(
+                    colorFilter.map { "颜色 · \($0.label)" } ?? "颜色",
+                    systemImage: "paintpalette"
+                )
             }
 
             Menu {
@@ -283,24 +289,10 @@ struct HomeDashboardView: View {
                     Label("清除筛选", systemImage: "xmark.circle")
                 }
             }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "line.3.horizontal.decrease")
-                    .font(.system(size: 11, weight: .semibold))
-                Text("筛选")
-                    .font(.system(size: 12, weight: .medium))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 7.5, weight: .bold))
-                    .foregroundStyle(.tertiary)
-            }
-            .foregroundStyle(hasFacets ? FizzTheme.accent : Color.secondary)
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .contentShape(Capsule())
-            .fixedSize()
         }
         .menuStyle(.button)
         .buttonStyle(.glass)
+        .menuIndicator(.visible)
         .controlSize(.small)
         .help("排序与筛选")
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: hasFacets)

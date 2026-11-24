@@ -100,7 +100,7 @@ On a fresh install, use **Scan folder** in the sidebar to discover and add proje
 | Menu bar | Keeps the pending-item count visible, opens the overview or a recent project, and sends local notifications when a dev server becomes ready or a test fails. |
 | Quick open | `⌘K` searches projects, branches, remote URLs, and actions with recent items, fuzzy matching, and pinned commands. Run project commands and app actions without leaving the keyboard. |
 | Project actions | Open a project in Finder, Terminal, or an installed editor (Cursor, VS Code, Zed, Antigravity, JetBrains IDEs, and Xcode including nested targets), or copy its path. `⌘⇧T` opens the current project in Terminal. |
-| AI sessions | Reads local Codex and Claude Code session metadata, matches sessions to projects, and copies `codex resume` / `claude --resume` commands. |
+| AI sessions | Lists matched Codex and Claude Code sessions with tool filters, shows the last user request, and copies `codex resume` / `claude --resume` commands. |
 | Git | Shows the current branch, ahead/behind state, dirty files, recent commits, and the `origin` URL. Supports opening or copying the remote, branch switching, and confirmed fetch, fast-forward pull, and push with inline results; dirty worktrees are protected. |
 | Dev servers | Detects common dev scripts and ports, starts and stops project processes, waits for readiness, and opens the app in a browser. |
 | Disk usage | Breaks down project size and reclaimable space across dependencies, build caches, artifacts, temporary files, and AI session history. |
@@ -157,7 +157,7 @@ scan-clean.mjs          CLI disk-usage report
 - The native theme is intentionally light-only.
 - There are no background file watchers yet.
 - Local notifications require system permission. The `--sign-local` build uses an ad-hoc signature, which is enough to register with Notification Center for local testing; distribution still needs a Developer ID signature and notarization.
-- AI session integration currently covers Codex and Claude Code.
+- AI session integration currently covers Codex and Claude Code; ending a session from FizzDeck is not available.
 - Port detection is heuristic; unusual development setups may need a mapping in `server.mjs`.
 - Initial scans run `du`-style size checks and take roughly a few seconds per large folder. Later loads use the scan cache until a rescan.
 
