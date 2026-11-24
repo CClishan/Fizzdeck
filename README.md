@@ -4,6 +4,8 @@
 
 Live landing page: [koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
+Download: [FizzDeck 0.2.0 for macOS](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+, ad-hoc signed (not notarized).
+
 No account, no telemetry, no hosted backend. FizzDeck reads only local project metadata and keeps its state on your Mac.
 
 [中文说明](README.zh-CN.md)
@@ -155,12 +157,12 @@ scan-clean.mjs          CLI disk-usage report
 
 ## Current limitations
 
-- The native app requires macOS 26+. It is built from source and is not signed or notarized yet.
-- The native app focuses on inspection and daily project actions. Batch rescan and cleanup-command copy are native; destructive project removal remains in the web UI.
+- The native app requires macOS 26+ on Apple Silicon. A DMG is published, but it uses an ad-hoc signature and is not notarized.
+- The native app includes batch rescan, cleanup-command copy, project removal, and ending dedicated AI CLI sessions.
 - The native theme is intentionally light-only.
 - There are no background file watchers yet.
 - Local notifications require system permission. The `--sign-local` build uses an ad-hoc signature, which is enough to register with Notification Center for local testing; distribution still needs a Developer ID signature and notarization.
-- AI session integration currently covers Codex and Claude Code; ending a session from FizzDeck is not available.
+- AI session integration covers Codex and Claude Code; the shared Codex Desktop app-server cannot be ended from FizzDeck.
 - Port detection is heuristic; unusual development setups may need a mapping in `server.mjs`.
 - Initial scans run `du`-style size checks and take roughly a few seconds per large folder. Later loads use the scan cache until a rescan.
 

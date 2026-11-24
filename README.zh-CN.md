@@ -4,6 +4,8 @@
 
 线上 landing：[koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
+下载：[FizzDeck 0.2.0 macOS 版](https://github.com/CClishan/Fizzdeck/releases/latest)，Apple Silicon、macOS 26+，ad-hoc 签名，未公证。
+
 不需要账号，不上传遥测，也没有托管后端。FizzDeck 只读取本机项目元数据，状态保存在本机。
 
 [English](README.md)
@@ -155,7 +157,7 @@ scan-clean.mjs          命令行版体积报告
 
 ## 当前限制
 
-- 原生版要求 macOS 26+，目前从源码构建，未签名、未公证。
+- 原生版要求 macOS 26+ 与 Apple Silicon；已提供 DMG，但使用 ad-hoc 签名，未公证。
 - 原生版专注浏览与日常项目操作；支持批量重扫、复制清理命令，以及带备份和确认的删除。
 - 原生界面固定浅色，不做暗色主题。
 - 暂不提供后台文件监听。

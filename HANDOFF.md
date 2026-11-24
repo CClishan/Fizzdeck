@@ -2,9 +2,9 @@
 
 - 更新时间：2026-11-24
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
-- 当前分支：`codex/p1-palette-remote`（PR #1，等待合并；已含批量操作、编辑器覆盖、Swift 测试、AI 会话管理、原生删除和本轮界面收口）
-- 基线 HEAD：`581b214 Add Swift tests and expand editor support`
-- 状态：P0 完成，P1 功能完成，P2 5/5；原生删除和 AI 会话结束已补齐；总览改为待处理半宽 + 四项汇总并排，项目页简介/技术栈合并，底部使用 Liquid Glass 运行与测试悬浮操作区；原生 app 可本地构建和 ad-hoc 运行；landing 主入口为 `https://koroo.top/fizzdeck`，旧 `https://fizzdeck.pages.dev` 保留可用。
+- 当前分支：`main`（PR #1 已合并；`v0.2.0` 已发布）
+- 基线 HEAD：`a93c096 Merge pull request #1 from CClishan/codex/p1-palette-remote`
+- 状态：P0 完成，P1 功能完成，P2 5/5；原生删除和 AI 会话结束已补齐；本轮完成总览、项目页和分类收口；原生 app 已打包为 ad-hoc 签名 DMG，landing 已增加下载入口；旧 `https://fizzdeck.pages.dev` 保留可用。
 
 ## 新对话开场提示
 
@@ -13,9 +13,9 @@
 ```text
 继续 FizzDeck 原生 macOS 项目，仓库在 /Users/a003/dsh-workspace/repo-dashboard。
 
-先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 P0 完成，P1 功能完成，P2 5/5；分组筛选/批量操作、编辑器覆盖、Swift 测试、AI 会话管理和原生删除均已完成。下一步优先补 P1 的真实 Git 错误路径、菜单栏/通知直测，或继续质量与性能任务。删除项目只能用临时目录验证，不要对用户真实项目点击确认。
+先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 main 已完成 P0、P1 功能和 P2 5/5；v0.2.0 已发布，app 从 `https://github.com/CClishan/Fizzdeck/releases/latest` 下载。下一步优先补 P1 的真实 Git 错误路径、菜单栏/通知直测，或继续质量与性能任务。删除项目只能用临时目录验证，不要对用户真实项目点击确认。
 
-不要合并 PR、签名、公证或部署，除非我明确确认；本阶段已授权提交、推送和更新 PR。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
+不要在没有明确确认时再发版、签名、公证或部署。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
 
 界面要求：纯 SwiftUI、浅色 Liquid Glass，不做整套暗色和吉祥物；UI 不加多余标签，让布局自己解释。
 
@@ -26,13 +26,13 @@
 
 | 项目 | 当前状态 |
 |---|---|
-| 原生 app | P0 完成，P1 功能完成，P2 5/5；`swift build`、`swift test` 通过（32 例）；AI 会话列表/过滤/恢复/结束 CLI 可用；ad-hoc 签名可本地运行 |
-| 原生分发 | 未做 Developer ID 签名、公证、安装包和自动更新 |
+| 原生 app | P0 完成，P1 功能完成，P2 5/5；`swift build`、`swift test` 通过（32 例）；AI 会话列表/过滤/恢复/结束 CLI 可用 |
+| 原生分发 | `v0.2.0` arm64 DMG 已发布，ad-hoc 签名；未做 Developer ID、公证和自动更新 |
 | Web UI | 保留在 `src/` + `server.mjs`，不是当前主入口 |
-| Landing | `https://koroo.top/fizzdeck` 已上线；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
-| 仓库 | 本轮 P1 与 P2 改动已提交到 `codex/p1-palette-remote`，PR #1 等待合并 |
-| 验证基线 | Swift build、Swift test 32 例、GitSync 本地 6 项、CUA 远程动作与删除确认框；ESLint、TypeScript、34 页生产构建、1440/390/320 浏览器验收、reduced motion 通过 |
-| 任务进度 | P0 5/5；P1 5/5（功能完成，2 项真实环境直测待补）；P2 5/5；发布与交付 0/3；质量与性能 0/4 |
+| Landing | `https://koroo.top/fizzdeck` 已上线并显示 macOS 下载；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
+| 仓库 | PR #1 已合并到 `main`；v0.2.0 Release 和 landing 下载入口已发布 |
+| 验证基线 | Swift test 32 例、ESLint、TypeScript、34 页生产构建、Vercel 生产部署、线上 CTA 与 DMG SHA-256 一致 |
+| 任务进度 | P0 5/5；P1 5/5（功能完成，2 项真实环境直测待补）；P2 5/5；发布与交付 1/3；质量与性能 0/4 |
 
 ## 项目是什么
 
@@ -45,7 +45,7 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - 不使用大面积深色主题，不做吉祥物。
 - 默认中文、结论先行、短句。
 - 生产代码禁止 Mock。
-- 本轮已授权提交、推送和更新 PR；合并、签名、公证、部署仍需明确确认。
+- 本轮已授权合并、部署和打包；后续版本、Developer ID、公证仍需明确确认。
 
 ## 已完成（P0）
 
@@ -479,33 +479,38 @@ CUA 实测：
 
 ## 发布记录
 
-- FizzDeck 上次 `main` 发布：`00c678b Record FizzDeck landing deployment`
-- FizzDeck 推送：`origin/main`，`4133ff2..00c678b`
-- 本轮 P1 / P2 PR：`https://github.com/CClishan/Fizzdeck/pull/1`（未合并；含命令面板、远程仓库、Git 错误文案、分组筛选/批量操作、编辑器覆盖、Swift 测试、AI 会话列表和原生筛选修复）
+- FizzDeck PR #1：`https://github.com/CClishan/Fizzdeck/pull/1`，已合并为 `a93c096`
+- FizzDeck 推送：`origin/main`，`680f842..a93c096`
+- 原生 Release：`https://github.com/CClishan/Fizzdeck/releases/tag/v0.2.0`
+- 安装包：`FizzDeck-0.2.0-arm64.dmg`，Apple Silicon，ad-hoc 签名，未公证
+- 安装包 SHA-256：`efb77fe2907c4b4adee24f36845e83d5d61b7c2f0f963487a5976901c6a78460`
+- 安装包验证：下载后的文件大小 2,120,985 bytes、SHA-256 一致、`hdiutil verify` 通过、`codesign --verify --deep --strict` 通过；`spctl` 因未公证被拒绝
 - 本轮会话 / 筛选提交：`55c0a20 Add AI session list and native filter menu`
 - 分支 `codex/p1-palette-remote` 起始提交：`732ef39 Add remote repository actions and palette search`
 - Landing 主入口：`https://koroo.top/fizzdeck`
 - koroo 路由提交：`f4a1b4f feat: mount FizzDeck landing at /fizzdeck`
-- koroo 当前 `main`：`cff192b`（motion/article 收尾提交）
+- koroo 下载入口提交：`089168d feat: add FizzDeck macOS download`
+- Vercel 生产部署：deployment `8026894649`，状态 `success`
 - 旧入口：`https://fizzdeck.pages.dev/` 仍返回 200；未做 301 重定向
-- 线上验收：`/fizzdeck` 返回 200，canonical 为 `https://koroo.top/fizzdeck`；1440/390/320px 无横向溢出，视图切换、复制命令、返回链接和 reduced motion 正常。
-- 原生 app 仍为本地 ad-hoc 构建，`codesign --verify --deep --strict` 通过；未做 Developer ID 签名、公证或分发。
+- 线上验收：`/fizzdeck` 返回 200；HTML 含“下载 macOS 版”、`releases/latest` 和“原生版 v0.2.0”
+- 分发限制：前端仍使用 ad-hoc 签名，未做 Developer ID 签名、公证或自动更新。
 
 ## 工作区现状（重要）
 
-- `codex/p1-palette-remote` 当前包含 P1 以及 P2 的批量操作、编辑器覆盖、Swift 测试和 AI 会话列表；PR #1 等待用户合并，未合并到 `main`。
-- 本轮提交后工作区应为空；`~/.repodeck` 的 `roots.json`、`state.json` 未因验收改动。
-- `macos/dist/FizzDeck.app` 是本机 ad-hoc 构建产物，不是发行包；不要把它当作可分发版本。
-- koroo 仓库的 motion/article 改动已在 `cff192b` 提交；本交接不再依赖未提交改动。
+- 当前发布分支是 `main`；PR #1 已合并，`v0.2.0` tag 已创建。
+- 本轮发布记录提交后工作区应为空；`~/.repodeck` 的 `roots.json`、`state.json` 未因打包改动。
+- 可分发安装包是 `macos/dist/FizzDeck-0.2.0-arm64.dmg`；`macos/dist/FizzDeck.app` 仍只是本机构建产物。
+- koroo 下载入口已在 `089168d` 提交并部署到 `https://koroo.top/fizzdeck`。
 - 不要回滚 `server.mjs`、`vite.config.js`、`public/`、`landing.html`、`src/landing/`、`src/stageshow/` 的已发布内容；需要修改时单独开任务。
 
 ## 待增加能力（移交清单）
 
 ### 发布与交付
 
-- [ ] 原生分发：补 Developer ID 签名、公证、版本号、DMG/ZIP 和更新策略。相关文件：`macos/script/build_and_run.sh`、`macos/Package.swift`、两份 README。验收：`codesign --verify --deep --strict`、`spctl --assess`、公证成功，并在干净 Mac 上安装运行。
+- [x] 原生安装包：`v0.2.0` arm64 DMG 已发布，landing 已接入下载；校验 SHA-256、镜像和 ad-hoc 签名均通过。
+- [ ] 正式签名与公证：补 Developer ID、公证、自动更新和干净 Mac 安装验收。相关文件：`macos/script/build_and_run.sh`、`macos/Package.swift`、两份 README。验收：`spctl --assess` 通过、公证成功，并在干净 Mac 上安装运行。
 - [ ] 旧域名收敛：把 `https://fizzdeck.pages.dev` 301 到 `https://koroo.top/fizzdeck`，保留 Cloudflare Pages 项目作为回滚。验收：旧路径 301、canonical/OG 不重复、静态资源不丢。
-- [ ] 文档同步：发布新版本时同步 README、`macos/README.md`、HANDOFF 的 live link、版本号和限制说明。
+- [x] 文档同步：README、`macos/README.md`、HANDOFF 已补充 v0.2.0 下载地址、签名限制和发布记录。
 
 ### P1（收尾）
 
@@ -534,7 +539,7 @@ CUA 实测：
 1. 先跑基线：`swift build --package-path macos`、`swift test --package-path macos`、`./macos/script/build_and_run.sh --verify`。
 2. P1 功能已完成；下一步补真实凭据失效/网络中断和菜单栏/通知直测。
 3. P2 已完成；删除只可用临时目录验证，不要对真实项目点击确认。
-4. 最后做 Developer ID 分发；用户已明确跳过签名、公证和旧域名 301。
+4. `v0.2.0` 已发布；下一版再做 Developer ID 签名、公证和自动更新，旧域名 301 仍需单独确认。
 
 ### 不做
 
