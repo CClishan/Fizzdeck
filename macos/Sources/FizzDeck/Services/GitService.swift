@@ -1,11 +1,66 @@
 import Foundation
 
+struct GitRemote: Sendable, Hashable {
+    let raw: String
+
+    init?(raw: String) {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        self.raw = value
+    }
+
+    var webURL: URL? {
+        guard let hostAndPath = hostAndPath else { return nil }
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = hostAndPath.host
+        components.port = hostAndPath.port
+        var path = hostAndPath.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if path.lowercased().hasSuffix(".git") {
+            path.removeLast(4)
+        }
+        guard !path.isEmpty else { return nil }
+        components.path = "/" + path
+        return components.url
+    }
+
+    private var hostAndPath: (host: String, path: String, port: Int?)? {
+        if let components = URLComponents(string: raw),
+           let scheme = components.scheme?.lowercased() {
+            guard scheme != "file" else { return nil }
+            guard let host = components.host, !host.isEmpty else { return nil }
+            let port = scheme == "http" || scheme == "https" ? components.port : nil
+            return (host, components.path, port)
+        }
+
+        guard let separator = raw.firstIndex(of: ":") else { return nil }
+        let prefix = String(raw[..<separator])
+        let path = String(raw[raw.index(after: separator)...])
+        guard !prefix.contains("/"), !path.hasPrefix("//") else { return nil }
+
+        let host = prefix.split(separator: "@").last.map(String.init) ?? prefix
+        guard host.contains("."), host != "localhost" else { return nil }
+        return (host, path, nil)
+    }
+}
+
 enum GitService {
     private static let fieldSeparator = "\u{1f}"
     private static let recordSeparator = "\u{1e}"
 
     static func hasGit(_ directory: URL) -> Bool {
         FileTools.exists(directory.appendingPathComponent(".git"))
+    }
+
+    static func remote(_ directory: URL) async -> GitRemote? {
+        guard hasGit(directory) else { return nil }
+        guard let value = await Shell.output(
+            "git",
+            ["config", "--get", "remote.origin.url"],
+            cwd: directory,
+            timeout: 10
+        ) else { return nil }
+        return GitRemote(raw: value)
     }
 
     static func summary(_ directory: URL) async -> GitSummary? {

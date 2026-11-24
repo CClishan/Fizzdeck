@@ -1,10 +1,10 @@
 # FizzDeck 交接文档
 
-更新时间：2026-11-24  
-仓库：`/Users/a003/dsh-workspace/repo-dashboard`  
-当前分支：`main`  
-当前 HEAD：`4133ff2 Ship native dashboard and public landing page`  
-状态：P0 / P1 已提交并推送到 `origin/main`；landing 已部署到 `https://fizzdeck.pages.dev`
+- 更新时间：2026-11-24
+- 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
+- 当前分支：`codex/p1-palette-remote`（PR #1，等待合并）
+- 基线 HEAD：`00c678b Record FizzDeck landing deployment`
+- 状态：P0 完成，P1 进行中；命令面板、远程仓库动作、Git 错误文案已完成；原生 app 可本地构建和 ad-hoc 运行；landing 主入口为 `https://koroo.top/fizzdeck`，旧 `https://fizzdeck.pages.dev` 保留可用。
 
 ## 新对话开场提示
 
@@ -13,12 +13,24 @@
 ```text
 继续 FizzDeck 原生 macOS 项目，仓库在 /Users/a003/dsh-workspace/repo-dashboard。
 
-先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff，确认当前 P0 改动。不要触碰工作区里与网页版、landing、stageshow 相关的改动（server.mjs、vite.config.js、public/、landing.html、src/landing/、src/stageshow/），它们不属于本任务。
+先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 P0 已完成，P1 进行中；命令面板、远程仓库动作和 Git 错误文案已完成。下一步优先补菜单栏/通知直测，或从 HANDOFF.md 的“待增加能力”选择任务，先汇报改动文件和验收方式，再动手。
 
-不要自动提交、推送、签名或部署，等我明确确认。下一步按 HANDOFF.md 的 P1 清单推进：先汇报你选的任务、要改的文件和验收方式，再动手。
+不要自动提交、推送、签名或部署，等我明确确认。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
 
 界面要求：纯 SwiftUI、浅色 Liquid Glass，不做整套暗色和吉祥物；UI 不加多余标签，让布局自己解释。
 ```
+
+## 移交摘要
+
+| 项目 | 当前状态 |
+|---|---|
+| 原生 app | P0 完成，P1 7/9；`swift build` 通过；ad-hoc 签名可本地运行 |
+| 原生分发 | 未做 Developer ID 签名、公证、安装包和自动更新 |
+| Web UI | 保留在 `src/` + `server.mjs`，不是当前主入口 |
+| Landing | `https://koroo.top/fizzdeck` 已上线；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
+| 仓库 | `main` 与 `origin/main` 一致；本轮 P1 改动已提交到 `codex/p1-palette-remote`，PR #1 等待合并 |
+| 验证基线 | Swift build、GitSync 本地 6 项、CUA 远程动作；ESLint、TypeScript、34 页生产构建、1440/390/320 浏览器验收、reduced motion 通过 |
+| 任务进度 | P0 5/5；P1 7/9；P2 0/5；发布与交付 0/3；质量与性能 0/4 |
 
 ## 项目是什么
 
@@ -189,6 +201,42 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - `macos/Sources/FizzDeck/Views/AttentionQueueView.swift`
 - `macos/Sources/FizzDeck/Views/CommandPaletteView.swift`
 
+### 6. 命令面板增强
+
+- 空查询显示“最近 / 快捷操作 / 项目 / 命令”；最近项目与最近动作写入 `UserDefaults`，重启后保留。
+- 支持多词模糊匹配，覆盖标题、副标题和关键词；连续命中、词首和靠前位置得分更高。
+- 置顶命令“打开总览”“重新扫描项目”始终排在命令区前面。
+- 后台用最多 4 个并发读取各项目 `origin` 并缓存；`⌘K` 可直接搜 SSH / HTTPS 远程地址。
+- 选中项目后显示“在浏览器中打开远程仓库”“复制远程地址”；已确认无 `origin` 时显示禁用的“没有远程仓库”。
+
+相关文件：
+
+- `macos/Sources/FizzDeck/Views/CommandPaletteView.swift`
+- `macos/Sources/FizzDeck/Stores/RepositoryStore.swift`
+
+### 7. 远程仓库动作
+
+- 新增 `GitRemote`：识别 `git@host:path`、`ssh://`、`git://` 和 HTTPS 远程，生成浏览器地址时去掉 `.git` 后缀和 HTTPS 内嵌凭据。
+- 项目“更多”菜单和“改动”页远程区都能打开浏览器或复制原始 remote；只读 `git config`，不发起网络写操作。
+- 无 `origin`、本地路径和空 remote 不生成浏览器地址；复制动作仍保留原始 remote。
+
+相关文件：
+
+- `macos/Sources/FizzDeck/Services/GitService.swift`
+- `macos/Sources/FizzDeck/Views/ProjectDetailView.swift`
+- `macos/Sources/FizzDeck/Views/GitTabView.swift`
+
+### 8. Git 错误文案
+
+- `ShellOutput` 增加 `timedOut`，超时后不再只显示退出码。
+- `GitSyncService` 将常见失败映射为可操作文案：无 upstream、凭据不可用、SSH 密钥不可用、非快进、非 Git 仓库、远端不可达、超时。
+- 所有同步命令继续使用 `GIT_TERMINAL_PROMPT=0`，避免后台等待凭据输入。
+
+相关文件：
+
+- `macos/Sources/FizzDeck/Services/Shell.swift`
+- `macos/Sources/FizzDeck/Services/GitSyncService.swift`
+
 ## 验证记录
 
 已通过：
@@ -247,6 +295,17 @@ P1 信息架构收敛：
 - CUA 实测：概览“预览端口 4317”和“运行与测试”面板保留端口状态；项目头部不再显示 localhost。
 - `npm run build` 通过；本地 `/landing` 返回 200，landing 的 JS、CSS、logo 资源均返回 200。
 
+P1 命令面板 / 远程仓库 / Git 错误：
+
+- `swift build --package-path macos` 通过。
+- 本地 Swift 校验：`GitRemote` 15 个输入通过，覆盖 SSH、`ssh://`、`git://`、HTTPS、内嵌凭据剥离、`.git` 去除、自定义 HTTPS 端口、SSH 单段主机别名，以及空值和本地路径拒绝。
+- 本地 Swift 校验：模糊匹配 9 个输入通过，覆盖中英文、大小写/变音、URL 片段和无匹配。
+- CUA 实测：`⌘K` 空查询显示“最近 / 快捷操作 / 项目 / 命令”；执行“复制远程地址”后剪贴板为 `https://github.com/CClishan/Fizzdeck.git`，重开面板出现“最近 / 复制远程地址”。
+- CUA 实测：输入 `CClishan/Fizzdeck` 同时命中项目 repo-dashboard 和远程动作；选中项目显示“打开远程仓库 / 复制远程地址”。
+- CUA 实测：项目“更多”菜单和“改动”页远程区均有打开/复制图标；未实际打开浏览器，避免打断当前会话。
+- 临时仓库脚本编译实际 `Shell.swift` + `GitSyncService.swift`，6 项通过：push 成功、无 upstream、脏工作区 pull 拦截、非快进 pull、不可达远端 fetch、Shell 超时标记。
+- 未实测：无 `origin` 项目的禁用态没有在 CUA 中实际切换确认；代码路径已覆盖。
+
 CUA 实测：
 
 - 首页队列显示 18 个项目 / 24 项。
@@ -262,7 +321,7 @@ CUA 实测：
 
 - “测试失败”行内操作没有用真实失败项触发；执行逻辑复用测试页的运行按钮。
 - 推送和拉取只在临时仓库执行，没有对用户现有项目实际推送或拉取。
-- Git 同步的成功路径只在本地临时 remote 上验证；未验证真实 GitHub 凭据失效、无 upstream、网络中断等错误文案。
+- Git 同步成功路径和可模拟错误路径已在临时 remote 验证；真实 GitHub 凭据失效、SSH 密钥失效和真实网络中断仍未在用户仓库触发。
 - 本地 remote 执行过快，“运行中”进度态没有被稳定截图；按钮禁用逻辑复用同一 `runningAction` 状态。
 - 菜单栏待处理数字与菜单点击未直接验证；`MenuBarExtra` 标签的 60 秒静默到期刷新没有等待实际到期。
 - 本地通知已验证授权与通知中心落库；banner 视觉、声音和点击跳转未逐项截图验证。
@@ -273,78 +332,60 @@ CUA 实测：
 
 ## 发布记录
 
-- 提交：`4133ff2 Ship native dashboard and public landing page`
-- 推送：`origin/main`，`b38b6d3..4133ff2`
-- Cloudflare Pages 项目：`fizzdeck`
-- 生产地址：`https://fizzdeck.pages.dev/`
-- 本次部署：`780ed1fd.fizzdeck.pages.dev`（生产域名已验证，部署域名在当前代理下 TLS 握手失败）
-- 线上验收：`/` 返回 200，landing 的 JS、CSS、logo 资源均返回 200；滚动到 CTA 后文案、命令和 GitHub 按钮正常显示。
-- 原生 app 仍为本地 ad-hoc 构建，未做 Developer ID 签名、公证或分发。
+- FizzDeck 提交：`00c678b Record FizzDeck landing deployment`
+- FizzDeck 推送：`origin/main`，`4133ff2..00c678b`
+- 本轮 P1 PR：`https://github.com/CClishan/Fizzdeck/pull/1`（未合并）
+- Landing 主入口：`https://koroo.top/fizzdeck`
+- koroo 路由提交：`f4a1b4f feat: mount FizzDeck landing at /fizzdeck`
+- koroo 当前 `main`：`cff192b`（motion/article 收尾提交）
+- 旧入口：`https://fizzdeck.pages.dev/` 仍返回 200；未做 301 重定向
+- 线上验收：`/fizzdeck` 返回 200，canonical 为 `https://koroo.top/fizzdeck`；1440/390/320px 无横向溢出，视图切换、复制命令、返回链接和 reduced motion 正常。
+- 原生 app 仍为本地 ad-hoc 构建，`codesign --verify --deep --strict` 通过；未做 Developer ID 签名、公证或分发。
 
 ## 工作区现状（重要）
 
-本任务产生的改动：
+- 交接前 `git status --short` 为空，`main` 与 `origin/main` 一致。
+- P0 / P1 第一批代码、landing、README 和 HANDOFF 已提交；本轮新增命令面板、远程仓库、Git 错误文案和文档，提交在 `codex/p1-palette-remote`，PR #1 等待合并。
+- `macos/dist/FizzDeck.app` 是本机 ad-hoc 构建产物，不是发行包；不要把它当作可分发版本。
+- koroo 仓库的 motion/article 改动已在 `cff192b` 提交；本交接不再依赖未提交改动。
+- 不要回滚 `server.mjs`、`vite.config.js`、`public/`、`landing.html`、`src/landing/`、`src/stageshow/` 的已发布内容；需要修改时单独开任务。
 
-- `README.md`
-- `README.zh-CN.md`
-- `macos/README.md`
-- `macos/Sources/FizzDeck/App/FizzDeckApp.swift`
-- `macos/Sources/FizzDeck/Models/Models.swift`
-- `macos/Sources/FizzDeck/Models/ProjectAttention.swift`（新增）
-- `macos/Sources/FizzDeck/Services/GitService.swift`
-- `macos/Sources/FizzDeck/Services/GitSyncService.swift`（新增）
-- `macos/Sources/FizzDeck/Services/RepositoryScanner.swift`
-- `macos/Sources/FizzDeck/Services/RootStore.swift`
-- `macos/Sources/FizzDeck/Stores/RepositoryStore.swift`
-- `macos/Sources/FizzDeck/Support/SystemActions.swift`
-- `macos/Sources/FizzDeck/Support/LocalNotifications.swift`（新增）
-- `macos/Sources/FizzDeck/Support/WindowFrameGuard.swift`（新增）
-- `macos/Sources/FizzDeck/Views/AttentionQueueView.swift`（新增）
-- `macos/Sources/FizzDeck/Views/CleanupTabView.swift`
-- `macos/Sources/FizzDeck/Views/CommandPaletteView.swift`（新增）
-- `macos/Sources/FizzDeck/Views/Components.swift`
-- `macos/Sources/FizzDeck/Views/ContentView.swift`
-- `macos/Sources/FizzDeck/Views/GitTabView.swift`
-- `macos/Sources/FizzDeck/Views/HomeDashboardView.swift`
-- `macos/Sources/FizzDeck/Views/MenuBarView.swift`（新增）
-- `macos/Sources/FizzDeck/Views/OverviewTabView.swift`
-- `macos/Sources/FizzDeck/Views/ProjectDetailView.swift`
-- `macos/Sources/FizzDeck/Views/SidebarView.swift`
-- `src/landing/`
-- `src/stageshow/`
-- `landing.html`
-- `public/`（Vite 构建产物）
+## 待增加能力（移交清单）
 
-**不属于本任务、不要回滚或提交的改动：**
+### 发布与交付
 
-- 用户已明确授权把网页版和 landing 一起提交部署；`server.mjs`、`vite.config.js`、`public/`、`landing.html`、`src/landing/`、`src/stageshow/` 现在属于同一发布批次。
+- [ ] 原生分发：补 Developer ID 签名、公证、版本号、DMG/ZIP 和更新策略。相关文件：`macos/script/build_and_run.sh`、`macos/Package.swift`、两份 README。验收：`codesign --verify --deep --strict`、`spctl --assess`、公证成功，并在干净 Mac 上安装运行。
+- [ ] 旧域名收敛：把 `https://fizzdeck.pages.dev` 301 到 `https://koroo.top/fizzdeck`，保留 Cloudflare Pages 项目作为回滚。验收：旧路径 301、canonical/OG 不重复、静态资源不丢。
+- [ ] 文档同步：发布新版本时同步 README、`macos/README.md`、HANDOFF 的 live link、版本号和限制说明。
 
-P1 验证期间继续检测到 `src/landing/FizzDeckStage.jsx`、`src/landing/fizzdeck-stage.css` 和根目录 `stage-test.html` 有并行更新；本任务未写入、未回滚。
+### P1（下一阶段优先）
 
-## 下一步任务
+- [x] 命令面板增强：最近项目、最近动作、模糊匹配、置顶命令，以及“打开远程仓库 / 复制远端地址”。相关文件：`CommandPaletteView.swift`、`RepositoryStore.swift`、`GitService.swift`。验收：`⌘K` 可搜项目、分支、远端 URL 和动作；无远端时明确不可用；上下键、回车、Esc 不回归。
+- [x] 远程仓库动作：从项目读取 `origin`，支持浏览器打开和复制 URL，不发起网络写操作。相关文件：`GitService.swift`、`ProjectDetailView.swift`。验收：有/无 origin、SSH/HTTPS 两种 URL 都正确。
+- [ ] Git 真实错误路径（本地可模拟部分已完成）：已补 timeout 和常见错误文案；待真实 GitHub 凭据失效、SSH 密钥失效和真实网络中断直测。相关文件：`GitSyncService.swift`、`GitTabView.swift`、`AttentionQueueView.swift`。验收：命令不挂起，`GIT_TERMINAL_PROMPT=0` 生效，错误就地回显，工作区不变。
+- [ ] 菜单栏与通知直测：`MenuBarExtra` 数字、60 秒静默到期、通知点击回到项目。相关文件：`MenuBarView.swift`、`LocalNotifications.swift`、`FizzDeckApp.swift`。验收：系统菜单栏可读、到期刷新、banner/click 路径有记录。
 
-### 待确认
+### P2（产品能力）
 
-- [x] 提交并推送 P0 / P1。
-- [x] 部署 landing 到 Cloudflare Pages。
-- [ ] 如需公开分发原生 app，补 Developer ID 签名、公证和版本号。
+- [ ] 原生删除项目：对齐网页版的备份、移入废纸篓、浅路径保护、目录名确认和测试运行时拦截。相关文件：`RepositoryStore.swift`、`ProjectDetailView.swift`、新增删除服务。验收：不自动永久删除；失败不改变目录；备份可恢复。
+- [ ] 批量操作：批量重扫、批量复制清理命令、按组筛选。相关文件：`HomeDashboardView.swift`、`SidebarView.swift`、`AttentionQueueView.swift`。验收：选择态清晰、部分失败可回显、无误触破坏性操作。
+- [ ] 编辑器覆盖：JetBrains 系列、Antigravity、嵌套 Xcode 工程。相关文件：`SystemActions.swift`、`Models.swift`。验收：安装/未安装、工程/普通目录分别显示正确。
+- [ ] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行。
+- [ ] AI 会话管理：会话列表、恢复、结束、按项目过滤；仍只读本地元数据。相关文件：Services 与 Views 下的会话相关实现。验收：Codex/Claude 两类会话、无会话空态、复制命令正确。
 
-### P1（建议按顺序）
+### 质量与性能
 
-- [x] 队列条目直接操作：在待处理行内提供“推送 / 拉取 / 运行测试 / 复制清理命令”，不必先进入项目页。
-- [x] 队列忽略/稍后：允许对单个项目的某类提醒静音或延后，避免长期噪声。
-- [x] Git 快捷同步：fetch、pull、push 带脏工作区保护、确认和结果回显。
-- [x] 菜单栏常驻：菜单栏显示待处理数量，快速打开总览/最近项目；开发服务就绪或测试失败时发本地通知。
-- [x] 信息架构收敛：首页筛选合并，项目头部动作收敛，端口状态回到概览，动效统一并尊重减少动态效果。
-- [ ] 命令面板增强：最近项目、最近动作、模糊匹配、置顶命令，以及“打开远程仓库 / 复制远端地址”。
+- [ ] 长列表 60fps：项目多、日志长、任务运行时用 Instruments 量；只动必要属性，避免重排、闪烁和溢出。
+- [ ] 可访问性：VoiceOver 顺序、减少动态效果、键盘全路径；补充 `accessibilityReduceMotion` 覆盖。
+- [ ] 大目录扫描：首次扫描的 `du` 开销、缓存命中、取消/重扫；给出耗时基线。
+- [ ] 真实项目回归：至少用一个脏工作区、一个无 upstream、一个多服务项目跑完整流程。
 
-### P2
+### 建议接手顺序
 
-- [ ] 原生删除项目：对齐网页版的备份、路径保护和目录名确认。
-- [ ] 批量操作：批量重新扫描、批量复制清理命令、按组筛选。
-- [ ] 编辑器覆盖扩展：JetBrains 系列、Antigravity；支持识别嵌套的 Xcode 工程。
-- [ ] 为 `ProjectAttentionQueue` 排序和 Git ahead/behind 解析补最小单元测试；当前 `Package.swift` 没有 test target。
-- [ ] AI 会话管理：会话列表、恢复、结束和按项目过滤。
+1. 先跑基线：`swift build --package-path macos`、`./macos/script/build_and_run.sh --verify`。
+2. 命令面板和远程仓库动作已完成；下一步补真实凭据失效/网络中断和菜单栏/通知直测，降低日常使用噪声。
+3. 再评估 Git 错误路径是否还缺真实环境覆盖；缺则补测，不缺则进入 P2。
+4. 最后做原生删除、批量操作和 Developer ID 分发，避免在未稳定的交互上扩大破坏面。
 
 ### 不做
 
@@ -359,10 +400,16 @@ P1 验证期间继续检测到 `src/landing/FizzDeckStage.jsx`、`src/landing/fi
 - 原生版刻意不开启 App Sandbox，需要访问任意用户目录和执行项目脚本。
 - `RepositoryStore.requestedTab` 用于从首页跳转到项目页签；`ProjectDetailView` 消费后清空。
 - `RepositoryStore.isCommandPalettePresented` 控制覆盖层；菜单和视图共用。
+- `RepositoryStore.loadRemotes` 以最多 4 个并发读取 `origin`，缓存缺失结果；项目页和命令面板共用。
+- `GitRemote` 只负责把 remote 转成浏览器地址，不改变原始 remote；打开/复制都不发起网络写操作。
+- `ShellOutput.timedOut` 是 Git 同步超时文案的依据；新增后台命令时不要只看退出码。
 - `GitService.summary` 多跑一次 `git rev-list --count --left-right @{upstream}...HEAD`；无 upstream 时返回 0/0。
 - 首页队列只在总览、无搜索、无筛选时显示。
 - 队列的 `ProjectAttentionKind.priority` 是唯一排序来源，新增类型时改这里。
 - 窗口可见性校正只在窗口不可达时触发，不会强行覆盖用户正常摆放。
+- 原生动效统一走 `FizzMotion`，新增动画先复用它，并接 `accessibilityReduceMotion`。
+- koroo 的 landing 路由是 `app/fizzdeck/page.tsx`；`fizzdeck.css` 只在 `.fizzdeck-page` 下生效。若 koroo 工作区有其他未完成改动，用干净 `HEAD` 临时副本验证。
+- 新增公开路由时同步 `public/llms.txt`，避免机器可读索引与页面入口脱节。
 
 ## CUA 验证提示
 

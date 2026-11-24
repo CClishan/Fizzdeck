@@ -10,28 +10,57 @@ struct CommandPaletteView: View {
     @FocusState private var searchFocused: Bool
 
     private var groups: [PaletteGroup] {
-        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let actions = quickActionEntries
+        let projects = projectEntries
+        let commands = commandEntries
+
+        guard !trimmed.isEmpty else {
+            let recent = recentEntries(from: actions + projects + commands)
+            let recentIDs = Set(recent.map(\.id))
+            var groups: [PaletteGroup] = []
+
+            if !recent.isEmpty {
+                groups.append(PaletteGroup(id: "recent", title: "最近", entries: recent))
+            }
+
+            let visibleActions = actions.filter { !recentIDs.contains($0.id) }
+            if !visibleActions.isEmpty {
+                groups.append(PaletteGroup(id: "actions", title: "快捷操作", entries: visibleActions))
+            }
+
+            let visibleProjects = Array(
+                projects.filter { !recentIDs.contains($0.id) }.prefix(8)
+            )
+            if !visibleProjects.isEmpty {
+                groups.append(PaletteGroup(id: "projects", title: "项目", entries: visibleProjects))
+            }
+
+            let remainingCommands = commands.filter { !recentIDs.contains($0.id) }
+            let visibleCommands = remainingCommands.filter(\.pinned)
+                + remainingCommands.filter { !$0.pinned }
+            if !visibleCommands.isEmpty {
+                groups.append(PaletteGroup(id: "commands", title: "命令", entries: visibleCommands))
+            }
+
+            return groups
+        }
+
         var groups: [PaletteGroup] = []
 
-        let quickActions = quickActionEntries.filter { entry in
-            query.isEmpty || entry.matches(query)
-        }
-        if !quickActions.isEmpty {
-            groups.append(PaletteGroup(id: "actions", title: "快捷操作", entries: quickActions))
+        let matchedActions = sortedMatches(actions, query: trimmed)
+        if !matchedActions.isEmpty {
+            groups.append(PaletteGroup(id: "actions", title: "快捷操作", entries: matchedActions))
         }
 
-        let projects = projectEntries.filter { entry in
-            query.isEmpty || entry.matches(query)
-        }
-        if !projects.isEmpty {
-            groups.append(PaletteGroup(id: "projects", title: "项目", entries: projects))
+        let matchedProjects = Array(sortedMatches(projects, query: trimmed).prefix(20))
+        if !matchedProjects.isEmpty {
+            groups.append(PaletteGroup(id: "projects", title: "项目", entries: matchedProjects))
         }
 
-        let commands = commandEntries.filter { entry in
-            query.isEmpty || entry.matches(query)
-        }
-        if !commands.isEmpty {
-            groups.append(PaletteGroup(id: "commands", title: "命令", entries: commands))
+        let matchedCommands = sortedMatches(commands, query: trimmed)
+        if !matchedCommands.isEmpty {
+            groups.append(PaletteGroup(id: "commands", title: "命令", entries: matchedCommands))
         }
 
         return groups
@@ -157,15 +186,59 @@ struct CommandPaletteView: View {
             )
         }
 
+        if let remote = store.cachedRemote(for: project.path) {
+            if let url = remote.webURL {
+                result.append(
+                    PaletteEntry(
+                        id: "action.remote.open.\(project.path)",
+                        group: "快捷操作",
+                        title: "在浏览器中打开远程仓库",
+                        subtitle: remote.raw,
+                        symbol: "arrow.up.right.square",
+                        tint: .blue,
+                        shortcut: nil,
+                        keywords: "远程 remote origin 仓库 browser \(url.absoluteString)"
+                    ) {
+                        SystemActions.openURL(url.absoluteString)
+                    }
+                )
+            }
+
+            result.append(
+                PaletteEntry(
+                    id: "action.remote.copy.\(project.path)",
+                    group: "快捷操作",
+                    title: "复制远程地址",
+                    subtitle: remote.raw,
+                    symbol: "link",
+                    tint: .teal,
+                    shortcut: nil,
+                    keywords: "远程 remote origin 地址 url"
+                ) {
+                    SystemActions.copy(remote.raw)
+                }
+            )
+        } else if store.hasResolvedRemote(for: project.path) {
+            result.append(
+                PaletteEntry(
+                    id: "action.remote.missing.\(project.path)",
+                    group: "快捷操作",
+                    title: "没有远程仓库",
+                    subtitle: "在 Git 中设置 origin 后可打开",
+                    symbol: "link.badge.plus",
+                    tint: .secondary,
+                    shortcut: nil,
+                    keywords: "远程 remote origin 未配置",
+                    isEnabled: false
+                ) {}
+            )
+        }
+
         return result
     }
 
     private var projectEntries: [PaletteEntry] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let limit = trimmed.isEmpty ? 8 : 20
-        return store.projects.filter { project in
-            trimmed.isEmpty || projectMatches(project, query: trimmed)
-        }.prefix(limit).compactMap { project in
+        store.projects.map { project in
             let subtitle = [
                 PathTools.displayPath(project.path),
                 project.branch,
@@ -197,7 +270,8 @@ struct CommandPaletteView: View {
                 symbol: "square.grid.2x2",
                 tint: FizzTheme.accent,
                 shortcut: "⌘0",
-                keywords: "首页 home dashboard"
+                keywords: "首页 home dashboard",
+                pinned: true
             ) {
                 store.selectedPath = RepositoryStore.homeSelection
             },
@@ -209,7 +283,8 @@ struct CommandPaletteView: View {
                 symbol: "arrow.clockwise",
                 tint: .blue,
                 shortcut: "⌘R",
-                keywords: "刷新 refresh scan"
+                keywords: "刷新 refresh scan",
+                pinned: true
             ) {
                 Task { await store.scan() }
             },
@@ -306,6 +381,9 @@ struct CommandPaletteView: View {
             return .handled
         }
         .onExitCommand(perform: dismiss)
+        .task {
+            await store.loadRemotes(for: store.projects)
+        }
     }
 
     private var searchField: some View {
@@ -314,7 +392,7 @@ struct CommandPaletteView: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            TextField("搜索项目、分支或动作", text: $query)
+            TextField("搜索项目、分支、远程或动作", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15))
                 .focused($searchFocused)
@@ -377,7 +455,7 @@ struct CommandPaletteView: View {
                 .foregroundStyle(.tertiary)
             Text("没有匹配结果")
                 .font(.system(size: 12.5, weight: .medium))
-            Text("试试项目名、路径、分支或动作")
+            Text("试试项目名、路径、分支、远程或动作")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
@@ -476,14 +554,51 @@ struct CommandPaletteView: View {
             .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
         .buttonStyle(.plain)
+        .disabled(!entry.isEnabled)
+        .opacity(entry.isEnabled ? 1 : 0.55)
     }
 
-    private func projectMatches(_ project: RepoProject, query: String) -> Bool {
-        projectKeywords(project).localizedCaseInsensitiveContains(query)
+    private func recentEntries(from base: [PaletteEntry]) -> [PaletteEntry] {
+        let byID = Dictionary(base.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var result: [PaletteEntry] = []
+        var seen = Set<String>()
+        let selectedPath = store.selectedProject?.path
+
+        for id in store.recentActionIDs {
+            guard let entry = byID[id], entry.isEnabled, seen.insert(entry.id).inserted else { continue }
+            result.append(entry.inGroup("最近"))
+            if result.count == 3 { break }
+        }
+
+        for path in store.recentProjectPaths where path != selectedPath {
+            guard let entry = byID["project.\(path)"],
+                  entry.isEnabled,
+                  seen.insert(entry.id).inserted
+            else { continue }
+            result.append(entry.inGroup("最近"))
+            if result.count == 5 { break }
+        }
+
+        return result
+    }
+
+    private func sortedMatches(_ entries: [PaletteEntry], query: String) -> [PaletteEntry] {
+        entries
+            .compactMap { entry -> (PaletteEntry, Int)? in
+                guard let score = entry.matchScore(query) else { return nil }
+                return (entry, score)
+            }
+            .sorted { lhs, rhs in
+                if lhs.0.pinned != rhs.0.pinned { return lhs.0.pinned }
+                if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
+                return lhs.0.title.localizedStandardCompare(rhs.0.title) == .orderedAscending
+            }
+            .map(\.0)
     }
 
     private func projectKeywords(_ project: RepoProject) -> String {
         let stacks = project.stacks.flatMap(\.items).joined(separator: " ")
+        let remote = store.cachedRemote(for: project.path)
         return [
             project.displayName,
             project.name,
@@ -492,21 +607,32 @@ struct CommandPaletteView: View {
             project.group,
             stacks,
             project.sessions.detected.joined(separator: " "),
+            remote?.raw ?? "",
+            remote?.webURL?.absoluteString ?? "",
         ].joined(separator: " ")
     }
 
     private func moveSelection(_ delta: Int) {
         guard !entries.isEmpty else { return }
-        selection = max(0, min(entries.count - 1, selectedIndex + delta))
+        var index = selectedIndex
+        for _ in entries.indices {
+            index = (index + delta + entries.count) % entries.count
+            if entries[index].isEnabled {
+                selection = index
+                return
+            }
+        }
     }
 
     private func runSelected() {
-        guard entries.indices.contains(selectedIndex) else { return }
+        guard entries.indices.contains(selectedIndex), entries[selectedIndex].isEnabled else { return }
         execute(entries[selectedIndex])
     }
 
     private func execute(_ entry: PaletteEntry) {
+        guard entry.isEnabled else { return }
         dismiss()
+        store.recordPaletteAction(entry.id)
         entry.action()
     }
 
@@ -530,11 +656,84 @@ private struct PaletteEntry: Identifiable {
     let tint: Color
     let shortcut: String?
     let keywords: String
+    var isEnabled = true
+    var pinned = false
     let action: () -> Void
 
-    func matches(_ query: String) -> Bool {
-        [title, subtitle ?? "", keywords]
-            .joined(separator: " ")
-            .localizedCaseInsensitiveContains(query)
+    func matchScore(_ query: String) -> Int? {
+        let tokens = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !tokens.isEmpty else { return 0 }
+        var total = 0
+        for token in tokens {
+            guard let score = PaletteMatcher.score(token, in: searchText) else { return nil }
+            total += score
+        }
+        return total
+    }
+
+    func inGroup(_ title: String) -> PaletteEntry {
+        PaletteEntry(
+            id: id,
+            group: title,
+            title: self.title,
+            subtitle: subtitle,
+            symbol: symbol,
+            tint: tint,
+            shortcut: shortcut,
+            keywords: keywords,
+            isEnabled: isEnabled,
+            pinned: pinned,
+            action: action
+        )
+    }
+
+    private var searchText: String {
+        [title, subtitle ?? "", keywords].joined(separator: " ")
+    }
+}
+
+private enum PaletteMatcher {
+    static func score(_ query: String, in text: String) -> Int? {
+        let needle = normalized(query)
+        let haystack = normalized(text)
+        guard !needle.isEmpty else { return 0 }
+
+        if let range = haystack.range(of: needle) {
+            let distance = haystack.distance(from: haystack.startIndex, to: range.lowerBound)
+            return 200 - min(distance, 120) + (range.lowerBound == haystack.startIndex ? 40 : 0)
+        }
+
+        var searchStart = haystack.startIndex
+        var previous: String.Index?
+        var score = 0
+        for character in needle {
+            guard let index = haystack[searchStart...].firstIndex(of: character) else { return nil }
+            if let previous {
+                score += haystack.index(after: previous) == index ? 12 : 3
+            } else {
+                score += 8
+            }
+
+            if index == haystack.startIndex {
+                score += 6
+            } else {
+                let before = haystack[haystack.index(before: index)]
+                if before == " " || before == "/" || before == "-" || before == "." || before == ":" {
+                    score += 5
+                }
+            }
+
+            score += max(0, 6 - haystack.distance(from: haystack.startIndex, to: index) / 10)
+            previous = index
+            searchStart = haystack.index(after: index)
+        }
+        return score
+    }
+
+    private static func normalized(_ value: String) -> String {
+        value.folding(
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+            locale: .current
+        )
     }
 }

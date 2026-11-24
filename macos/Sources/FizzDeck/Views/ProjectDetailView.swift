@@ -203,6 +203,8 @@ private struct ProjectHeroActions: View {
     let project: RepoProject
 
     @State private var hovering: Action?
+    @State private var remote: GitRemote?
+    @State private var remoteResolved = false
 
     private enum Action {
         case star
@@ -271,6 +273,28 @@ private struct ProjectHeroActions: View {
                     } label: {
                         Label("复制路径", systemImage: "doc.on.doc")
                     }
+
+                    Divider()
+
+                    if let remote {
+                        if let url = remote.webURL {
+                            Button {
+                                SystemActions.openURL(url.absoluteString)
+                            } label: {
+                                Label("在浏览器中打开远程仓库", systemImage: "arrow.up.right.square")
+                            }
+                        }
+                        Button {
+                            SystemActions.copy(remote.raw)
+                        } label: {
+                            Label("复制远程地址", systemImage: "link")
+                        }
+                    } else if remoteResolved {
+                        Button {} label: {
+                            Label("没有远程仓库", systemImage: "link.badge.plus")
+                        }
+                        .disabled(true)
+                    }
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 12, weight: .semibold))
@@ -292,6 +316,12 @@ private struct ProjectHeroActions: View {
         .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("项目操作")
+        .task(id: project.path) {
+            remote = store.cachedRemote(for: project.path)
+            remoteResolved = store.hasResolvedRemote(for: project.path)
+            remote = await store.remote(for: project)
+            remoteResolved = true
+        }
     }
 
     private var segmentShape: RoundedRectangle {

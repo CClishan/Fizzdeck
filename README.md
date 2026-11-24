@@ -2,7 +2,7 @@
 
 **A local-first project dashboard for macOS.** Scan selected folders, recognize your repositories, inspect Git and disk state, resume AI coding sessions, and launch development servers from one place.
 
-Live landing page: [fizzdeck.pages.dev](https://fizzdeck.pages.dev)
+Live landing page: [koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
 No account, no telemetry, no hosted backend. FizzDeck reads only local project metadata and keeps its state on your Mac.
 
@@ -91,10 +91,10 @@ On a fresh install, use **Scan folder** in the sidebar to discover and add proje
 | Dashboard | Native overview with starred, changed, and running filters; collapsible project groups; dashboard, list, and gallery layouts. |
 | Attention queue | Surfaces failing tests, behind-remote and unpushed commits, uncommitted files, and reclaimable disk. Ordered by urgency; each row opens the matching project tab and offers inline push, fast-forward pull, test rerun, or cleanup-command copy. Right-click a row to snooze or mute that project/type; silenced rules can be restored from the header. |
 | Menu bar | Keeps the pending-item count visible, opens the overview or a recent project, and sends local notifications when a dev server becomes ready or a test fails. |
-| Quick open | `⌘K` searches projects, branches, and actions. Run project commands and app actions without leaving the keyboard. |
+| Quick open | `⌘K` searches projects, branches, remote URLs, and actions with recent items, fuzzy matching, and pinned commands. Run project commands and app actions without leaving the keyboard. |
 | Project actions | Open a project in Finder, Terminal, or an installed editor (Cursor, VS Code, Zed, and Xcode when a project target exists), or copy its path. `⌘⇧T` opens the current project in Terminal. |
 | AI sessions | Reads local Codex and Claude Code session metadata, matches sessions to projects, and copies `codex resume` / `claude --resume` commands. |
-| Git | Shows the current branch, ahead/behind state, dirty files, and recent commits. Supports branch switching plus confirmed fetch, fast-forward pull, and push with inline results; dirty worktrees are protected. |
+| Git | Shows the current branch, ahead/behind state, dirty files, recent commits, and the `origin` URL. Supports opening or copying the remote, branch switching, and confirmed fetch, fast-forward pull, and push with inline results; dirty worktrees are protected. |
 | Dev servers | Detects common dev scripts and ports, starts and stops project processes, waits for readiness, and opens the app in a browser. |
 | Disk usage | Breaks down project size and reclaimable space across dependencies, build caches, artifacts, temporary files, and AI session history. |
 | Cleanup | Provides copy-only cleanup commands. It never executes destructive cleanup automatically. |
