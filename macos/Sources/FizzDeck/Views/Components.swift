@@ -27,7 +27,7 @@ struct GlassStatCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
-                Image(systemName: symbol)
+                FizzIcon(symbol: symbol, size: 13)
                     .foregroundStyle(tint)
                 Text(title)
                     .foregroundStyle(.secondary)
@@ -88,8 +88,7 @@ struct Panel<Content: View, Accessory: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 7) {
-                Image(systemName: symbol)
-                    .font(.system(size: 11.5, weight: .medium))
+                FizzIcon(symbol: symbol, size: 13)
                     .foregroundStyle(.secondary)
                     .frame(width: 16)
                 Text(title)
@@ -143,14 +142,26 @@ struct CopyButton: View {
     }
 }
 
-struct StatusDot: View {
+struct PortStatusBadge: View {
     let state: PortState
 
     var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 7, height: 7)
-            .help(label)
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 5, height: 5)
+
+            Text(label)
+                .font(.system(size: 9.5, weight: .medium))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(color.opacity(0.10), in: Capsule())
+        .fixedSize()
+        .help(label)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
     }
 
     private var color: Color {

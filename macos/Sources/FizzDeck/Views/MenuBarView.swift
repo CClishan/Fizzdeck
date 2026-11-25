@@ -22,8 +22,10 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: attentionCount > 0 ? "exclamationmark.circle.fill" : "checkmark.circle")
-                .font(.system(size: 12, weight: .semibold))
+            FizzIcon(
+                symbol: attentionCount > 0 ? "exclamationmark.circle.fill" : "checkmark.circle",
+                size: 12
+            )
             Text("\(attentionCount)")
                 .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
         }

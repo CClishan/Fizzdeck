@@ -1,0 +1,363 @@
+{
+  "source": "https://iconmcp.com/mcp",
+  "style": "outline",
+  "size": 16,
+  "stroke": 1.3,
+  "radius": 2,
+  "icons": [
+    {
+      "file": "sliders.svg",
+      "name": "sliders",
+      "set": "generic",
+      "label": "Adjust"
+    },
+    {
+      "file": "info.svg",
+      "name": "info",
+      "set": "generic",
+      "label": "Info"
+    },
+    {
+      "file": "power.svg",
+      "name": "power",
+      "set": "interface",
+      "label": "Power"
+    },
+    {
+      "file": "bell.svg",
+      "name": "bell",
+      "set": "generic",
+      "label": "Bell"
+    },
+    {
+      "file": "bell-off.svg",
+      "name": "bell-off",
+      "set": "security",
+      "label": "Bell off"
+    },
+    {
+      "file": "shield-lock.svg",
+      "name": "shield-lock",
+      "set": "security",
+      "label": "Shield lock"
+    },
+    {
+      "file": "shield-check.svg",
+      "name": "shield-check",
+      "set": "security",
+      "label": "Shield check"
+    },
+    {
+      "file": "refresh.svg",
+      "name": "refresh",
+      "set": "generic",
+      "label": "Refresh"
+    },
+    {
+      "file": "home.svg",
+      "name": "home",
+      "set": "generic",
+      "label": "Home"
+    },
+    {
+      "file": "mention.svg",
+      "name": "mention",
+      "set": "social",
+      "label": "Mention"
+    },
+    {
+      "file": "code.svg",
+      "name": "code",
+      "set": "editor",
+      "label": "Code"
+    },
+    {
+      "file": "arrow-up-right.svg",
+      "name": "arrow-up-right",
+      "set": "arrows",
+      "label": "Arrow up right"
+    },
+    {
+      "file": "external-link.svg",
+      "name": "external-link",
+      "set": "generic",
+      "label": "External link"
+    },
+    {
+      "file": "close.svg",
+      "name": "close",
+      "set": "generic",
+      "label": "Close"
+    },
+    {
+      "file": "search.svg",
+      "name": "search",
+      "set": "generic",
+      "label": "Search"
+    },
+    {
+      "file": "folder.svg",
+      "name": "folder",
+      "set": "generic",
+      "label": "Folder"
+    },
+    {
+      "file": "folder-plus.svg",
+      "name": "folder-plus",
+      "set": "files",
+      "label": "New folder"
+    },
+    {
+      "file": "folder-minus.svg",
+      "name": "folder-minus",
+      "set": "files",
+      "label": "Folder minus"
+    },
+    {
+      "file": "star.svg",
+      "name": "star",
+      "set": "generic",
+      "label": "Star"
+    },
+    {
+      "file": "grid.svg",
+      "name": "grid",
+      "set": "generic",
+      "label": "Grid"
+    },
+    {
+      "file": "list-bullet.svg",
+      "name": "list-bullet",
+      "set": "editor",
+      "label": "Bulleted list"
+    },
+    {
+      "file": "filter.svg",
+      "name": "filter",
+      "set": "generic",
+      "label": "Filter"
+    },
+    {
+      "file": "multi-select.svg",
+      "name": "multi-select",
+      "set": "interface",
+      "label": "Multi-select"
+    },
+    {
+      "file": "circle-check.svg",
+      "name": "circle-check",
+      "set": "generic",
+      "label": "Success"
+    },
+    {
+      "file": "check.svg",
+      "name": "check",
+      "set": "generic",
+      "label": "Check"
+    },
+    {
+      "file": "x-circle.svg",
+      "name": "x-circle",
+      "set": "security",
+      "label": "Error"
+    },
+    {
+      "file": "alert-circle.svg",
+      "name": "alert-circle",
+      "set": "security",
+      "label": "Alert circle"
+    },
+    {
+      "file": "alert-octagon.svg",
+      "name": "alert-octagon",
+      "set": "security",
+      "label": "Stop alert"
+    },
+    {
+      "file": "copy.svg",
+      "name": "copy",
+      "set": "generic",
+      "label": "Copy"
+    },
+    {
+      "file": "file-text.svg",
+      "name": "file-text",
+      "set": "files",
+      "label": "Document"
+    },
+    {
+      "file": "git-branch.svg",
+      "name": "git-branch",
+      "set": "files",
+      "label": "Git branch"
+    },
+    {
+      "file": "git-pull.svg",
+      "name": "git-pull",
+      "set": "dev",
+      "label": "Pull"
+    },
+    {
+      "file": "git-push.svg",
+      "name": "git-push",
+      "set": "dev",
+      "label": "Git push"
+    },
+    {
+      "file": "message.svg",
+      "name": "message",
+      "set": "generic",
+      "label": "Message"
+    },
+    {
+      "file": "trash.svg",
+      "name": "trash",
+      "set": "generic",
+      "label": "Trash"
+    },
+    {
+      "file": "terminal.svg",
+      "name": "terminal",
+      "set": "files",
+      "label": "Terminal"
+    },
+    {
+      "file": "sparkles.svg",
+      "name": "sparkles",
+      "set": "editor",
+      "label": "Sparkles"
+    },
+    {
+      "file": "play-circle.svg",
+      "name": "play-circle",
+      "set": "media",
+      "label": "Play circle"
+    },
+    {
+      "file": "play.svg",
+      "name": "play",
+      "set": "media",
+      "label": "Play"
+    },
+    {
+      "file": "arrow-down.svg",
+      "name": "arrow-down",
+      "set": "generic",
+      "label": "Arrow down"
+    },
+    {
+      "file": "arrow-up.svg",
+      "name": "arrow-up",
+      "set": "generic",
+      "label": "Arrow up"
+    },
+    {
+      "file": "arrow-left.svg",
+      "name": "arrow-left",
+      "set": "generic",
+      "label": "Arrow left"
+    },
+    {
+      "file": "arrow-right.svg",
+      "name": "arrow-right",
+      "set": "generic",
+      "label": "Arrow right"
+    },
+    {
+      "file": "chevron-down.svg",
+      "name": "chevron-down",
+      "set": "generic",
+      "label": "Chevron down"
+    },
+    {
+      "file": "chevron-up.svg",
+      "name": "chevron-up",
+      "set": "generic",
+      "label": "Chevron up"
+    },
+    {
+      "file": "chevron-right.svg",
+      "name": "chevron-right",
+      "set": "generic",
+      "label": "Chevron right"
+    },
+    {
+      "file": "chevron-left.svg",
+      "name": "chevron-left",
+      "set": "generic",
+      "label": "Chevron left"
+    },
+    {
+      "file": "more-horizontal.svg",
+      "name": "more-horizontal",
+      "set": "generic",
+      "label": "More"
+    },
+    {
+      "file": "layers.svg",
+      "name": "layers",
+      "set": "files",
+      "label": "Layers"
+    },
+    {
+      "file": "undo.svg",
+      "name": "undo",
+      "set": "editor",
+      "label": "Undo"
+    },
+    {
+      "file": "plus.svg",
+      "name": "plus",
+      "set": "generic",
+      "label": "Plus"
+    },
+    {
+      "file": "clock.svg",
+      "name": "clock",
+      "set": "generic",
+      "label": "Clock"
+    },
+    {
+      "file": "hard-drive.svg",
+      "name": "hard-drive",
+      "set": "devices",
+      "label": "Drive"
+    },
+    {
+      "file": "archive.svg",
+      "name": "archive",
+      "set": "files",
+      "label": "Archive"
+    },
+    {
+      "file": "box.svg",
+      "name": "box",
+      "set": "commerce",
+      "label": "Package"
+    },
+    {
+      "file": "build.svg",
+      "name": "build",
+      "set": "dev",
+      "label": "Build"
+    },
+    {
+      "file": "bar-chart.svg",
+      "name": "bar-chart",
+      "set": "charts",
+      "label": "Bar chart"
+    },
+    {
+      "file": "server.svg",
+      "name": "server",
+      "set": "files",
+      "label": "Server"
+    },
+    {
+      "file": "edit.svg",
+      "name": "edit",
+      "set": "generic",
+      "label": "Edit"
+    }
+  ]
+}

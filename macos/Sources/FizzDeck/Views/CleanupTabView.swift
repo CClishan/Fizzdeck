@@ -65,8 +65,7 @@ struct CleanupTabView: View {
 
     private func cleanupRow(_ item: CleanupItem) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(systemName: kindSymbol(item.kind))
-                .font(.system(size: 13, weight: .medium))
+            FizzIcon(symbol: kindSymbol(item.kind), size: 14)
                 .foregroundStyle(kindColor(item.kind))
                 .frame(width: 24)
 
@@ -94,7 +93,7 @@ struct CleanupTabView: View {
             Button {
                 SystemActions.copy(project.cleanup.removalCommand(for: item))
             } label: {
-                Image(systemName: "doc.on.doc")
+                FizzIcon(symbol: "doc.on.doc", size: 12)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)

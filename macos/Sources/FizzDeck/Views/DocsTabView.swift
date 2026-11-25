@@ -97,7 +97,7 @@ struct DocsTabView: View {
                     Button {
                         SystemActions.copy("\(project.path)/\(doc.file)")
                     } label: {
-                        Image(systemName: "doc.on.doc")
+                        FizzIcon(symbol: "doc.on.doc", size: 12)
                     }
                     .buttonStyle(.bordered)
                     .help("复制文件路径")
@@ -105,7 +105,7 @@ struct DocsTabView: View {
                     Button {
                         SystemActions.open("\(project.path)/\(doc.file)")
                     } label: {
-                        Image(systemName: "arrow.up.forward.app")
+                        FizzIcon(symbol: "arrow.up.forward.app", size: 12)
                     }
                     .buttonStyle(.bordered)
                     .help("用默认应用打开")

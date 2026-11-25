@@ -182,29 +182,40 @@ struct HomeDashboardView: View {
     }
 
     private var modePicker: some View {
-        Picker(
-            "布局",
-            selection: Binding(
-                get: { mode },
-                set: { item in
-                    guard mode != item else { return }
-                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.standard)) {
-                        modeRaw = item.rawValue
+        GlassEffectContainer(spacing: 2) {
+            HStack(spacing: 1) {
+                ForEach(HomeViewMode.allCases) { item in
+                    let selected = mode == item
+
+                    Button {
+                        guard !selected else { return }
+                        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.standard)) {
+                            modeRaw = item.rawValue
+                        }
+                    } label: {
+                        FizzIcon(symbol: item.symbol, size: 13)
+                            .foregroundStyle(selected ? FizzTheme.accent : Color.secondary)
+                            .frame(width: 30, height: 26)
+                            .background {
+                                if selected {
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.9))
+                                        .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+                                }
+                            }
+                            .contentShape(Capsule())
                     }
-                }
-            )
-        ) {
-            ForEach(HomeViewMode.allCases) { item in
-                Image(systemName: item.symbol)
-                    .tag(item)
+                    .buttonStyle(.plain)
                     .help(item.title)
                     .accessibilityLabel(item.title)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityRemoveTraits(selected ? [] : .isSelected)
+                }
             }
+            .padding(2)
+            .glassEffect(.regular.interactive(), in: Capsule())
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
-        .tint(FizzTheme.accent)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("布局")
     }
 
@@ -313,11 +324,15 @@ struct HomeDashboardView: View {
             }
         } label: {
             filterMenuLabel
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .contentShape(Capsule())
         }
         .menuStyle(.button)
-        .buttonStyle(.glass)
+        .buttonStyle(.plain)
         .menuIndicator(.visible)
         .controlSize(.small)
+        .glassEffect(.regular.interactive(), in: Capsule())
         .help("排序与筛选")
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: hasFacets)
     }
@@ -332,8 +347,7 @@ struct HomeDashboardView: View {
                 }
             }
         } label: {
-            Image(systemName: selectionMode ? "checkmark.circle.fill" : "checklist")
-                .font(.system(size: 12.5, weight: .semibold))
+            FizzIcon(symbol: selectionMode ? "checkmark.circle.fill" : "checklist", size: 13)
                 .foregroundStyle(selectionMode ? FizzTheme.accent : Color.secondary)
                 .frame(width: 24, height: 24)
                 .contentShape(Circle())
@@ -348,13 +362,11 @@ struct HomeDashboardView: View {
 
     private var filterMenuLabel: some View {
         HStack(spacing: 5) {
-            Image(systemName: "line.3.horizontal.decrease")
-                .font(.system(size: 11, weight: .semibold))
+            FizzIcon(symbol: "line.3.horizontal.decrease", size: 12)
             Text("筛选")
                 .font(.system(size: 11, weight: .medium))
         }
         .foregroundStyle(.primary)
-        .padding(.horizontal, 2)
     }
 
     private var activeFilterChips: some View {
@@ -501,7 +513,7 @@ struct HomeDashboardView: View {
     private var batchBar: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle")
+                FizzIcon(symbol: "checkmark.circle", size: 13)
                     .foregroundStyle(FizzTheme.accent)
                 Text("已选 \(selectedProjects.count) 个")
                     .font(.system(size: 11.5, weight: .medium))
@@ -550,7 +562,7 @@ struct HomeDashboardView: View {
 
             if let batchFeedback {
                 HStack(spacing: 5) {
-                    Image(systemName: "info.circle")
+                    FizzIcon(symbol: "info.circle", size: 11)
                         .foregroundStyle(FizzTheme.accent)
                     Text(batchFeedback)
                         .foregroundStyle(.secondary)
@@ -844,8 +856,7 @@ private struct ActiveFilterChip: View {
                 Text(text)
                     .font(.system(size: 10.5, weight: .medium))
                     .lineLimit(1)
-                Image(systemName: "xmark")
-                    .font(.system(size: 7.5, weight: .bold))
+                FizzIcon(symbol: "xmark", size: 8)
                     .foregroundStyle(.tertiary)
             }
             .foregroundStyle(.secondary)
@@ -909,11 +920,9 @@ private struct HomeSummaryMetric: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.system(size: 11.5, weight: .semibold))
+            FizzIcon(symbol: symbol, size: 14)
                 .foregroundStyle(tint)
                 .frame(width: 26, height: 26)
-                .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
@@ -961,15 +970,17 @@ private struct ProjectFolderCard: View {
                                 .lineLimit(1)
 
                             if project.starred {
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: 8))
+                                FizzIcon(symbol: "star.fill", size: 9)
                                     .foregroundStyle(.yellow)
                             }
 
                             if project.dirtyCount > 0 {
-                                Circle()
-                                    .fill(.orange)
-                                    .frame(width: 5, height: 5)
+                                TagChip(
+                                    text: "\(project.dirtyCount) 处改动",
+                                    tint: .orange,
+                                    compact: true
+                                )
+                                .help("\(project.dirtyCount) 处未提交改动")
                             }
                         }
 
@@ -981,7 +992,7 @@ private struct ProjectFolderCard: View {
 
                     Spacer(minLength: 4)
 
-                    StatusDot(state: project.port)
+                    PortStatusBadge(state: project.port)
                 }
 
                 Text(primaryDetail)
@@ -1029,14 +1040,11 @@ private struct ProjectFolderCard: View {
             }
             .overlay(alignment: .topTrailing) {
                 if selecting {
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.88))
-                            .frame(width: 20, height: 20)
-                        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
-                    }
+                    FizzIcon(
+                        symbol: selected ? "checkmark.circle.fill" : "circle",
+                        size: 15
+                    )
+                    .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
                     .padding(8)
                 }
             }
@@ -1118,8 +1126,7 @@ private struct ProjectListRow: View {
         } label: {
             HStack(spacing: 10) {
                 if selecting {
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 14, weight: .semibold))
+                    FizzIcon(symbol: selected ? "checkmark.circle.fill" : "circle", size: 15)
                         .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
                         .frame(width: 16)
                 }
@@ -1132,14 +1139,16 @@ private struct ProjectListRow: View {
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(1)
                         if project.starred {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 8))
+                            FizzIcon(symbol: "star.fill", size: 9)
                                 .foregroundStyle(.yellow)
                         }
                         if project.dirtyCount > 0 {
-                            Circle()
-                                .fill(.orange)
-                                .frame(width: 5, height: 5)
+                            TagChip(
+                                text: "\(project.dirtyCount) 处改动",
+                                tint: .orange,
+                                compact: true
+                            )
+                            .help("\(project.dirtyCount) 处未提交改动")
                         }
                     }
                     Text(secondaryText)
@@ -1163,7 +1172,7 @@ private struct ProjectListRow: View {
                 Text(Format.bytes(project.size.totalBytes))
                     .frame(width: 62, alignment: .trailing)
                     .foregroundStyle(.secondary)
-                StatusDot(state: project.port)
+                PortStatusBadge(state: project.port)
             }
             .font(.caption2.monospacedDigit())
             .padding(.horizontal, 12)
@@ -1226,18 +1235,9 @@ private struct FolderBadge: View {
     var size: CGFloat = 36
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
-                .fill(color.opacity(0.11))
-            Image(systemName: "folder.fill")
-                .font(.system(size: size * 0.52, weight: .medium))
-                .foregroundStyle(color)
-        }
-        .frame(width: size, height: size)
-        .overlay {
-            RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
-                .strokeBorder(color.opacity(project.color == nil ? 0.10 : 0.24), lineWidth: 1)
-        }
+        FizzIcon(symbol: "folder.fill", size: size * 0.62)
+            .foregroundStyle(color)
+            .frame(width: size, height: size)
     }
 
     private var color: Color {
@@ -1251,7 +1251,7 @@ private struct HomeToolBadge: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: symbol)
+            FizzIcon(symbol: symbol, size: 10)
             if !compact {
                 Text(title)
             }

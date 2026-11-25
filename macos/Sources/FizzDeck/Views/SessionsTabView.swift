@@ -59,7 +59,7 @@ struct SessionsTabView: View {
                         Panel(title: "最近会话", symbol: "clock.arrow.circlepath") {
                             if sessions.isEmpty {
                                 HStack(spacing: 8) {
-                                    Image(systemName: "line.3.horizontal.decrease.circle")
+                                    FizzIcon(symbol: "line.3.horizontal.decrease.circle", size: 12)
                                     Text("没有 \(toolFilter.title) 会话")
                                     Spacer(minLength: 0)
                                 }
@@ -155,8 +155,7 @@ struct SessionsTabView: View {
 
     private func sessionRow(_ session: SessionRecord) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: toolSymbol(session.tool))
-                .font(.system(size: 11.5, weight: .medium))
+            FizzIcon(symbol: toolSymbol(session.tool), size: 13)
                 .foregroundStyle(toolTint(session.tool))
                 .frame(width: 16, height: 20)
 

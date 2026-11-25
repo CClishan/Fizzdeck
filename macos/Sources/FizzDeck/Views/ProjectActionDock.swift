@@ -164,8 +164,7 @@ struct ProjectActionDock: View {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: symbol)
-                    .font(.system(size: 10.5, weight: .semibold))
+                FizzIcon(symbol: symbol, size: 11)
                 Text(label)
                     .font(.system(size: 10.5, weight: .medium))
                     .lineLimit(1)

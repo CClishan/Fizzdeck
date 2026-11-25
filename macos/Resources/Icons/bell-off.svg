@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" color="#000000">
+  <defs>
+    <mask id="iconmcp-bell-off-m" maskUnits="userSpaceOnUse" x="-4" y="-4" width="24" height="24">
+      <rect x="-4" y="-4" width="24" height="24" fill="#fff" stroke="none"/>
+      <line x1="2.75" y1="2.75" x2="13.25" y2="13.25" stroke="#000" fill="none" stroke-width="3.3"/>
+    </mask>
+  </defs>
+  <g>
+    <g mask="url(#iconmcp-bell-off-m)">
+      <path d="M3.75 10.75 V6.5 A4.25 4.25 0 0 1 12.25 6.5 V10.75 L13.25 11.75 H2.75 Z"/>
+      <line x1="6.5" y1="13.75" x2="9.5" y2="13.75"/>
+    </g>
+    <line x1="2.75" y1="2.75" x2="13.25" y2="13.25"/>
+  </g>
+</svg>

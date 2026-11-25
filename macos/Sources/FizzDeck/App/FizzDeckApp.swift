@@ -49,6 +49,11 @@ struct FizzDeckApp: App {
             }
         }
 
+        Settings {
+            AppSettingsView()
+        }
+        .defaultSize(width: 720, height: 500)
+
         MenuBarExtra {
             MenuBarMenu(store: store, actions: actions)
         } label: {

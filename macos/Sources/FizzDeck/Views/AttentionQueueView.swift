@@ -45,8 +45,7 @@ struct AttentionQueueView: View {
         if !items.isEmpty || !suppressedItems.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    Image(systemName: "exclamationmark.circle")
-                        .font(.system(size: 12, weight: .semibold))
+                    FizzIcon(symbol: "exclamationmark.circle", size: 13)
                         .foregroundStyle(FizzTheme.accent)
                     Text("待处理")
                         .font(.system(size: 13, weight: .semibold))
@@ -110,7 +109,7 @@ struct AttentionQueueView: View {
 
                 if items.isEmpty {
                     HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle")
+                        FizzIcon(symbol: "checkmark.circle", size: 12)
                             .foregroundStyle(.green)
                         Text("没有待处理项")
                             .foregroundStyle(.secondary)
@@ -128,8 +127,7 @@ struct AttentionQueueView: View {
                     } label: {
                         HStack(spacing: 5) {
                             Text(expanded ? "收起" : "还有 \(items.count - collapsedLimit) 项")
-                            Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 8, weight: .semibold))
+                            FizzIcon(symbol: expanded ? "chevron.up" : "chevron.down", size: 8)
                         }
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
@@ -297,14 +295,9 @@ private struct AttentionRow: View {
         HStack(spacing: 4) {
             Button(action: open) {
                 HStack(spacing: 9) {
-                    Image(systemName: item.kind.symbol)
-                        .font(.system(size: 11, weight: .semibold))
+                    FizzIcon(symbol: item.kind.symbol, size: 13)
                         .foregroundStyle(item.kind.tint)
-                        .frame(width: 27, height: 27)
-                        .background(
-                            item.kind.tint.opacity(0.10),
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        )
+                        .frame(width: 24, height: 27)
 
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 5) {
@@ -339,16 +332,14 @@ private struct AttentionRow: View {
                             ProgressView()
                                 .controlSize(.mini)
                         } else {
-                            Image(systemName: copied ? "checkmark" : inlineAction.symbol)
-                                .font(.system(size: 10.5, weight: .semibold))
+                            FizzIcon(
+                                symbol: copied ? "checkmark" : inlineAction.symbol,
+                                size: 11
+                            )
                                 .foregroundStyle(copied ? Color.green : item.kind.tint)
                         }
                     }
                     .frame(width: 25, height: 25)
-                    .background(
-                        item.kind.tint.opacity(hovering || copied ? 0.12 : 0.06),
-                        in: Circle()
-                    )
                     .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -357,8 +348,7 @@ private struct AttentionRow: View {
                 .accessibilityLabel(inlineAction.title)
             }
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 8, weight: .semibold))
+            FizzIcon(symbol: "chevron.right", size: 8)
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 10)

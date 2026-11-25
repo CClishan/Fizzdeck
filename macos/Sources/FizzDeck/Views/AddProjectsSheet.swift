@@ -79,8 +79,7 @@ struct AddProjectsSheet: View {
                 Spacer()
 
                 Button(action: close) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
+                    FizzIcon(symbol: "xmark", size: 11)
                         .frame(width: 24, height: 24)
                 }
                 .buttonStyle(.plain)
@@ -125,7 +124,11 @@ struct AddProjectsSheet: View {
 
             HStack(spacing: 10) {
                 Button(action: chooseFolder) {
-                    Label("添加文件夹…", systemImage: "plus")
+                    Label {
+                        Text("添加文件夹…")
+                    } icon: {
+                        FizzIcon(symbol: "plus", size: 11)
+                    }
                         .font(.system(size: 12.5, weight: .medium))
                         .padding(.horizontal, 12)
                         .frame(height: 32)
@@ -174,8 +177,7 @@ struct AddProjectsSheet: View {
 
     private var emptyFolders: some View {
         VStack(spacing: 7) {
-            Image(systemName: "folder.badge.plus")
-                .font(.system(size: 22, weight: .light))
+            FizzIcon(symbol: "folder.badge.plus", size: 22)
                 .foregroundStyle(.tertiary)
             Text("还没有加入文件夹")
                 .font(.system(size: 12, weight: .medium))
@@ -192,8 +194,7 @@ struct AddProjectsSheet: View {
             openRoot(path)
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 16))
+                FizzIcon(symbol: "folder.fill", size: 18)
                     .foregroundStyle(.blue)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -249,8 +250,7 @@ struct AddProjectsSheet: View {
 
     private func scanHeader(_ folder: URL) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 16))
+            FizzIcon(symbol: "folder.fill", size: 18)
                 .foregroundStyle(.blue)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -275,7 +275,7 @@ struct AddProjectsSheet: View {
             }
 
             Button(action: chooseFolder) {
-                Image(systemName: "folder.badge.plus")
+                FizzIcon(symbol: "folder.badge.plus", size: 14)
                     .frame(width: 22, height: 20)
             }
             .buttonStyle(.glass)
@@ -329,8 +329,7 @@ struct AddProjectsSheet: View {
         let isSelected = selected.contains(candidate.path)
 
         return HStack(spacing: 11) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 16))
+            FizzIcon(symbol: "folder.fill", size: 18)
                 .foregroundStyle(managed ? .green : (isSelected ? FizzTheme.accent : .blue))
                 .frame(width: 22)
 
@@ -361,7 +360,11 @@ struct AddProjectsSheet: View {
             Spacer(minLength: 12)
 
             if managed {
-                Label("已加入", systemImage: "checkmark.circle.fill")
+                Label {
+                    Text("已加入")
+                } icon: {
+                    FizzIcon(symbol: "checkmark.circle.fill", size: 11)
+                }
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(.green)
             } else {

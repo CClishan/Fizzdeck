@@ -36,7 +36,7 @@ struct ContentView: View {
                     Button {
                         store.selectedPath = RepositoryStore.homeSelection
                     } label: {
-                        Image(systemName: "xmark")
+                        FizzIcon(symbol: "xmark", size: 13)
                     }
                     .help("退出项目")
                     .accessibilityLabel("退出项目")
@@ -44,7 +44,7 @@ struct ContentView: View {
                     Button {
                         Task { await store.rescanProjects([project]) }
                     } label: {
-                        Image(systemName: "arrow.clockwise")
+                        FizzIcon(symbol: "arrow.clockwise", size: 13)
                     }
                     .help("重新扫描 \(project.displayName)")
                     .accessibilityLabel("重新扫描项目")
@@ -53,7 +53,11 @@ struct ContentView: View {
                     Button {
                         Task { await store.scan() }
                     } label: {
-                        Label("重新扫描", systemImage: "arrow.clockwise")
+                        Label {
+                            Text("重新扫描")
+                        } icon: {
+                            FizzIcon(symbol: "arrow.clockwise", size: 13)
+                        }
                     }
                     .help("重新扫描受管目录")
                     .disabled(store.phase == .scanning)
@@ -61,7 +65,11 @@ struct ContentView: View {
                     Button {
                         Task { await store.addRoot() }
                     } label: {
-                        Label("文件夹", systemImage: "folder")
+                        Label {
+                            Text("文件夹")
+                        } icon: {
+                            FizzIcon(symbol: "folder", size: 13)
+                        }
                     }
                     .help("查看已加入文件夹，或扫描新目录")
                 }
@@ -71,7 +79,7 @@ struct ContentView: View {
                 Button {
                     store.toggleCommandPalette()
                 } label: {
-                    Image(systemName: "magnifyingglass")
+                    FizzIcon(symbol: "magnifyingglass", size: 14)
                 }
                 .help("搜索项目、分支、远程或动作（⌘K）")
                 .accessibilityLabel("搜索")

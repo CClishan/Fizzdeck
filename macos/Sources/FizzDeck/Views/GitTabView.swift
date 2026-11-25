@@ -64,7 +64,10 @@ struct GitTabView: View {
                     Divider()
                         .padding(.vertical, 6)
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Image(systemName: feedback.failed ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                        FizzIcon(
+                            symbol: feedback.failed ? "exclamationmark.circle.fill" : "checkmark.circle.fill",
+                            size: 12
+                        )
                             .foregroundStyle(feedback.failed ? Color.red : Color.green)
                         Text(feedback.message)
                             .font(.caption)
@@ -89,8 +92,7 @@ struct GitTabView: View {
                                 Button {
                                     SystemActions.openURL(url.absoluteString)
                                 } label: {
-                                    Image(systemName: "arrow.up.right.square")
-                                        .font(.system(size: 11, weight: .medium))
+                                    FizzIcon(symbol: "arrow.up.right.square", size: 11)
                                 }
                                 .buttonStyle(.plain)
                                 .foregroundStyle(.secondary)
@@ -100,8 +102,7 @@ struct GitTabView: View {
                             Button {
                                 SystemActions.copy(remote)
                             } label: {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.system(size: 10.5, weight: .medium))
+                                FizzIcon(symbol: "doc.on.doc", size: 11)
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
@@ -133,8 +134,7 @@ struct GitTabView: View {
                                 ProgressView()
                                     .controlSize(.mini)
                             } else {
-                                Image(systemName: symbol(for: action))
-                                    .font(.system(size: 11, weight: .semibold))
+                                FizzIcon(symbol: symbol(for: action), size: 11)
                                     .foregroundStyle(tint(for: action))
                             }
                         }
@@ -232,8 +232,10 @@ struct GitTabView: View {
             VStack(spacing: 0) {
                 ForEach(Array(git.branches.prefix(20))) { branch in
                     HStack(spacing: 8) {
-                        Image(systemName: branch.name == project.branch ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 10))
+                        FizzIcon(
+                            symbol: branch.name == project.branch ? "checkmark.circle.fill" : "circle",
+                            size: 10
+                        )
                             .foregroundStyle(branch.name == project.branch ? .green : .secondary)
                         Text(branch.name)
                             .font(.system(size: 11, design: .monospaced))

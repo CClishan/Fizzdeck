@@ -80,8 +80,7 @@ struct FizzLogo: View {
             } else {
                 ZStack {
                     FizzTheme.accent
-                    Image(systemName: "bubble.left.fill")
-                        .font(.system(size: size * 0.43, weight: .semibold))
+                    FizzIcon(symbol: "bubble.left.fill", size: size * 0.43)
                         .foregroundStyle(.white)
                 }
             }

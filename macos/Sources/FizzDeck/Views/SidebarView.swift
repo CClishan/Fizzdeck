@@ -121,46 +121,50 @@ struct SidebarView: View {
     }
 
     private var footer: some View {
-        Group {
-            if store.phase == .scanning {
-                HStack(spacing: 7) {
-                    ProgressView()
-                        .controlSize(.mini)
-                    Text("正在扫描")
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
-                }
-            } else if let disk {
-                HStack(spacing: 5) {
-                    Text(Format.bytes(disk.free))
-                        .fontWeight(.medium)
-                    Text("可用")
-                        .foregroundStyle(.tertiary)
-                    Spacer(minLength: 8)
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(FizzTheme.hairline)
-                            Capsule()
-                                .fill(FizzTheme.accent.opacity(0.74))
-                                .frame(width: max(4, proxy.size.width * disk.usedFraction))
-                        }
+        VStack(spacing: 8) {
+            Group {
+                if store.phase == .scanning {
+                    HStack(spacing: 7) {
+                        ProgressView()
+                            .controlSize(.mini)
+                        Text("正在扫描")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
                     }
-                    .frame(width: 48, height: 4)
-                }
-                .help(store.scannedAt.map { "\(Format.relative($0))更新" } ?? "尚未扫描")
-            } else {
-                HStack {
-                    Text("尚未扫描")
-                        .foregroundStyle(.tertiary)
-                    Spacer(minLength: 0)
+                } else if let disk {
+                    HStack(spacing: 5) {
+                        Text(Format.bytes(disk.free))
+                            .fontWeight(.medium)
+                        Text("可用")
+                            .foregroundStyle(.tertiary)
+                        Spacer(minLength: 8)
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(FizzTheme.hairline)
+                                Capsule()
+                                    .fill(FizzTheme.accent.opacity(0.74))
+                                    .frame(width: max(4, proxy.size.width * disk.usedFraction))
+                            }
+                        }
+                        .frame(width: 48, height: 4)
+                    }
+                    .help(store.scannedAt.map { "\(Format.relative($0))更新" } ?? "尚未扫描")
+                } else {
+                    HStack {
+                        Text("尚未扫描")
+                            .foregroundStyle(.tertiary)
+                        Spacer(minLength: 0)
+                    }
                 }
             }
+            .font(.system(size: 10.5).monospacedDigit())
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            SidebarSettingsRow()
         }
-        .font(.system(size: 10.5).monospacedDigit())
-        .padding(.horizontal, 10)
-        .frame(height: 28)
-        .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
     }
@@ -198,8 +202,7 @@ private struct SidebarNavRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 9) {
-                Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .medium))
+                FizzIcon(symbol: symbol, size: 13)
                     .frame(width: 17)
 
                 Text(title)
@@ -244,8 +247,7 @@ private struct SidebarGroupHeader: View {
 
                 Spacer(minLength: 0)
 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 8, weight: .semibold))
+                FizzIcon(symbol: "chevron.right", size: 8)
                     .foregroundStyle(.tertiary)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
             }
@@ -261,6 +263,38 @@ private struct SidebarGroupHeader: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+    }
+}
+
+private struct SidebarSettingsRow: View {
+    @State private var hovering = false
+
+    var body: some View {
+        SettingsLink {
+            HStack(spacing: 9) {
+                FizzIcon(symbol: "slider.horizontal.3", size: 13)
+                    .frame(width: 17)
+
+                Text("设置")
+                    .font(.system(size: 13))
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 9)
+            .frame(height: 32)
+            .background {
+                if hovering {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(FizzTheme.selectedFill.opacity(0.55))
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("打开设置（⌘,）")
+        .accessibilityLabel("设置")
     }
 }
 

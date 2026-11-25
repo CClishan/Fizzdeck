@@ -176,8 +176,7 @@ private struct ProjectHero: View {
                     HStack(spacing: 5) {
                         Text(PathTools.displayPath(project.path))
                             .font(.system(size: 10.5, design: .monospaced))
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 8.5))
+                        FizzIcon(symbol: "doc.on.doc", size: 9)
                     }
                     .foregroundStyle(.white.opacity(0.72))
                 }
@@ -255,8 +254,7 @@ private struct ProjectHero: View {
                 endPoint: .bottomTrailing
             )
 
-            Image(systemName: "rectangle.on.rectangle")
-                .font(.system(size: 48, weight: .light))
+            FizzIcon(symbol: "rectangle.on.rectangle", size: 48)
                 .foregroundStyle(.white.opacity(0.5))
         }
     }
@@ -293,8 +291,7 @@ private struct ProjectHeroActions: View {
                         store.toggleStar(project)
                     }
                 } label: {
-                    Image(systemName: project.starred ? "star.fill" : "star")
-                        .font(.system(size: 12.5, weight: .semibold))
+                    FizzIcon(symbol: project.starred ? "star.fill" : "star", size: 13)
                         .foregroundStyle(project.starred ? Color.yellow : Color.secondary)
                         .frame(width: 30, height: 30)
                         .background(segmentBackground(.star), in: segmentShape)
@@ -312,10 +309,8 @@ private struct ProjectHeroActions: View {
                     ProjectQuickActions(project: project)
                 } label: {
                     HStack(spacing: 3) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 12, weight: .medium))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 7, weight: .bold))
+                        FizzIcon(symbol: "folder", size: 12)
+                        FizzIcon(symbol: "chevron.down", size: 7)
                             .foregroundStyle(.tertiary)
                     }
                     .foregroundStyle(.secondary)
@@ -379,8 +374,7 @@ private struct ProjectHeroActions: View {
                         removalRequest = ProjectRemovalRequest(mode: .permanent)
                     }
                 } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 12, weight: .semibold))
+                    FizzIcon(symbol: "ellipsis", size: 12)
                         .foregroundStyle(.secondary)
                         .frame(width: 30, height: 30)
                         .background(segmentBackground(.more), in: segmentShape)
@@ -490,8 +484,7 @@ private struct ProjectRemovalSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
-                Image(systemName: mode.symbol)
-                    .font(.system(size: 18, weight: .semibold))
+                FizzIcon(symbol: mode.symbol, size: 18)
                     .foregroundStyle(.red)
                 Text("\(mode.title) \(project.displayName)")
                     .font(.headline)

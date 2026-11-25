@@ -29,6 +29,7 @@ cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 cp "$ROOT_DIR/Resources/FizzDeck_logo.png" "$APP_RESOURCES/FizzDeck_logo.png"
 cp "$ROOT_DIR/Resources/FizzDeck.icns" "$APP_RESOURCES/FizzDeck.icns"
+cp -R "$ROOT_DIR/Resources/Icons" "$APP_RESOURCES/Icons"
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -48,9 +49,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.2.2</string>
+  <string>0.2.3</string>
   <key>CFBundleVersion</key>
-  <string>4</string>
+  <string>5</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>

@@ -388,8 +388,7 @@ struct CommandPaletteView: View {
 
     private var searchField: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .medium))
+            FizzIcon(symbol: "magnifyingglass", size: 15)
                 .foregroundStyle(.secondary)
 
             TextField("搜索项目、分支、远程或动作", text: $query)
@@ -404,7 +403,7 @@ struct CommandPaletteView: View {
                 Button {
                     query = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
+                    FizzIcon(symbol: "xmark.circle.fill", size: 13)
                         .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
@@ -450,8 +449,7 @@ struct CommandPaletteView: View {
 
     private var emptyState: some View {
         VStack(spacing: 7) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 20, weight: .light))
+            FizzIcon(symbol: "magnifyingglass", size: 20)
                 .foregroundStyle(.tertiary)
             Text("没有匹配结果")
                 .font(.system(size: 12.5, weight: .medium))
@@ -509,14 +507,9 @@ struct CommandPaletteView: View {
             execute(entry)
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: entry.symbol)
-                    .font(.system(size: 12, weight: .semibold))
+                FizzIcon(symbol: entry.symbol, size: 14)
                     .foregroundStyle(entry.tint)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        entry.tint.opacity(0.10),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
+                    .frame(width: 24, height: 28)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.title)
