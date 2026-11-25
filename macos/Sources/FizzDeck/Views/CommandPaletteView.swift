@@ -291,12 +291,12 @@ struct CommandPaletteView: View {
             PaletteEntry(
                 id: "command.add",
                 group: "命令",
-                title: "添加项目目录",
-                subtitle: "选择一个目录加入看板",
+                title: "管理项目文件夹",
+                subtitle: "查看文件夹或扫描新的父目录",
                 symbol: "plus",
                 tint: .green,
                 shortcut: nil,
-                keywords: "新增 导入 folder"
+                keywords: "新增 导入 folder 文件夹"
             ) {
                 Task { await store.addRoot() }
             }

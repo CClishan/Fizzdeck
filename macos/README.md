@@ -2,7 +2,7 @@
 
 The native, SwiftUI-first client for FizzDeck.
 
-Download: [FizzDeck 0.2.1 for macOS](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+, ad-hoc signed (not notarized).
+Download: [FizzDeck 0.2.2 for macOS](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+, ad-hoc signed (not notarized).
 
 FizzDeck reads and writes the same local state as the web UI, but runs without Node.js and without a local HTTP server.
 
@@ -60,7 +60,7 @@ To work in Xcode, open `Package.swift`.
 - Search across projects, paths, stacks, and branches
 - Dashboard and list layouts, with a half-width attention card beside four summary cards
 - Group filtering plus multi-select batch rescan and cleanup-command copy across both layouts
-- Folder scanning and managed roots
+- Native Liquid Glass folder manager with nested project discovery, scan-depth control, duplicate protection, and managed roots
 - Disk usage and cleanup suggestions
 - Git status, ahead/behind state, dirty files, and recent commits
 - Branch switching, confirmed fetch, fast-forward pull, and push with inline results

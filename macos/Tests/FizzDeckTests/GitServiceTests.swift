@@ -35,4 +35,31 @@ final class GitServiceTests: XCTestCase {
             "https://github.com/CClishan/Fizzdeck"
         )
     }
+
+    func testDetailKeepsFirstCharacterForTrackedChange() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FizzDeckGitServiceTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try await git(["init"], in: directory)
+        try await git(["config", "user.email", "test@example.com"], in: directory)
+        try await git(["config", "user.name", "FizzDeck Test"], in: directory)
+
+        let file = directory.appendingPathComponent("HANDOFF.md")
+        try "initial".write(to: file, atomically: true, encoding: .utf8)
+        try await git(["add", "HANDOFF.md"], in: directory)
+        try await git(["commit", "-m", "initial"], in: directory)
+        try "changed".write(to: file, atomically: true, encoding: .utf8)
+
+        let (detail, _) = await GitService.detail(directory)
+
+        XCTAssertEqual(detail?.files.first?.code, "M")
+        XCTAssertEqual(detail?.files.first?.path, "HANDOFF.md")
+    }
+
+    private func git(_ arguments: [String], in directory: URL) async throws {
+        let result = await Shell.run("git", arguments, cwd: directory, timeout: 10)
+        XCTAssertEqual(result?.status, 0, result?.text ?? "git failed")
+    }
 }

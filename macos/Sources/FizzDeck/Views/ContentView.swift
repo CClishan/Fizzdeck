@@ -61,9 +61,9 @@ struct ContentView: View {
                     Button {
                         Task { await store.addRoot() }
                     } label: {
-                        Label("添加目录", systemImage: "plus")
+                        Label("文件夹", systemImage: "folder")
                     }
-                    .help("把一个目录加入看板")
+                    .help("查看已加入文件夹，或扫描新目录")
                 }
             }
 
@@ -84,10 +84,35 @@ struct ContentView: View {
                     .zIndex(10)
             }
         }
+        .overlay {
+            if store.isFolderManagerPresented {
+                AddProjectsSheet()
+                    .environment(store)
+                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
+                    .zIndex(20)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppRouting.openProjectNotification)) { _ in
+            openPendingProject()
+        }
+        .onAppear {
+            openPendingProject()
+        }
         .animation(
             FizzMotion.resolved(reduceMotion, FizzMotion.panel),
             value: store.isCommandPalettePresented
         )
+        .animation(
+            FizzMotion.resolved(reduceMotion, FizzMotion.panel),
+            value: store.isFolderManagerPresented
+        )
+    }
+
+    private func openPendingProject() {
+        guard let request = AppRouting.consumePendingProject() else { return }
+        store.selectedPath = request.path
+        store.requestedTab = request.tab
+        store.isCommandPalettePresented = false
     }
 }
 

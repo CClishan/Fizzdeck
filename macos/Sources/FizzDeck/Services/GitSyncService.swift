@@ -105,7 +105,7 @@ enum GitSyncService {
         return GitSyncResult(status: .succeeded, message: action.successMessage)
     }
 
-    private static func failure(_ action: GitSyncAction, result: ShellOutput) -> GitSyncResult {
+    static func failure(_ action: GitSyncAction, result: ShellOutput) -> GitSyncResult {
         let lines = result.text
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }

@@ -5,6 +5,7 @@ struct ProjectActionDock: View {
     @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let project: RepoProject
+    let tab: ProjectTab
 
     private var run: RunConfig? {
         project.run
@@ -29,55 +30,10 @@ struct ProjectActionDock: View {
 
                 Spacer(minLength: 8)
 
-                if let run {
-                    runButton
-                    if isRunning, let url = run.previewURL {
-                        dockButton(
-                            symbol: "safari",
-                            title: "打开预览",
-                            label: "打开预览"
-                        ) {
-                            SystemActions.openURL(url)
-                        }
-                    }
-                    dockButton(
-                        symbol: "terminal",
-                        title: "在 Terminal 中打开",
-                        label: "Terminal"
-                    ) {
-                        SystemActions.openTerminal(project.path)
-                    }
-                    dockButton(
-                        symbol: "doc.on.doc",
-                        title: "复制启动命令",
-                        label: "复制命令"
-                    ) {
-                        SystemActions.copy(run.command)
-                    }
-                    dockButton(
-                        symbol: "doc.text.magnifyingglass",
-                        title: "打开启动日志",
-                        label: "启动日志"
-                    ) {
-                        actions.openLog(for: project)
-                    }
-                }
-                if let test = project.test {
-                    testButton
-                    dockButton(
-                        symbol: "list.bullet.rectangle",
-                        title: "打开测试日志",
-                        label: "测试日志"
-                    ) {
-                        actions.openLog(for: project, test: true)
-                    }
-                    dockButton(
-                        symbol: "doc.on.clipboard",
-                        title: "复制测试命令",
-                        label: "复制测试"
-                    ) {
-                        SystemActions.copy(test.command)
-                    }
+                if tab == .tests {
+                    testActions
+                } else {
+                    runActions
                 }
             }
             .padding(.horizontal, 12)
@@ -87,7 +43,65 @@ struct ProjectActionDock: View {
         .frame(maxWidth: 900)
         .shadow(color: .black.opacity(0.08), radius: 18, y: 7)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("运行与测试")
+        .accessibilityLabel(tab == .tests ? "测试操作" : "运行操作")
+    }
+
+    @ViewBuilder
+    private var runActions: some View {
+        if let run {
+            runButton
+            if isRunning, let url = run.previewURL {
+                dockButton(
+                    symbol: "safari",
+                    title: "打开预览",
+                    label: "打开预览"
+                ) {
+                    SystemActions.openURL(url)
+                }
+            }
+            dockButton(
+                symbol: "terminal",
+                title: "在 Terminal 中打开",
+                label: "Terminal"
+            ) {
+                SystemActions.openTerminal(project.path)
+            }
+            dockButton(
+                symbol: "doc.on.doc",
+                title: "复制启动命令",
+                label: "复制命令"
+            ) {
+                SystemActions.copy(run.command)
+            }
+            dockButton(
+                symbol: "doc.text.magnifyingglass",
+                title: "打开启动日志",
+                label: "启动日志"
+            ) {
+                actions.openLog(for: project)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var testActions: some View {
+        if let test = project.test {
+            testButton
+            dockButton(
+                symbol: "list.bullet.rectangle",
+                title: "打开测试日志",
+                label: "测试日志"
+            ) {
+                actions.openLog(for: project, test: true)
+            }
+            dockButton(
+                symbol: "doc.on.clipboard",
+                title: "复制测试命令",
+                label: "复制测试"
+            ) {
+                SystemActions.copy(test.command)
+            }
+        }
     }
 
     private var status: some View {
@@ -107,6 +121,7 @@ struct ProjectActionDock: View {
             }
         }
         .frame(minWidth: 132, maxWidth: 220, alignment: .leading)
+        .padding(.horizontal, 2)
     }
 
     private var runButton: some View {
@@ -168,30 +183,40 @@ struct ProjectActionDock: View {
     }
 
     private var statusTitle: String {
-        if isTestRunning { return "测试中" }
+        if tab == .tests {
+            switch testRun?.status {
+            case .running: return "测试中"
+            case .passed: return "测试通过"
+            case .failed: return "测试失败"
+            case nil: return project.test == nil ? "未配置测试" : "未测试"
+            }
+        }
         if isRunning { return "运行中" }
-        return run == nil ? "测试" : "未启动"
+        return run == nil ? "未配置运行" : "未启动"
     }
 
     private var statusDetail: String {
-        if let message = actions.message(for: project.path), !message.isEmpty {
+        let message = tab == .tests
+            ? actions.testMessage(for: project.path)
+            : actions.message(for: project.path)
+        if let message, !message.isEmpty {
             return message
+        }
+
+        if tab == .tests {
+            return project.test?.command ?? "未识别测试命令"
         }
 
         var parts: [String] = []
         if let run {
             parts.append(run.port > 0 ? "localhost:\(run.port)" : run.command)
         }
-        if let testRun {
-            parts.append(testStatusText(testRun))
-        } else if let test = project.test {
-            parts.append(test.command)
-        }
         return parts.joined(separator: " · ")
     }
 
     private var statusColor: Color {
-        if let testRun {
+        if tab == .tests {
+            guard let testRun else { return .orange }
             switch testRun.status {
             case .running: return .secondary
             case .passed: return .green
@@ -208,17 +233,6 @@ struct ProjectActionDock: View {
         case .running: return "stop.fill"
         case .passed: return "checkmark.circle"
         case .failed: return "xmark.circle"
-        }
-    }
-
-    private func testStatusText(_ run: TestRunState) -> String {
-        switch run.status {
-        case .running:
-            return "测试运行中"
-        case .passed:
-            return "测试通过 · \(String(format: "%.1f", run.duration ?? 0))s"
-        case .failed:
-            return "测试失败 · \(String(format: "%.1f", run.duration ?? 0))s"
         }
     }
 }

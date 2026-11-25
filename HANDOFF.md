@@ -1,10 +1,10 @@
 # FizzDeck 交接文档
 
-- 更新时间：2026-11-24
+- 更新时间：2026-11-25
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
 - 当前分支：`main`（PR #1 已合并；`v0.2.1` 已发布）
 - 基线 HEAD：`a93c096 Merge pull request #1 from CClishan/codex/p1-palette-remote`
-- 状态：P0 完成，P1 功能完成，P2 5/5；原生删除和 AI 会话结束已补齐；2026-11-24 完成总览、项目页和分类收口；`v0.2.1` Release DMG 已上传并验证，landing 已更新为 v0.2.1；旧 `https://fizzdeck.pages.dev` 保留可用。
+- 状态：P0 完成，P1 功能完成，P2 5/5；原生删除和 AI 会话结束已补齐；2026-11-25 完成页签/底栏收口、项目自动发现、文件夹面板原生 Glass 覆盖层、Git 错误路径测试和真实项目回归；`v0.2.1` Release DMG 已上传并验证，landing 已更新为 v0.2.1；旧 `https://fizzdeck.pages.dev` 保留可用。
 
 ## 新对话开场提示
 
@@ -26,13 +26,13 @@
 
 | 项目 | 当前状态 |
 |---|---|
-| 原生 app | P0 完成，P1 功能完成，P2 5/5；`swift build`、`swift test` 通过（32 例）；AI 会话列表/过滤/恢复/结束 CLI 可用 |
+| 原生 app | P0 完成，P1 功能完成，P2 5/5；`swift build`、`swift test` 通过（47 例）；AI 会话列表/过滤/恢复/结束 CLI 可用 |
 | 原生分发 | `v0.2.1` arm64 DMG 已发布，ad-hoc 签名；未做 Developer ID、公证和自动更新 |
 | Web UI | 保留在 `src/` + `server.mjs`，不是当前主入口 |
 | Landing | `https://koroo.top/fizzdeck` 已上线并显示 `v0.2.1` macOS 下载；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
 | 仓库 | PR #1 已合并到 `main`；v0.2.1 Release 和 landing 下载入口已发布 |
-| 验证基线 | Swift test 32 例、ESLint、TypeScript、34 页生产构建、Vercel 生产部署、线上 CTA 与 DMG SHA-256 一致 |
-| 任务进度 | P0 5/5；P1 5/5（功能完成，2 项真实环境直测待补）；P2 5/5；发布与交付 1/3；质量与性能 0/4 |
+| 验证基线 | Swift test 47 例、ESLint、TypeScript、34 页生产构建、Vercel 生产部署、线上 CTA 与 DMG SHA-256 一致 |
+| 任务进度 | P0 5/5；P1 5/5（功能完成，2 项真实环境直测待补）；P2 5/5；发布与交付 1/3；质量与性能 1/4 |
 
 ## 项目是什么
 
@@ -288,7 +288,7 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - 覆盖待处理队列的五类优先级、最近项目 tie-break、1 GB 清理阈值和静默到期判断。
 - 覆盖 Git tracking 的 behind/ahead 解析、缺失 upstream、格式异常和 SSH remote 转换。
 - 覆盖编辑器嵌套 Xcode 目标：嵌套 workspace、顶层优先、嵌套 Package 回退、生成目录跳过。
-- 覆盖会话排序分组、cwd 规范化、恢复命令和跨分块反向扫描；后续补充分组与删除测试，当前共 32 例。
+- 覆盖会话排序分组、cwd 规范化、恢复命令和跨分块反向扫描；后续补充分组、删除、Git 错误路径、通知路由和项目发现测试，当前共 47 例。
 
 相关文件：
 
@@ -330,6 +330,44 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - `macos/Sources/FizzDeck/Views/ProjectDetailView.swift`
 - `macos/Sources/FizzDeck/Stores/RepositoryStore.swift`
 - `macos/Tests/FizzDeckTests/ProjectRemovalTests.swift`
+
+## 2026-11-25 页签选中态与操作栏分流
+
+- 搜索保留独立 `ToolbarItem`，六个页签合并到另一个 `ToolbarItem`；系统渲染为两个胶囊。六个页签分开提交时，选中态会停在第一个页签，内容切换后视觉不跟随。
+- 选中页签使用 `FizzTheme.accent` 实心底、白字；辅助功能树显示 `(selected)`。
+- 底部操作栏只在「概览 / 测试」出现：概览显示启动服务、Terminal、复制命令、启动日志；测试显示运行测试、测试日志、复制测试；其他页签不显示。
+- 底栏保留整条玻璃底衬与阴影；状态为上方纯文字，操作按钮保持独立玻璃胶囊。
+- 截图中底部大块遮挡来自内容区预留的 `96pt` 底部 padding，不是玻璃胶囊。移除后内容延伸到操作栏后方，操作栏只占自身内容高度。
+- 测试页中间区移除「跑测试 / 日志」按钮，只保留状态和输出；启动与测试消息分开保存，避免串到另一页签。
+- 修复 `git status --porcelain` 首字符被吞：原 `Shell.output` 会去掉行首空格，导致 ` HANDOFF.md` 显示成 `ANDOFF.md`；状态读取改用保留前缀空格的专用路径，并加回归测试。
+- Git 错误路径新增 7 个本地集成/单元测试：无 upstream、HTTP 401、SSH 公钥拒绝、断开本地端口、脏工作区拉取拦截和超时终止。
+- 本地通知写入 `projectPath` / `tab`，点击通知会回到对应项目页签；主窗口关闭时会先恢复主窗口。新增 2 个通知路由解析测试。
+- 验证：`swift build`、`swift test`（47 例）、`./macos/script/build_and_run.sh --verify` 通过；CUA 实测概览/测试页底栏动作、玻璃底衬、阴影和内容延伸。
+- 真实项目只读回归：`repo-dashboard` 的 `HANDOFF.md` 首字符正确；`video-tem` 无 upstream、16 个改动；`shipany-template-two` 268 个改动、概览与测试底栏分流正确。未执行真实同步。
+
+## 2026-11-25 添加项目自动发现
+
+- 工具栏“文件夹”打开文件夹面板：左侧列出已加入文件夹，点击可直接打开；底部提供“添加文件夹…”和层级控制，右侧显示新父目录的扫描结果。
+- “添加文件夹…”从面板内打开系统目录选择器；文件夹扫描层级为 1–10，默认 3，可恢复默认，扫描结果按层级即时刷新。
+- 按文件特征发现项目：`.git`、`package.json`、`pnpm-workspace.yaml`、Gradle/Maven、Cargo、Go、Python、Ruby、PHP、Elixir、Swift Package、`*.xcodeproj`、`*.xcworkspace`。
+- `CLAUDE.md` / `Claude.md` 大小写不敏感；同时识别 `AGENTS.md`、`SKILL.md`。
+- 跳过隐藏目录、`node_modules`、构建产物、缓存、虚拟环境和其他常见生成目录；不跟随符号链接。
+- 候选行使用文件夹图标，显示名称、`~` 路径、识别特征和 Git 标记；已在看板的项目显示“已加入”且不可重复勾选。
+- 默认只勾选顶层项目；勾选子项目会自动取消父目录，勾选父目录会取消其子项目；“全选”也只保留顶层，避免重复添加重叠目录。
+- 无候选时可只添加当前文件夹；最多显示 200 个候选，添加后统一写入 roots 并重新扫描一次。
+- 面板不再使用系统 sheet：macOS 的 sheet 窗口背板会压住 `.glassEffect`，`NSGlassEffectView` 也无法跨窗口采样，最终改为主窗口内原生 Glass 覆盖层。
+- 面板使用 14% 深色遮罩、28pt 连续圆角、native Liquid Glass 与 22% 白色 tint；点击面板外、关闭按钮或取消可退出，已加入文件夹点击后会打开项目并关闭面板。
+- 验证：`ProjectDiscoveryTests` 5 例通过，覆盖嵌套发现、跳过生成/隐藏目录、层级限制、默认选择和父子互斥；全量 47 例通过。
+- CUA 用临时父目录验证：左侧已加入列表正确显示、从面板内选择文件夹、发现 4 个候选、`node_modules` 被跳过、父子互斥、实际添加一个子项目后看板从 23 增至 24、左侧计数更新为 24、再次扫描显示“已加入”。测试后已恢复原 `~/.repodeck/roots.json` 并重启应用，当前仍为 23 个项目。
+- 玻璃终验：激活窗口截图中可透出后方项目卡片与模糊文字，侧栏、扫描结果、底部操作均保持可读；`swift test` 47 例通过，`./macos/script/build_and_run.sh --verify` 通过。Escape 快捷关闭已挂到 `onExitCommand`，CUA 无法稳定前台聚焦，未单独实测。
+
+相关文件：
+
+- `macos/Sources/FizzDeck/Services/ProjectDiscovery.swift`
+- `macos/Sources/FizzDeck/Views/AddProjectsSheet.swift`
+- `macos/Sources/FizzDeck/Stores/RepositoryStore.swift`
+- `macos/Sources/FizzDeck/Views/ContentView.swift`
+- `macos/Tests/FizzDeckTests/ProjectDiscoveryTests.swift`
 
 ## 验证记录
 
@@ -532,15 +570,15 @@ CUA 实测：
 
 - [x] 命令面板增强：最近项目、最近动作、模糊匹配、置顶命令，以及“打开远程仓库 / 复制远端地址”。相关文件：`CommandPaletteView.swift`、`RepositoryStore.swift`、`GitService.swift`。验收：`⌘K` 可搜项目、分支、远端 URL 和动作；无远端时明确不可用；上下键、回车、Esc 不回归。
 - [x] 远程仓库动作：从项目读取 `origin`，支持浏览器打开和复制 URL，不发起网络写操作。相关文件：`GitService.swift`、`ProjectDetailView.swift`。验收：有/无 origin、SSH/HTTPS 两种 URL 都正确。
-- [ ] Git 真实错误路径（本地可模拟部分已完成）：已补 timeout 和常见错误文案；待真实 GitHub 凭据失效、SSH 密钥失效和真实网络中断直测。相关文件：`GitSyncService.swift`、`GitTabView.swift`、`AttentionQueueView.swift`。验收：命令不挂起，`GIT_TERMINAL_PROMPT=0` 生效，错误就地回显，工作区不变。
-- [ ] 菜单栏与通知直测：`MenuBarExtra` 数字、60 秒静默到期、通知点击回到项目。相关文件：`MenuBarView.swift`、`LocalNotifications.swift`、`FizzDeckApp.swift`。验收：系统菜单栏可读、到期刷新、banner/click 路径有记录。
+- [ ] Git 真实错误路径（本地可模拟部分已完成）：已用本地 HTTP 401、SSH 公钥拒绝和关闭端口覆盖凭据/网络失败，7 个测试通过；真实 GitHub 凭据失效尚未在用户仓库触发。相关文件：`GitSyncService.swift`、`GitTabView.swift`、`AttentionQueueView.swift`。验收：命令不挂起，`GIT_TERMINAL_PROMPT=0` 生效，错误就地回显，工作区不变。
+- [ ] 菜单栏与通知直测：全屏截图确认菜单栏显示待处理数字 `23`，与首页队列一致；通知点击回项目的路由代码和解析测试已完成，真实 banner 点击与 60 秒静默到期尚未直测。相关文件：`MenuBarView.swift`、`LocalNotifications.swift`、`FizzDeckApp.swift`、`AppRouting.swift`。验收：系统菜单栏可读、到期刷新、banner/click 路径有记录。
 
 ### P2（产品能力）
 
 - [x] 原生删除项目：对齐网页版的备份、移入废纸篓、浅路径保护、目录名确认和测试运行时拦截。相关文件：`RepositoryStore.swift`、`ProjectDetailView.swift`、`ProjectRemovalService.swift`。验收：不自动永久删除；失败不改变目录；备份可恢复；6 例单测和确认框已验收。
 - [x] 批量操作：批量重扫、批量复制清理命令、按组筛选。相关文件：`HomeDashboardView.swift`、`RepositoryStore.swift`、`RepositoryScanner.swift`。验收：选择态清晰、部分失败可回显、无误触破坏性操作；目录存在性预检和数量回显已实现。
 - [x] 编辑器覆盖：JetBrains 系列、Antigravity、嵌套 Xcode 工程。相关文件：`SystemActions.swift`、`CommandPaletteView.swift`、`Components.swift`。验收：安装/未安装、工程/普通目录分别显示正确；本机已验证 Xcode 与 Antigravity，JetBrains 映射待安装后直测。
-- [x] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行，32 例通过。
+- [x] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行，47 例通过。
 - [x] AI 会话管理：会话列表、按工具过滤、恢复命令和精确 CLI 进程结束已完成；Desktop app-server 永不终止。相关文件：`SessionIndex.swift`、`SessionProcessService.swift`、`SessionsTabView.swift`。验收：Codex/Claude 两类会话、无会话空态、复制命令正确；结束只在明确匹配时出现。
 
 ### 质量与性能
@@ -548,7 +586,7 @@ CUA 实测：
 - [ ] 长列表 60fps：项目多、日志长、任务运行时用 Instruments 量；只动必要属性，避免重排、闪烁和溢出。
 - [ ] 可访问性：VoiceOver 顺序、减少动态效果、键盘全路径；补充 `accessibilityReduceMotion` 覆盖。
 - [ ] 大目录扫描：首次扫描的 `du` 开销、缓存命中、取消/重扫；给出耗时基线。
-- [ ] 真实项目回归：至少用一个脏工作区、一个无 upstream、一个多服务项目跑完整流程。
+- [x] 真实项目回归：用 `repo-dashboard` 脏工作区、`video-tem` 无 upstream、`shipany-template-two` 268 项改动核对了改动列表、概览与测试底栏；只读，没有同步或删除。
 
 ### 建议接手顺序
 

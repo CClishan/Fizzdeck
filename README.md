@@ -4,7 +4,7 @@
 
 Live landing page: [koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
-Download: [FizzDeck 0.2.1 for macOS](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+, ad-hoc signed (not notarized).
+Download: [FizzDeck 0.2.2 for macOS](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+, ad-hoc signed (not notarized).
 
 No account, no telemetry, no hosted backend. FizzDeck reads only local project metadata and keeps its state on your Mac.
 
@@ -95,7 +95,7 @@ On a fresh install, use **Scan folder** in the sidebar to discover and add proje
 
 | Area | Capability |
 |---|---|
-| Project discovery | Scans managed folders for repositories and project markers such as `.git`, `package.json`, `pom.xml`, and `go.mod`. Skips heavy generated folders such as `node_modules`, `Library`, `dist`, and `build`. |
+| Project discovery | A native folder manager lists existing folders, scans a selected parent directory for nested projects, and recognizes `.git`, `package.json`, `CLAUDE.md`, `AGENTS.md`, Xcode, Gradle, Cargo, Go, Python, and other project markers. Skips heavy generated folders and prevents duplicate or parent/child additions. |
 | Dashboard | Native overview with starred, changed, and running filters; a half-width attention card beside four summary cards; collapsible project groups; dashboard and list layouts. |
 | Project grouping | Default groups are inferred from path keywords. Move any project to an existing or new group from its context menu, or restore automatic classification at any time. |
 | Batch actions | Filter by project group, then select projects across card or list views to rescan only those folders or copy one combined set of cleanup commands. Batch actions never delete files. |

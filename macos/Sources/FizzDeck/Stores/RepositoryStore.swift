@@ -35,6 +35,7 @@ final class RepositoryStore {
     var scanDuration: TimeInterval = 0
     var requestedTab: ProjectTab?
     var isCommandPalettePresented = false
+    var isFolderManagerPresented = false
     private(set) var remotes: [String: GitRemote] = [:]
     private(set) var missingRemotes: Set<String> = []
     private(set) var recentProjectPaths: [String] = []
@@ -134,22 +135,47 @@ final class RepositoryStore {
     }
 
     func addRoot() async {
+        isCommandPalettePresented = false
+        isFolderManagerPresented = true
+    }
+
+    func chooseFolderForScan() -> URL? {
         let panel = NSOpenPanel()
-        panel.title = "添加项目目录"
-        panel.prompt = "添加"
+        panel.title = "添加项目文件夹"
+        panel.message = "选择父文件夹后，自动查找其中的项目。"
+        panel.prompt = "扫描"
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        return URL(fileURLWithPath: PathTools.normalize(url.path), isDirectory: true)
+    }
 
+    @discardableResult
+    func addProjects(paths: [String]) async -> Int {
         var roots = RootStore.load()
-        let path = PathTools.normalize(url.path)
-        if !roots.contains(path) {
+        var existing = Set(roots)
+        var added = 0
+
+        for rawPath in paths {
+            let path = PathTools.normalize(rawPath)
+            guard FileTools.isDirectory(URL(fileURLWithPath: path)),
+                  existing.insert(path).inserted
+            else { continue }
             roots.append(path)
-            try? RootStore.save(roots)
+            added += 1
         }
-        await scan()
+
+        if added > 0 {
+            try? RootStore.save(roots)
+            await scan()
+        }
+        return added
+    }
+
+    func dismissFolderManager() {
+        isFolderManagerPresented = false
     }
 
     func removeFromBoard(_ project: RepoProject) async {
@@ -308,6 +334,9 @@ final class RepositoryStore {
     }
 
     func toggleCommandPalette() {
+        if !isCommandPalettePresented {
+            isFolderManagerPresented = false
+        }
         isCommandPalettePresented.toggle()
     }
 

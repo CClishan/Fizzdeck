@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct TestsTabView: View {
-    @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
     let project: RepoProject
 
@@ -12,9 +11,11 @@ struct TestsTabView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Panel(title: "提交测试", symbol: "checkmark.shield") {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack(alignment: .center, spacing: 12) {
+                Panel(
+                    title: "提交测试",
+                    symbol: "checkmark.shield",
+                    content: {
+                        VStack(alignment: .leading, spacing: 14) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(project.test?.command ?? "未识别测试命令")
                                     .font(.system(size: 12, design: .monospaced))
@@ -25,35 +26,35 @@ struct TestsTabView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            Spacer(minLength: 12)
-                            statusBadge
-                            actionsView
-                        }
 
-                        if let output = runState?.output, !output.isEmpty {
-                            ScrollView {
-                                Text(output)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(12)
+                            if let output = runState?.output, !output.isEmpty {
+                                ScrollView {
+                                    Text(output)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .textSelection(.enabled)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(12)
+                                }
+                                .frame(minHeight: 220, maxHeight: 460)
+                                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .strokeBorder(.separator.opacity(0.4), lineWidth: 1)
+                                }
+                            } else {
+                                ContentUnavailableView {
+                                    Label("还没有测试输出", systemImage: "terminal")
+                                } description: {
+                                    Text(project.test == nil ? "这个项目没有 test / check / typecheck 脚本。" : "底栏「运行测试」会在项目目录执行命令，并实时回显输出。")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 180)
                             }
-                            .frame(minHeight: 220, maxHeight: 460)
-                            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .strokeBorder(.separator.opacity(0.4), lineWidth: 1)
-                            }
-                        } else {
-                            ContentUnavailableView {
-                                Label("还没有测试输出", systemImage: "terminal")
-                            } description: {
-                                Text(project.test == nil ? "这个项目没有 test / check / typecheck 脚本。" : "点「跑测试」会在项目目录执行命令，并实时回显输出。")
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 180)
                         }
+                    },
+                    accessory: {
+                        statusBadge
                     }
-                }
+                )
             }
             .padding(24)
         }
@@ -68,38 +69,6 @@ struct TestsTabView: View {
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(statusColor(run.status).opacity(0.12), in: Capsule())
-        }
-    }
-
-    @ViewBuilder
-    private var actionsView: some View {
-        HStack(spacing: 8) {
-            if runState?.status == .running {
-                Button {
-                    actions.stopTests(project)
-                } label: {
-                    Label("停止", systemImage: "stop.fill")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            } else {
-                Button {
-                    actions.runTests(project, store: store)
-                } label: {
-                    Label(runState == nil ? "跑测试" : "重跑", systemImage: "play.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .disabled(project.test == nil || runState?.status == .running)
-            }
-
-            Button {
-                actions.openLog(for: project, test: true)
-            } label: {
-                Label("日志", systemImage: "doc.text.magnifyingglass")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
         }
     }
 

@@ -77,7 +77,7 @@ enum GitService {
             ["log", "-1", "--format=%H%n%ad%n%s%n%an", "--date=iso-strict"],
             cwd: directory
         )
-        async let statusTask = Shell.output("git", ["status", "--porcelain", "-uall"], cwd: directory, timeout: 30)
+        async let statusTask = statusOutput(directory)
         async let trackingTask = Shell.output(
             "git",
             ["rev-list", "--count", "--left-right", "@{upstream}...HEAD"],
@@ -122,7 +122,7 @@ enum GitService {
             ["branch", "--format=%(refname:short)|%(committerdate:iso-strict)|%(upstream:short)", "--sort=-committerdate"],
             cwd: directory
         )
-        async let statusTask = Shell.output("git", ["status", "--porcelain=v1", "-uall"], cwd: directory, timeout: 30)
+        async let statusTask = statusOutput(directory)
         async let remoteTask = Shell.output("git", ["remote", "get-url", "origin"], cwd: directory)
         async let aheadTask = Shell.output("git", ["rev-list", "--count", "--left-right", "@{u}...HEAD"], cwd: directory)
         async let stashTask = Shell.output("git", ["stash", "list"], cwd: directory)
@@ -179,6 +179,18 @@ enum GitService {
                     author: fields[3]
                 )
             }
+    }
+
+    private static func statusOutput(_ directory: URL) async -> String? {
+        guard let result = await Shell.run(
+            "git",
+            ["status", "--porcelain=v1", "-uall"],
+            cwd: directory,
+            timeout: 30
+        ), result.succeeded else {
+            return nil
+        }
+        return result.text.trimmingCharacters(in: .newlines)
     }
 
     private static func parseLastCommit(_ output: String?) -> Commit? {

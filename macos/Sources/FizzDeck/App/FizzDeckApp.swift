@@ -74,4 +74,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     ) {
         completionHandler([.banner, .sound])
     }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        Task { @MainActor in
+            if let request = AppRouting.projectRequest(from: userInfo) {
+                AppRouting.openProject(path: request.path, tab: request.tab)
+            } else {
+                AppRouting.presentMainWindow()
+            }
+        }
+        completionHandler()
+    }
 }

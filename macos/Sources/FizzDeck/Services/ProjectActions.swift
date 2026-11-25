@@ -32,6 +32,7 @@ final class ProjectActions {
     var busy: [String: ProjectAction] = [:]
     var testRuns: [String: TestRunState] = [:]
     var messages: [String: String] = [:]
+    var testMessages: [String: String] = [:]
 
     @ObservationIgnored private var devProcesses: [String: Process] = [:]
     @ObservationIgnored private var devLogs: [String: FileHandle] = [:]
@@ -45,6 +46,10 @@ final class ProjectActions {
 
     func message(for path: String) -> String? {
         messages[path]
+    }
+
+    func testMessage(for path: String) -> String? {
+        testMessages[path]
     }
 
     func testRun(for path: String) -> TestRunState? {
@@ -78,6 +83,7 @@ final class ProjectActions {
             return
         }
 
+        messages[project.path] = nil
         busy[project.path] = .launching
         defer { busy[project.path] = nil }
 
@@ -127,7 +133,9 @@ final class ProjectActions {
                 Task {
                     await LocalNotifications.send(
                         title: "开发服务已就绪",
-                        body: "\(project.displayName) · localhost:\(run.port)"
+                        body: "\(project.displayName) · localhost:\(run.port)",
+                        projectPath: project.path,
+                        tab: .overview
                     )
                 }
                 return
@@ -156,6 +164,7 @@ final class ProjectActions {
             return
         }
 
+        messages[project.path] = nil
         busy[project.path] = .stopping
         defer { busy[project.path] = nil }
 
@@ -187,20 +196,21 @@ final class ProjectActions {
 
     func runTests(_ project: RepoProject, store: RepositoryStore) {
         guard isManaged(project, in: store) else {
-            messages[project.path] = "不在受管项目内，拒绝执行测试"
+            testMessages[project.path] = "不在受管项目内，拒绝执行测试"
             return
         }
         guard let test = project.test else {
-            messages[project.path] = "没有识别到测试命令"
+            testMessages[project.path] = "没有识别到测试命令"
             return
         }
         guard testRuns[project.path]?.status != .running else { return }
         cancelledTestPaths.remove(project.path)
+        testMessages[project.path] = nil
 
         let logURL = URL(fileURLWithPath: logPath(for: project, prefix: "test-"))
         let header = "\n--- \(Date().ISO8601Format()) \(test.command)\n"
         guard let log = openLog(logURL, header: header) else {
-            messages[project.path] = "无法写入测试日志"
+            testMessages[project.path] = "无法写入测试日志"
             return
         }
 
@@ -265,8 +275,17 @@ final class ProjectActions {
 
     func openLog(for project: RepoProject, test: Bool = false) {
         let path = logPath(for: project, prefix: test ? "test-" : "")
+        if test {
+            testMessages[project.path] = nil
+        } else {
+            messages[project.path] = nil
+        }
         guard FileTools.exists(path) else {
-            messages[project.path] = "还没有日志文件"
+            if test {
+                testMessages[project.path] = "还没有测试日志"
+            } else {
+                messages[project.path] = "还没有启动日志"
+            }
             return
         }
         SystemActions.open(path)
@@ -373,7 +392,9 @@ final class ProjectActions {
             Task {
                 await LocalNotifications.send(
                     title: "测试失败",
-                    body: "\(project.displayName) · \(state.command)"
+                    body: "\(project.displayName) · \(state.command)",
+                    projectPath: project.path,
+                    tab: .tests
                 )
             }
         }

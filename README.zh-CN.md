@@ -4,7 +4,7 @@
 
 线上 landing：[koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
-下载：[FizzDeck 0.2.1 macOS 版](https://github.com/CClishan/Fizzdeck/releases/latest)，Apple Silicon、macOS 26+，ad-hoc 签名，未公证。
+下载：[FizzDeck 0.2.2 macOS 版](https://github.com/CClishan/Fizzdeck/releases/latest)，Apple Silicon、macOS 26+，ad-hoc 签名，未公证。
 
 不需要账号，不上传遥测，也没有托管后端。FizzDeck 只读取本机项目元数据，状态保存在本机。
 
@@ -95,7 +95,7 @@ npm run build
 
 | 模块 | 能力 |
 |---|---|
-| 项目发现 | 扫描受管目录中的 `.git`、`package.json`、`pom.xml`、`go.mod` 等工程标记，跳过 `node_modules`、`Library`、`dist`、`build` 等生成目录。 |
+| 项目发现 | 原生文件夹面板列出已加入目录，扫描所选父目录下的嵌套项目，识别 `.git`、`package.json`、`CLAUDE.md`、`AGENTS.md`、Xcode、Gradle、Cargo、Go、Python 等工程标记；跳过生成目录，并避免重复或父子项目重叠添加。 |
 | 总览首页 | 原生总览支持收藏、有改动、正在运行、可折叠项目组，以及卡片、列表两种布局；待处理卡片半宽显示，四项汇总卡片并排在右侧。 |
 | 项目分组 | 默认按路径关键词自动分类；右键项目可移动到已有分组或新建分组，也可随时恢复自动分类。 |
 | 批量操作 | 可按项目分组筛选，在卡片或列表中多选项目，仅重扫所选目录或一次复制合并后的清理命令；批量操作不会删除文件。 |

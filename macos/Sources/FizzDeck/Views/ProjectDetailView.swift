@@ -40,11 +40,10 @@ struct ProjectDetailView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.top, 8)
-            .padding(.bottom, showsActionDock ? 96 : 0)
             .scrollEdgeEffectHidden(true, for: .bottom)
             .overlay(alignment: .bottom) {
                 if showsActionDock {
-                    ProjectActionDock(project: project)
+                    ProjectActionDock(project: project, tab: tab)
                         .padding(.horizontal, 24)
                         .padding(.bottom, 16)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -75,10 +74,14 @@ struct ProjectDetailView: View {
             applyRequestedTab()
         }
         .toolbar {
-            ForEach(ProjectTab.allCases) { item in
-                ToolbarItem(id: "project-tab-\(item.rawValue)", placement: .principal) {
-                    projectTabButton(item)
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 2) {
+                    ForEach(ProjectTab.allCases) { item in
+                        projectTabButton(item)
+                    }
                 }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("项目页签")
             }
         }
     }
@@ -88,22 +91,39 @@ struct ProjectDetailView: View {
     }
 
     private var showsActionDock: Bool {
-        project.run != nil || project.test != nil
+        switch tab {
+        case .overview:
+            project.run != nil
+        case .tests:
+            project.test != nil
+        default:
+            false
+        }
     }
 
     private func projectTabButton(_ item: ProjectTab) -> some View {
-        Button {
+        let selected = tab == item
+
+        return Button {
             withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
                 tab = item
             }
         } label: {
             Text(item.title)
-                .font(.system(size: 11.5, weight: tab == item ? .semibold : .medium))
-                .foregroundStyle(tab == item ? FizzTheme.accent : Color.secondary)
+                .font(.system(size: 11.5, weight: selected ? .semibold : .medium))
+                .foregroundStyle(selected ? Color.white : Color.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    selected ? FizzTheme.accent : Color.clear,
+                    in: Capsule()
+                )
+                .contentShape(Capsule())
         }
+        .buttonStyle(.plain)
         .help(item.title)
-        .accessibilityAddTraits(tab == item ? .isSelected : [])
-        .accessibilityRemoveTraits(tab == item ? [] : .isSelected)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityRemoveTraits(selected ? [] : .isSelected)
     }
 
     private func applyRequestedTab() {
