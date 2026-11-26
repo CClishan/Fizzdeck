@@ -501,39 +501,7 @@ enum AppUpdateService {
         )
         let script = updates.appendingPathComponent("install-\(UUID().uuidString).sh")
         let log = updates.appendingPathComponent("install.log")
-        let scriptBody = #"""
-#!/bin/sh
-set -u
-
-pid="$1"
-staged="$2"
-target="$3"
-backup="$4"
-log="$5"
-
-exec >>"$log" 2>&1
-printf '\n[%s] waiting for pid %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$pid"
-
-while kill -0 "$pid" 2>/dev/null; do
-  /bin/sleep 0.2
-done
-
-if [ -e "$target" ]; then
-  /bin/mv "$target" "$backup" || exit 10
-fi
-
-if /bin/mv "$staged" "$target"; then
-  /bin/rm -rf "$backup"
-  /usr/bin/open -n "$target"
-  exit 0
-fi
-
-if [ -e "$backup" ] && [ ! -e "$target" ]; then
-  /bin/mv "$backup" "$target"
-fi
-/usr/bin/open -n "$target" 2>/dev/null || true
-exit 11
-"""#
+        let scriptBody = installScriptBody()
 
         do {
             try scriptBody.write(to: script, atomically: true, encoding: .utf8)
@@ -559,6 +527,46 @@ exit 11
             try? fileManager.removeItem(at: staging)
             throw AppUpdateError.installerLaunchFailed(error.localizedDescription)
         }
+    }
+
+    static func installScriptBody() -> String {
+        #"""
+#!/bin/sh
+set -u
+
+pid="$1"
+staged="$2"
+target="$3"
+backup="$4"
+log="$5"
+
+exec >>"$log" 2>&1
+printf '\n[%s] waiting for pid %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$pid"
+
+while kill -0 "$pid" 2>/dev/null; do
+  /bin/sleep 0.2
+done
+
+staging_dir="$(/usr/bin/dirname "$staged")"
+
+if [ -e "$target" ]; then
+  /bin/mv "$target" "$backup" || exit 10
+fi
+
+if /bin/mv "$staged" "$target"; then
+  /bin/rm -rf "$backup"
+  /bin/rmdir "$staging_dir" 2>/dev/null || true
+  /usr/bin/open -n "$target"
+  exit 0
+fi
+
+if [ -e "$backup" ] && [ ! -e "$target" ]; then
+  /bin/mv "$backup" "$target"
+fi
+/bin/rm -rf "$staging_dir" 2>/dev/null || true
+/usr/bin/open -n "$target" 2>/dev/null || true
+exit 11
+"""#
     }
 
     private struct GitHubRelease: Decodable {

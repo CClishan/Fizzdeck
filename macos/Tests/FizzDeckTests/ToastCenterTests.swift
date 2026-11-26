@@ -117,4 +117,15 @@ final class ToastCenterTests: XCTestCase {
             TestOutcomeSummary(passed: 1, failed: 0)
         )
     }
+
+    func testStageHeightScalesWithVisibleToastCount() {
+        XCTAssertEqual(ToastOverlayView.stageHeight(visibleCount: 0, expanded: false), 0)
+        XCTAssertEqual(ToastOverlayView.stageHeight(visibleCount: 0, expanded: true), 0)
+        XCTAssertEqual(ToastOverlayView.stageHeight(visibleCount: 1, expanded: false), 64)
+        XCTAssertEqual(ToastOverlayView.stageHeight(visibleCount: 1, expanded: true), 64)
+        XCTAssertEqual(ToastOverlayView.stageHeight(visibleCount: 2, expanded: false), 74)
+        XCTAssertEqual(ToastOverlayView.stageHeight(visibleCount: 2, expanded: true), 138)
+        XCTAssertEqual(ToastOverlayView.stageHeight(visibleCount: 3, expanded: false), 84)
+        XCTAssertEqual(ToastOverlayView.stageHeight(visibleCount: 3, expanded: true), 212)
+    }
 }

@@ -153,6 +153,13 @@ final class AppUpdateTests: XCTestCase {
         XCTAssertNotNil(development.reason)
     }
 
+    func testInstallScriptCleansEmptyStagingDirectoryAfterMove() {
+        let script = AppUpdateService.installScriptBody()
+        XCTAssertTrue(script.contains(#"staging_dir="$(/usr/bin/dirname "$staged")""#))
+        XCTAssertTrue(script.contains(#"/bin/rmdir "$staging_dir""#))
+        XCTAssertTrue(script.contains(#"/bin/rm -rf "$staging_dir""#))
+    }
+
     private func fixtureData() -> Data {
         Data(
             """

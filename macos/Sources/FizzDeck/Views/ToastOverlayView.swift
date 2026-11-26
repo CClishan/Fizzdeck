@@ -20,10 +20,27 @@ struct ToastOverlayView: View {
         stageHovered || !hoveredCards.isEmpty
     }
 
+    static func stageHeight(
+        visibleCount: Int,
+        expanded: Bool,
+        cardHeight: CGFloat = 64,
+        expandedGap: CGFloat = 10
+    ) -> CGFloat {
+        guard visibleCount > 0 else { return 0 }
+        let count = CGFloat(visibleCount)
+        if expanded {
+            return count * cardHeight + max(0, count - 1) * expandedGap
+        }
+        return cardHeight + max(0, count - 1) * 10
+    }
+
     private var stageHeight: CGFloat {
-        expanded
-            ? cardHeight * 3 + expandedGap * 2
-            : cardHeight
+        Self.stageHeight(
+            visibleCount: visibleMessages.count,
+            expanded: expanded,
+            cardHeight: cardHeight,
+            expandedGap: expandedGap
+        )
     }
 
     var body: some View {
