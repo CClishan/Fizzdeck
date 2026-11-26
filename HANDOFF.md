@@ -4,7 +4,7 @@
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
 - 当前分支：`feat/macos-ui2-and-sessions`（从 `main` 的 `24ff3f4` 切出；本地分组提交已完成，待推送/提 PR）
 - 分支起点：`24ff3f4 Record v0.2.3 release and landing`（`main` 仍停在此提交）
-- 状态：`v0.2.3` 已发布；本轮新增首次启动发现、快扫/补全拆分、缓存、一键回到现场、Grok 会话与 token/费用估算、终端适配层与继续偏好、Gemini CLI / IDE 工作区会话适配、轻量后台文件监听、阶段 4 性能基线/可访问性收口，UI 2.0 的浅/暗双主题、双态悬浮侧栏、紧凑项目 Header、总览微柱 KPI / Services / 内嵌 Logs 四步，以及 Round 2 · Batch C1/C2/C3 的设计 Token、原生 Liquid Glass 控件层与玻璃可读性收口；代码已通过 140 例单测和干净构建 0 warning（含 `-strict-concurrency=complete`），各阶段已完成隔离 GUI 验收；已在特性分支本地提交，尚未推送或发版。
+- 状态：`v0.2.3` 已发布；本轮新增首次启动发现、快扫/补全拆分、缓存、一键回到现场、Grok 会话与 token/费用估算、终端适配层与继续偏好、Gemini CLI / IDE 工作区会话适配、轻量后台文件监听、阶段 4 性能基线/可访问性收口，UI 2.0 的浅/暗双主题、双态悬浮侧栏、紧凑项目 Header、总览微柱 KPI / Services / 内嵌 Logs 四步，以及 Round 2 · Batch C1-C4 的设计 Token、原生 Liquid Glass 控件层、双主题 SVG Logo 与浅色纯色背景收口；代码已通过 142 例单测和干净构建 0 warning（含 `-strict-concurrency=complete`），各阶段已完成隔离 GUI 验收；已在特性分支本地提交，尚未推送或发版。
 
 ## 新对话开场提示
 
@@ -13,7 +13,7 @@
 ```text
 继续 FizzDeck 原生 macOS 项目，仓库在 /Users/a003/dsh-workspace/repo-dashboard。
 
-先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git log / git status。当前改动已在本地分支 `feat/macos-ui2-and-sessions` 分组提交，尚未推送或提 PR；首次启动、缓存、Grok/token、运行中检测和结束会话已在隔离环境验收，UI 2.0 四步与 Round 2 · Batch C1/C2/C3 均已完成浅/暗截图与真实测试验收。下一步是 review 后 push / 开 PR，或补真实终端启动、菜单栏/通知直测。删除项目只能用临时目录验证，不要对用户真实项目点击确认。
+先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git log / git status。当前改动已在本地分支 `feat/macos-ui2-and-sessions` 分组提交，尚未推送或提 PR；首次启动、缓存、Grok/token、运行中检测和结束会话已在隔离环境验收，UI 2.0 四步与 Round 2 · Batch C1/C2/C3/C4 均已完成浅/暗截图与真实测试验收。下一步是 review 后 push / 开 PR，或补真实终端启动、菜单栏/通知直测。删除项目只能用临时目录验证，不要对用户真实项目点击确认。
 
 不要在没有明确确认时再发版、签名、公证或部署。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
 
@@ -26,15 +26,25 @@
 
 | 项目 | 当前状态 |
 |---|---|
-| 原生 app | P0 完成，P1 功能完成，P2 5/5；`swift build`、`swift test` 通过（140 例，0 warning）；AI 会话列表/过滤/恢复/结束 CLI 可用，新增 Grok、Gemini CLI、IDE 工作区摘要、token/费用估算、多终端适配、后台增量监听、浅/暗双主题、双态悬浮侧栏与品牌微图标、紧凑项目 Header、微柱 KPI / Services / Logs 工作台、设计 Token、原生 Liquid Glass 控件层与 C1/C2/C3 可读性收口；已在特性分支本地提交 |
+| 原生 app | P0 完成，P1 功能完成，P2 5/5；`swift build`、`swift test` 通过（142 例，0 warning）；AI 会话列表/过滤/恢复/结束 CLI 可用，新增 Grok、Gemini CLI、IDE 工作区摘要、token/费用估算、多终端适配、后台增量监听、浅/暗双主题、双态悬浮侧栏与品牌微图标、紧凑项目 Header、微柱 KPI / Services / Logs 工作台、设计 Token、原生 Liquid Glass 控件层、双主题 SVG Logo 与 C1-C4 可读性收口；已在特性分支本地提交 |
 | 原生分发 | `v0.2.3` arm64 DMG 已发布，ad-hoc 签名；未做 Developer ID、公证和自动更新 |
 | Web UI | 保留在 `src/` + `server.mjs`，不是当前主入口 |
 | Landing | `https://koroo.top/fizzdeck` 已上线并显示 `v0.2.3` macOS 下载；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
 | 仓库 | PR #1 已合并到 `main`；v0.2.3 Release 和 landing 下载入口已发布；本轮改造已在 `feat/macos-ui2-and-sessions` 本地提交，待推送/提 PR |
-| 验证基线 | Swift test 140 例、干净构建 0 warning（含 `-strict-concurrency=complete`）、`git diff --check` 通过；ESLint、TypeScript、35 页生产构建、Vercel 生产部署、线上 CTA 与 DMG SHA-256 为上一版记录 |
-| 任务进度 | P0 5/5；P1 6/6（终端适配已补，真实终端启动未直测）；P2 5/5；P2-A 会话适配、P2-B 后台监听、阶段 4 性能/可访问性、UI-1 双主题、UI-2 双态侧栏、UI-3 紧凑 Header、UI-4 总览工作台、Round 2 · Batch C1/C2/C3 已收口；发布与交付 1/3；质量与性能 3/4（Instruments 长列表实测未做） |
+| 验证基线 | Swift test 142 例、干净构建 0 warning（含 `-strict-concurrency=complete`）、`git diff --check` 通过；ESLint、TypeScript、35 页生产构建、Vercel 生产部署、线上 CTA 与 DMG SHA-256 为上一版记录 |
+| 任务进度 | P0 5/5；P1 6/6（终端适配已补，真实终端启动未直测）；P2 5/5；P2-A 会话适配、P2-B 后台监听、阶段 4 性能/可访问性、UI-1 双主题、UI-2 双态侧栏、UI-3 紧凑 Header、UI-4 总览工作台、Round 2 · Batch C1-C4 已收口；发布与交付 1/3；质量与性能 3/4（Instruments 长列表实测未做） |
 
 ## 已提交改造（特性分支 `feat/macos-ui2-and-sessions`，2026-11-25/26）
+
+### Round 2 · Batch C4：双主题矢量 Logo 与浅色纯色背景（2026-11-26）
+
+- `FizzAsset` 新增 `logo(for:)`：浅色加载 `FizzDeck_logo_light.svg`，暗色加载 `FizzDeck_logo_dark.svg`；`Bundle.main` → `Resources/` → `macos/Resources/` 三路查找，静态缓存，SVG 缺失时回退旧 `FizzDeck_logo.png`。
+- 两份原始 SVG 从 `fizzdeck_{light,dark}.svg` 更名为 `FizzDeck_logo_{light,dark}.svg`，并移除自带的白色/黑色整块 `<rect>` 底板，改为真正透明底；`FizzLogo` 用 `scaledToFit()` 直接渲染，不再加 `logoPlate`、白底或描边，18/32/64pt 均无裁切。
+- `FizzBackground` 浅色只渲染 `FizzTheme.page`（`#F8F8F7`），不再叠加 `warmGlow` / `coolGlow` 的 `RadialGradient`；暗色保持两处 `0.06` 微光。新增静态 `glowOpacity(for:)` 便于断言。
+- `build_and_run.sh` 同时复制浅/暗 SVG 到 `$APP_RESOURCES/`，保留 PNG 兜底。
+- 验证：`swift test --package-path macos` 142/142 通过（新增 SVG 双主题加载与浅色无光晕断言）；`swift build --package-path macos --build-path /tmp/fizzdeck-c4-build -Xswiftc -strict-concurrency=complete` 干净构建 0 warning / 0 error；`git diff --check` 通过。
+- 隔离 GUI 验收：独立 bundle `com.a003.fizzdeck.c4audit` + 临时 `CFFIXED_USER_HOME`，路径 `/tmp/fizzdeck-c4-audit-o28LNa`，截图前缀 `/tmp/fizzdeck-c4-`。浅色首页与详情页背景为均匀纯色，无粉/紫渐变；浅/暗关于页分别为透明黑线/白线 Logo，无底板方块；浅/暗 `AddProjectsSheet` 的 18pt Logo 清晰、无裁切。验收后已退出 audit app、注销 LaunchServices 注册，无残留进程或 5199 监听。
+- 隔离边界：真实 `~/.repodeck` 与 `/Applications/FizzDeck.app` mtime 未变；截图与临时 bundle 未纳入版本控制。C4 只做本地提交，未 push、未提 PR、未发版、未签名/公证/部署。
 
 ### Round 2 · Batch C3：P2 微瑕收口与本地分支提交（2026-11-26）
 
@@ -444,7 +454,7 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - 覆盖待处理队列的五类优先级、最近项目 tie-break、1 GB 清理阈值和静默到期判断。
 - 覆盖 Git tracking 的 behind/ahead 解析、缺失 upstream、格式异常和 SSH remote 转换。
 - 覆盖编辑器嵌套 Xcode 目标：嵌套 workspace、顶层优先、嵌套 Package 回退、生成目录跳过。
-- 覆盖会话排序分组、cwd 规范化、恢复命令和跨分块反向扫描；已补充分组、删除、Git 错误路径、通知路由、项目发现、Grok/Gemini/IDE 会话、进程匹配、工具索引、token 费用、终端脚本、后台监听、50 项目扫描/会话缓存、取消响应、项目品牌徽章映射、7 天 KPI/会话聚合、字节拆分与日志尾部安全读取测试、设计 Token、浅/暗阴影收敛、日志来源决策与端口徽章语义、命令面板高度与小于 1 KB 字节格式，当前共 140 例。
+- 覆盖会话排序分组、cwd 规范化、恢复命令和跨分块反向扫描；已补充分组、删除、Git 错误路径、通知路由、项目发现、Grok/Gemini/IDE 会话、进程匹配、工具索引、token 费用、终端脚本、后台监听、50 项目扫描/会话缓存、取消响应、项目品牌徽章映射、7 天 KPI/会话聚合、字节拆分与日志尾部安全读取测试、设计 Token、浅/暗阴影收敛、日志来源决策与端口徽章语义、命令面板高度、小于 1 KB 字节格式、双主题 SVG 加载与浅色背景光晕，当前共 142 例。
 
 相关文件：
 
@@ -730,7 +740,7 @@ CUA 实测：
 ## 工作区现状（重要）
 
 - 当前发布分支是 `main`；PR #1 已合并，`v0.2.3` tag 已创建并已推送。
-- 本轮 P0-A/P0-B/P1-A/UI-1..4 与 Round 2 · Batch C1/C2/C3 已提交到本地分支 `feat/macos-ui2-and-sessions`；`main` 仍停在 `24ff3f4`，尚未 push 或提 PR。
+- 本轮 P0-A/P0-B/P1-A/UI-1..4 与 Round 2 · Batch C1-C4 已提交到本地分支 `feat/macos-ui2-and-sessions`；`main` 仍停在 `24ff3f4`，尚未 push 或提 PR。
 - `~/.repodeck` 的 `roots.json`、`state.json` 未因打包或 GUI 验收改动。
 - 当前运行中的 app 可能是 `/Applications/FizzDeck.app`，不是本轮源码构建；`macos/dist/FizzDeck.app` 也可能早于本轮改动。
 - 可分发安装包是 `macos/dist/FizzDeck-0.2.3-arm64.dmg`；`macos/dist/FizzDeck.app` 仍只是本机构建产物。
@@ -758,7 +768,7 @@ CUA 实测：
 - [x] 原生删除项目：对齐网页版的备份、移入废纸篓、浅路径保护、目录名确认和测试运行时拦截。相关文件：`RepositoryStore.swift`、`ProjectDetailView.swift`、`ProjectRemovalService.swift`。验收：不自动永久删除；失败不改变目录；备份可恢复；6 例单测和确认框已验收。
 - [x] 批量操作：批量重扫、批量复制清理命令、按组筛选。相关文件：`HomeDashboardView.swift`、`RepositoryStore.swift`、`RepositoryScanner.swift`。验收：选择态清晰、部分失败可回显、无误触破坏性操作；目录存在性预检和数量回显已实现。
 - [x] 编辑器覆盖：JetBrains 系列、Antigravity、嵌套 Xcode 工程。相关文件：`SystemActions.swift`、`CommandPaletteView.swift`、`Components.swift`。验收：安装/未安装、工程/普通目录分别显示正确；本机已验证 Xcode 与 Antigravity，JetBrains 映射待安装后直测。
-- [x] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行，当前 140 例通过。
+- [x] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行，当前 142 例通过。
 - [x] AI 会话管理：会话列表、按工具过滤、恢复命令和精确 CLI 进程结束已完成；Desktop app-server 永不终止。相关文件：`SessionIndex.swift`、`SessionProcessService.swift`、`SessionsTabView.swift`。验收：Codex/Claude/Grok 会话、无会话空态、复制命令正确；结束只在明确匹配时出现。
 
 ### 质量与性能

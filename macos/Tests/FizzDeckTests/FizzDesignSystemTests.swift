@@ -52,4 +52,16 @@ final class FizzDesignSystemTests: XCTestCase {
         XCTAssertEqual(PortState.stopped.badgeLabel, "端口未启动")
         XCTAssertEqual(PortState.noPreview.badgeLabel, "无预览端口")
     }
+
+    func testLogoSVGLoadsForEachAppearance() {
+        XCTAssertEqual(FizzAsset.logoResourceName(for: .light), "FizzDeck_logo_light")
+        XCTAssertEqual(FizzAsset.logoResourceName(for: .dark), "FizzDeck_logo_dark")
+        XCTAssertNotNil(FizzAsset.logo(for: .light))
+        XCTAssertNotNil(FizzAsset.logo(for: .dark))
+    }
+
+    func testLightBackgroundDisablesGlow() {
+        XCTAssertNil(FizzBackground.glowOpacity(for: .light))
+        XCTAssertEqual(FizzBackground.glowOpacity(for: .dark), 0.06)
+    }
 }

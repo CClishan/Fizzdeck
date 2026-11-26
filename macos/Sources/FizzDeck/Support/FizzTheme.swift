@@ -159,44 +159,63 @@ enum FizzMotion {
 }
 
 enum FizzAsset {
-    static let logo: NSImage? = {
-        if let url = Bundle.main.url(forResource: "FizzDeck_logo", withExtension: "png"),
+    private static let pngLogo = loadImage(named: "FizzDeck_logo", extension: "png")
+    private static let lightLogo = loadImage(named: logoResourceName(for: .light), extension: "svg") ?? pngLogo
+    private static let darkLogo = loadImage(named: logoResourceName(for: .dark), extension: "svg") ?? pngLogo
+
+    static func logo(for colorScheme: ColorScheme) -> NSImage? {
+        colorScheme == .dark ? darkLogo : lightLogo
+    }
+
+    static func logoResourceName(for colorScheme: ColorScheme) -> String {
+        colorScheme == .dark ? "FizzDeck_logo_dark" : "FizzDeck_logo_light"
+    }
+
+    private static func loadImage(named name: String, extension fileExtension: String) -> NSImage? {
+        if let url = Bundle.main.url(forResource: name, withExtension: fileExtension),
            let image = NSImage(contentsOf: url) {
             return image
         }
 
-        let direct = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("Resources/FizzDeck_logo.png")
-        if let image = NSImage(contentsOf: direct) {
-            return image
+        let current = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        for directory in ["Resources", "macos/Resources"] {
+            let url = current
+                .appendingPathComponent(directory)
+                .appendingPathComponent("\(name).\(fileExtension)")
+            if let image = NSImage(contentsOf: url) {
+                return image
+            }
         }
-
-        let nested = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("macos/Resources/FizzDeck_logo.png")
-        return NSImage(contentsOf: nested)
-    }()
+        return nil
+    }
 }
 
 struct FizzBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
+    static func glowOpacity(for colorScheme: ColorScheme) -> Double? {
+        colorScheme == .dark ? 0.06 : nil
+    }
+
     var body: some View {
         ZStack {
             FizzTheme.page
 
-            RadialGradient(
-                colors: [FizzTheme.warmGlow.opacity(colorScheme == .dark ? 0.06 : 0.18), .clear],
-                center: .topTrailing,
-                startRadius: 20,
-                endRadius: 470
-            )
+            if let glowOpacity = Self.glowOpacity(for: colorScheme) {
+                RadialGradient(
+                    colors: [FizzTheme.warmGlow.opacity(glowOpacity), .clear],
+                    center: .topTrailing,
+                    startRadius: 20,
+                    endRadius: 470
+                )
 
-            RadialGradient(
-                colors: [FizzTheme.coolGlow.opacity(colorScheme == .dark ? 0.06 : 0.14), .clear],
-                center: .bottomTrailing,
-                startRadius: 0,
-                endRadius: 680
-            )
+                RadialGradient(
+                    colors: [FizzTheme.coolGlow.opacity(glowOpacity), .clear],
+                    center: .bottomTrailing,
+                    startRadius: 0,
+                    endRadius: 680
+                )
+            }
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
@@ -210,12 +229,11 @@ struct FizzLogo: View {
 
     var body: some View {
         Group {
-            if let image = FizzAsset.logo {
+            if let image = FizzAsset.logo(for: colorScheme) {
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.high)
-                    .scaledToFill()
-                    .background(logoPlate)
+                    .scaledToFit()
             } else {
                 ZStack {
                     FizzTheme.accent
@@ -225,19 +243,6 @@ struct FizzLogo: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
-    }
-
-    private var logoPlate: some View {
-        RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-            .fill(colorScheme == .dark ? Color(white: 0.95) : Color(white: 0.99))
-            .overlay {
-                RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-                    .strokeBorder(
-                        colorScheme == .dark ? Color.black.opacity(0.10) : FizzTheme.stroke,
-                        lineWidth: 1
-                    )
-            }
     }
 }
 
