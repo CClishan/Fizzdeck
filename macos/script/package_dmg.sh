@@ -4,8 +4,8 @@ set -euo pipefail
 APP_NAME="FizzDeck"
 BUNDLE_ID="com.a003.fizzdeck"
 MIN_SYSTEM_VERSION="26.0"
-VERSION="0.4.0"
-BUILD_NUM="7"
+VERSION="0.5.0"
+BUILD_NUM="8"
 CONFIG="release"
 SKIP_FINDER_LAYOUT=0
 OUTPUT_DMG=""
@@ -150,35 +150,36 @@ hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_ROOT" -ov -format UDRW -fs 
 
 if [[ "$SKIP_FINDER_LAYOUT" -eq 0 ]]; then
   MOUNT_POINT="$(hdiutil attach -readwrite -noverify -noautoopen "$RW_DMG" | awk '/\/Volumes\// { idx = index($0, "/Volumes/"); print substr($0, idx); exit }')"
-  if [[ -n "$MOUNT_POINT" ]]; then
-    DISK_NAME="$(basename "$MOUNT_POINT")"
-    echo "Configuring Finder layout on $DISK_NAME..."
-    osascript <<APPLESCRIPT || echo "Warning: Finder AppleScript layout skipped (no Automation permission)." >&2
-tell application "Finder"
-  tell disk "$DISK_NAME"
-    open
-    set current view of container window of it to icon view
-    set toolbar visible of container window of it to false
-    set statusbar visible of container window of it to false
-    set the bounds of container window of it to {120, 120, 780, 540}
-    set viewOptions to the icon view options of container window of it
-    set arrangement of viewOptions to not arranged
-    set icon size of viewOptions to 108
-    set text size of viewOptions to 12
-    set background picture of viewOptions to file ".background:background.tiff"
-    set position of item "$APP_NAME.app" of it to {180, 196}
-    set position of item "Applications" of it to {480, 196}
-    close
-    open
-    update without registering applications
-    delay 1
-  end tell
-end tell
-APPLESCRIPT
-    sync
-    hdiutil detach "$MOUNT_POINT" -quiet
-    MOUNT_POINT=""
+  if [[ -z "$MOUNT_POINT" ]]; then
+    echo "ERROR: Failed to mount writable DMG for layout" >&2
+    exit 1
   fi
+  DISK_NAME="$(basename "$MOUNT_POINT")"
+  echo "Writing headless DMG layout (.DS_Store) on $DISK_NAME..."
+  chflags hidden "$MOUNT_POINT/.background" "$MOUNT_POINT/.VolumeIcon.icns" 2>/dev/null || true
+
+  UV_BIN=""
+  if command -v uv >/dev/null 2>&1; then
+    UV_BIN="$(command -v uv)"
+  elif [[ -x "$HOME/.local/bin/uv" ]]; then
+    UV_BIN="$HOME/.local/bin/uv"
+  fi
+
+  if [[ -n "$UV_BIN" ]]; then
+    "$UV_BIN" run --quiet --with ds_store --with mac_alias python3 "$SCRIPT_DIR/write_dmg_dsstore.py" "$MOUNT_POINT" "$APP_NAME"
+  else
+    python3 "$SCRIPT_DIR/write_dmg_dsstore.py" "$MOUNT_POINT" "$APP_NAME"
+  fi
+
+  if [[ ! -s "$MOUNT_POINT/.DS_Store" ]]; then
+    echo "ERROR: .DS_Store was not generated or is empty at $MOUNT_POINT/.DS_Store" >&2
+    exit 1
+  fi
+
+  sync
+  sleep 0.5
+  hdiutil detach "$MOUNT_POINT" -quiet
+  MOUNT_POINT=""
 fi
 
 echo "Compressing final UDZO DMG..."
