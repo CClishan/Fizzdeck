@@ -18,38 +18,37 @@ func renderPNG(scale: Int, to url: URL) throws {
     let pixelWidth = baseWidth * scale
     let pixelHeight = baseHeight * scale
 
-    guard let rep = NSBitmapImageRep(
-        bitmapDataPlanes: nil,
-        pixelsWide: pixelWidth,
-        pixelsHigh: pixelHeight,
-        bitsPerSample: 8,
-        samplesPerPixel: 4,
-        hasAlpha: true,
-        isPlanar: false,
-        colorSpaceName: .deviceRGB,
+    let space = CGColorSpaceCreateDeviceRGB()
+    guard let cg = CGContext(
+        data: nil,
+        width: pixelWidth,
+        height: pixelHeight,
+        bitsPerComponent: 8,
         bytesPerRow: 0,
-        bitsPerPixel: 0
+        space: space,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
     ) else {
-        throw NSError(domain: "DMGRenderer", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to allocate bitmap"])
-    }
-    rep.size = NSSize(width: baseWidth, height: baseHeight)
-
-    guard let context = NSGraphicsContext(bitmapImageRep: rep) else {
-        throw NSError(domain: "DMGRenderer", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create graphics context"])
+        throw NSError(domain: "DMGRenderer", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to allocate CGContext"])
     }
 
-    NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = context
-    let cg = context.cgContext
     cg.scaleBy(x: CGFloat(scale), y: CGFloat(scale))
-
     // Flip to top-left origin matching 660x420 SVG coordinates
     cg.translateBy(x: 0, y: CGFloat(baseHeight))
     cg.scaleBy(x: 1, y: -1)
 
+    let context = NSGraphicsContext(cgContext: cg, flipped: true)
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = context
+
     drawBackground(in: cg)
 
     NSGraphicsContext.restoreGraphicsState()
+
+    guard let cgImage = cg.makeImage() else {
+        throw NSError(domain: "DMGRenderer", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create CGImage"])
+    }
+    let rep = NSBitmapImageRep(cgImage: cgImage)
+    rep.size = NSSize(width: baseWidth, height: baseHeight)
 
     guard let png = rep.representation(using: .png, properties: [:]) else {
         throw NSError(domain: "DMGRenderer", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to encode PNG"])
