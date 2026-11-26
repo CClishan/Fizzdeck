@@ -41,7 +41,7 @@ struct ProjectActionDock: View {
             .glassEffect(.regular, in: Capsule())
         }
         .frame(maxWidth: 900)
-        .shadow(color: .black.opacity(0.08), radius: 18, y: 7)
+        .fizzAdaptiveShadow(.floating)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(tab == .tests ? "测试操作" : "运行操作")
     }
@@ -61,8 +61,8 @@ struct ProjectActionDock: View {
             }
             dockButton(
                 symbol: "terminal",
-                title: "在 Terminal 中打开",
-                label: "Terminal"
+                title: "在终端中打开",
+                label: "终端"
             ) {
                 SystemActions.openTerminal(project.path)
             }
