@@ -6,6 +6,7 @@ struct GitTabView: View {
     let loading: Bool
     let onSyncCompleted: () async -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var changes: [GitChange] = []
     @State private var worktrees: [GitWorktree] = []
     @State private var loadingWorkspace = false
@@ -369,7 +370,9 @@ struct GitTabView: View {
     private func fileRow(_ change: GitChange) -> some View {
         HStack(spacing: 8) {
             Button {
-                toggleDiff(change)
+                withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
+                    toggleDiff(change)
+                }
             } label: {
                 HStack(spacing: 9) {
                     Text(change.displayCode)
@@ -407,12 +410,11 @@ struct GitTabView: View {
                     Spacer(minLength: 0)
 
                     FizzIcon(
-                        symbol: expandedPaths.contains(change.path)
-                            ? "chevron.up"
-                            : "chevron.down",
+                        symbol: "chevron.right",
                         size: 8
                     )
                     .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(expandedPaths.contains(change.path) ? 90 : 0))
                 }
                 .contentShape(Rectangle())
             }
@@ -441,6 +443,7 @@ struct GitTabView: View {
             diffView(change)
                 .padding(.leading, 33)
                 .padding(.bottom, 7)
+                .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 
@@ -768,6 +771,13 @@ struct GitTabView: View {
             failed: !result.succeeded,
             date: Date()
         )
+        if result.succeeded {
+            ToastCenter.shared.show(
+                result.message,
+                symbol: "checkmark.circle.fill",
+                tint: .green
+            )
+        }
         await refreshAfterWrite()
         runningAction = nil
     }
@@ -787,6 +797,13 @@ struct GitTabView: View {
                 failed: !result.succeeded,
                 date: Date()
             )
+            if result.succeeded {
+                ToastCenter.shared.show(
+                    result.message,
+                    symbol: "checkmark.circle.fill",
+                    tint: .green
+                )
+            }
             if result.didMutate {
                 onSuccess()
                 diffs.removeAll()

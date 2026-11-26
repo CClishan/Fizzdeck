@@ -3,6 +3,7 @@ import SwiftUI
 struct ServicesPanel: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let project: RepoProject
     @State private var scripts: [ProjectScript] = []
     @State private var pinnedIDs: [String] = []
@@ -61,18 +62,29 @@ struct ServicesPanel: View {
                 }
                 if let conflict = actions.portConflict(for: project.path), !devRunning {
                     conflictNotice(conflict)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                if !scripts.isEmpty {
+                if !pinnedScripts.isEmpty {
                     Divider()
                         .padding(.vertical, 2)
                     scriptsSection
                 }
                 feedback
             }
+            .animation(
+                FizzMotion.resolved(reduceMotion, FizzMotion.spring),
+                value: actions.portConflict(for: project.path)
+            )
         } accessory: {
-            Text(runningCount > 0 ? "\(runningCount) 运行中" : "空闲")
-                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                .foregroundStyle(runningCount > 0 ? Color.green : Color.secondary)
+            HStack(spacing: 8) {
+                Text(runningCount > 0 ? "\(runningCount) 运行中" : "空闲")
+                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(runningCount > 0 ? Color.green : Color.secondary)
+
+                if !scripts.isEmpty, pinnedScripts.isEmpty {
+                    scriptPinMenu(compact: true)
+                }
+            }
         }
         .task(id: project.path) {
             await loadScripts()
@@ -100,7 +112,7 @@ struct ServicesPanel: View {
     private func devCard(_ run: RunConfig) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                statusDot(active: devRunning, busy: busy)
+                serviceStatus(active: devRunning, busy: busy)
 
                 Text("dev")
                     .font(.system(size: 13, weight: .semibold))
@@ -204,31 +216,30 @@ struct ServicesPanel: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.tertiary)
                 Spacer(minLength: 8)
-                scriptPinMenu
+                scriptPinMenu(compact: false)
             }
 
-            if pinnedScripts.isEmpty {
-                Text("从菜单固定常用脚本后可直接运行")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 220, maximum: 340), spacing: FizzSpacing.grid)],
-                    spacing: FizzSpacing.grid
-                ) {
-                    ForEach(pinnedScripts) { script in
-                        scriptCard(script)
-                    }
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 220, maximum: 340), spacing: FizzSpacing.grid)],
+                spacing: FizzSpacing.grid
+            ) {
+                ForEach(pinnedScripts) { script in
+                    scriptCard(script)
                 }
             }
 
             if let selectedScript {
                 scriptOutput(selectedScript)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .animation(
+            FizzMotion.resolved(reduceMotion, FizzMotion.spring),
+            value: selectedScriptID
+        )
     }
 
-    private var scriptPinMenu: some View {
+    private func scriptPinMenu(compact: Bool) -> some View {
         Menu {
             if unpinnedScripts.isEmpty {
                 Text("全部脚本已固定")
@@ -249,7 +260,7 @@ struct ServicesPanel: View {
                 }
             }
         } label: {
-            Label("固定脚本", systemImage: "star")
+            Label("固定脚本", systemImage: compact ? "plus" : "star")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
         }
@@ -266,7 +277,7 @@ struct ServicesPanel: View {
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                statusDot(active: running, busy: false)
+                serviceStatus(active: running, busy: false)
 
                 Text(script.name)
                     .font(.system(size: 13, weight: .semibold))
@@ -311,7 +322,9 @@ struct ServicesPanel: View {
 
             HStack(spacing: 6) {
                 serviceButton("输出", help: "查看 \(script.name) 输出") {
-                    selectedScriptID = selectedScriptID == script.id ? nil : script.id
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
+                        selectedScriptID = selectedScriptID == script.id ? nil : script.id
+                    }
                 }
 
                 serviceButton("日志", help: "打开 \(script.name) 日志") {
@@ -326,7 +339,9 @@ struct ServicesPanel: View {
                     }
                 } else {
                     serviceButton("运行", help: "运行 \(script.command)") {
-                        selectedScriptID = script.id
+                        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
+                            selectedScriptID = script.id
+                        }
                         actions.runScript(script, project: project, store: store)
                     }
                 }
@@ -359,7 +374,9 @@ struct ServicesPanel: View {
                 }
                 Spacer(minLength: 8)
                 Button {
-                    selectedScriptID = nil
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
+                        selectedScriptID = nil
+                    }
                 } label: {
                     FizzIcon(symbol: "xmark", size: 8)
                         .foregroundStyle(.secondary)
@@ -420,6 +437,11 @@ struct ServicesPanel: View {
         pinnedIDs = ProjectScriptPreferences
             .setPinned(ids, for: project.path)
             .pinnedIDs(for: project.path)
+        ToastCenter.shared.show(
+            "已固定 \(script.name)",
+            symbol: "star.fill",
+            tint: FizzTheme.accent
+        )
     }
 
     private func unpin(_ script: ProjectScript) {
@@ -430,6 +452,11 @@ struct ServicesPanel: View {
         if selectedScriptID == script.id {
             selectedScriptID = nil
         }
+        ToastCenter.shared.show(
+            "已取消固定 \(script.name)",
+            symbol: "star.slash",
+            tint: .secondary
+        )
     }
 
     private func loadScripts() async {
@@ -448,7 +475,7 @@ struct ServicesPanel: View {
     private func testCard(_ test: TestCommand) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                statusDot(active: testRunning, busy: false)
+                serviceStatus(active: testRunning, busy: false)
 
                 Text(test.label)
                     .font(.system(size: 13, weight: .semibold))
@@ -496,14 +523,17 @@ struct ServicesPanel: View {
     }
 
     @ViewBuilder
-    private func statusDot(active: Bool, busy: Bool) -> some View {
+    private func serviceStatus(active: Bool, busy: Bool) -> some View {
         if busy {
             ProgressView()
                 .controlSize(.mini)
                 .frame(width: 10, height: 10)
+        } else if active {
+            RunningPulseDot(size: 7)
+                .frame(width: 10, height: 10)
         } else {
             Circle()
-                .fill(active ? Color.green : Color.secondary.opacity(0.45))
+                .fill(Color.secondary.opacity(0.45))
                 .frame(width: 7, height: 7)
                 .frame(width: 10, height: 10)
                 .accessibilityHidden(true)

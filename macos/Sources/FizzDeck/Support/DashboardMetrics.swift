@@ -460,8 +460,8 @@ enum DashboardMetrics {
             }
             guard let latest = resumable.max(by: { $0.modified < $1.modified }) else { continue }
             let toolTitle = HomeDashboardModel.toolTitle(latest.tool)
-            let rawSummary = latest.lastUser?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let summary = (rawSummary?.isEmpty == false ? rawSummary : nil) ?? "\(toolTitle) 会话"
+            let cleaned = SessionSummaryText.clean(latest.lastUser ?? "")
+            let summary = cleaned.isEmpty ? "\(toolTitle) 会话" : cleaned
             candidates.append(ContinueWorkItem(
                 id: "\(project.path)::\(latest.stableID)",
                 project: project,

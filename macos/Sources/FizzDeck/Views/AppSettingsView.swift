@@ -437,7 +437,8 @@ private struct SessionsSettingsPage: View {
 
 private struct AboutSettingsPage: View {
     @Environment(\.openURL) private var openURL
-    @State private var updateState: UpdateState = .idle
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var updater = AppUpdateController()
 
     var body: some View {
         ScrollView {
@@ -455,40 +456,43 @@ private struct AboutSettingsPage: View {
                 .padding(.top, 12)
 
                 SettingsCard {
-                    HStack(spacing: 12) {
-                        SettingsIcon(symbol: "arrow.triangle.2.circlepath")
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 12) {
+                            SettingsIcon(symbol: "arrow.triangle.2.circlepath")
 
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("检查更新")
-                                .font(.system(size: 13, weight: .medium))
-                            Text(updateStatusText)
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(updateStatusColor)
-                        }
-
-                        Spacer(minLength: 12)
-
-                        if case let .available(release) = updateState {
-                            Button("前往下载") {
-                                openURL(release.pageURL)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("检查更新")
+                                    .font(.system(size: 13, weight: .medium))
+                                Text(updateStatusText)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(updateStatusColor)
                             }
-                            .buttonStyle(.glass)
+
+                            Spacer(minLength: 12)
+                            updateActions
                         }
 
-                        Button {
-                            Task { await checkForUpdates() }
-                        } label: {
-                            HStack(spacing: 6) {
-                                if isChecking {
-                                    ProgressView()
-                                        .controlSize(.mini)
+                        if case .downloading(let progress, let received, let total) = updater.state {
+                            VStack(alignment: .leading, spacing: 5) {
+                                ProgressView(value: progress)
+                                    .progressViewStyle(.linear)
+                                    .tint(FizzTheme.accent)
+                                    .animation(
+                                        FizzMotion.resolved(reduceMotion, .easeOut(duration: 0.22)),
+                                        value: progress
+                                    )
+
+                                HStack {
+                                    Text("\(Format.bytes(received)) / \(Format.bytes(total))")
+                                    Spacer(minLength: 8)
+                                    Text("\(Int((progress * 100).rounded()))%")
+                                        .monospacedDigit()
                                 }
-                                Text(isChecking ? "检查中…" : "立即检查")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
                             }
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                         }
-                        .buttonStyle(.glassProminent)
-                        .tint(FizzTheme.accent)
-                        .disabled(isChecking)
                     }
                 }
 
@@ -522,54 +526,152 @@ private struct AboutSettingsPage: View {
                 }
             }
             .padding(28)
+            .animation(
+                FizzMotion.resolved(reduceMotion, FizzMotion.spring),
+                value: updater.state
+            )
+        }
+        .task {
+            if case .idle = updater.state {
+                await updater.check()
+            }
+        }
+        .alert(
+            "无法自动安装",
+            isPresented: Binding(
+                get: { updater.notice != nil },
+                set: { if !$0 { updater.clearNotice() } }
+            )
+        ) {
+            Button("好") {
+                updater.clearNotice()
+            }
+        } message: {
+            Text(updater.notice ?? "")
         }
     }
 
-    private var isChecking: Bool {
-        if case .checking = updateState { return true }
-        return false
+    @ViewBuilder
+    private var updateActions: some View {
+        switch updater.state {
+        case .idle:
+            checkButton
+        case .checking:
+            Button {
+            } label: {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("检查中…")
+                }
+            }
+            .buttonStyle(.glassProminent)
+            .tint(FizzTheme.accent)
+            .disabled(true)
+        case .upToDate:
+            checkButton
+        case .available(let release):
+            Button("前往 Release") {
+                openURL(release.pageURL)
+            }
+            .buttonStyle(.glass)
+
+            Button("下载更新") {
+                updater.startDownload()
+            }
+            .buttonStyle(.glassProminent)
+            .tint(FizzTheme.accent)
+            .disabled(release.dmgAsset == nil)
+            .help(release.dmgAsset == nil ? "这个版本没有可用的 arm64 DMG" : "下载更新")
+        case .downloading:
+            Button("取消") {
+                updater.cancelDownload()
+            }
+            .buttonStyle(.glass)
+
+            Button {
+            } label: {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("下载中…")
+                }
+            }
+            .buttonStyle(.glassProminent)
+            .tint(FizzTheme.accent)
+            .disabled(true)
+        case .verifying:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text("校验中…")
+                    .font(.system(size: 11))
+            }
+            .foregroundStyle(.secondary)
+        case .readyToInstall:
+            Button("安装并重启") {
+                Task { await updater.installAndRestart() }
+            }
+            .buttonStyle(.glassProminent)
+            .tint(FizzTheme.accent)
+        case .installing:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text("正在安装…")
+                    .font(.system(size: 11))
+            }
+            .foregroundStyle(.secondary)
+        case .failed:
+            Button("重新检查") {
+                Task { await updater.check() }
+            }
+            .buttonStyle(.glassProminent)
+            .tint(FizzTheme.accent)
+        }
+    }
+
+    private var checkButton: some View {
+        Button("立即检查") {
+            Task { await updater.check() }
+        }
+        .buttonStyle(.glassProminent)
+        .tint(FizzTheme.accent)
     }
 
     private var updateStatusText: String {
-        switch updateState {
+        switch updater.state {
         case .idle:
-            return "手动检查是否有新版本。"
+            "手动检查是否有新版本。"
         case .checking:
-            return "正在连接 GitHub…"
+            "正在连接 GitHub…"
         case .upToDate:
-            return "已是最新版本。"
-        case let .available(release):
-            return "发现新版本 v\(release.version)。"
-        case .failed:
-            return "检查失败，请确认网络后重试。"
+            "已是最新版本。"
+        case .available(let release):
+            "发现新版本 v\(release.version)，可下载并自动校验。"
+        case .downloading(_, let received, let total):
+            "正在下载更新 · \(Format.bytes(received)) / \(Format.bytes(total))"
+        case .verifying:
+            "正在校验 SHA-256、应用标识与签名…"
+        case .readyToInstall:
+            "更新已通过校验，可以安装并重启。"
+        case .installing:
+            "正在替换应用并重启…"
+        case .failed(let message):
+            message
         }
     }
 
     private var updateStatusColor: Color {
-        switch updateState {
+        switch updater.state {
         case .idle, .checking:
             return .secondary
         case .upToDate:
             return .green
-        case .available:
+        case .available, .downloading, .verifying, .readyToInstall, .installing:
             return FizzTheme.accent
         case .failed:
             return .orange
-        }
-    }
-
-    @MainActor
-    private func checkForUpdates() async {
-        guard !isChecking else { return }
-        updateState = .checking
-
-        do {
-            let release = try await AppUpdateService.latestRelease()
-            updateState = AppUpdateService.isNewer(release.version, than: AppVersion.short)
-                ? .available(release)
-                : .upToDate
-        } catch {
-            updateState = .failed
         }
     }
 }
@@ -703,12 +805,4 @@ private struct AboutLinkRow: View {
         }
         .buttonStyle(.plain)
     }
-}
-
-private enum UpdateState {
-    case idle
-    case checking
-    case upToDate
-    case available(AppRelease)
-    case failed
 }

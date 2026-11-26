@@ -1097,27 +1097,7 @@ enum SessionIndex {
     }
 
     private static func cleanUserText(_ value: String) -> String {
-        var text = value
-        text = text.replacingOccurrences(
-            of: #"(?s)<environment_context>.*?</environment_context>"#,
-            with: "",
-            options: .regularExpression
-        )
-        text = text.replacingOccurrences(
-            of: #"(?s)<user_instructions>.*?</user_instructions>"#,
-            with: "",
-            options: .regularExpression
-        )
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let ignoredPrefixes = [
-            "[Request interrupted",
-            "[Tool use interrupted",
-            "[Request cancelled",
-        ]
-        if ignoredPrefixes.contains(where: { trimmed.hasPrefix($0) }) {
-            return ""
-        }
-        return String(trimmed.prefix(400))
+        SessionSummaryText.clean(value)
     }
 
     // MARK: - DeepSeek Harness (.dsh)

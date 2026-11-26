@@ -114,12 +114,35 @@ struct MenuBarMenu: View {
             Section("正在运行的服务") {
                 ForEach(runningProjects) { project in
                     if let port = project.run?.port, port > 0 {
-                        Button("打开 \(project.displayName) 预览 · :\(port)") {
+                        Button {
                             SystemActions.openURL("http://127.0.0.1:\(port)")
+                        } label: {
+                            HStack(spacing: 8) {
+                                RunningPulseDot(size: 5)
+                                Text("打开 \(project.displayName) 预览")
+                                    .lineLimit(1)
+                                Spacer(minLength: 12)
+                                Text(":\(port)")
+                                    .font(.system(size: 10.5, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 2)
+                            .contentShape(Rectangle())
                         }
                     }
-                    Button("停止 \(project.displayName)") {
+                    Button {
                         Task { await actions.stop(project, store: store) }
+                    } label: {
+                        HStack(spacing: 8) {
+                            FizzIcon(symbol: "stop.fill", size: 9)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 9)
+                            Text("停止 \(project.displayName)")
+                                .lineLimit(1)
+                            Spacer(minLength: 12)
+                        }
+                        .padding(.vertical, 2)
+                        .contentShape(Rectangle())
                     }
                 }
             }

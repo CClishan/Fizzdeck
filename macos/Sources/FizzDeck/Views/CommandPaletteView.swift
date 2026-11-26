@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct CommandPaletteView: View {
@@ -8,6 +9,8 @@ struct CommandPaletteView: View {
 
     @State private var query = ""
     @State private var selection = 0
+    @State private var returnMonitor: Any?
+    @Namespace private var selectionNamespace
     @FocusState private var searchFocused: Bool
 
     private var groups: [PaletteGroup] {
@@ -390,9 +393,13 @@ struct CommandPaletteView: View {
             .padding(.top, 88)
         }
         .onAppear {
+            installReturnMonitor()
             DispatchQueue.main.async {
                 searchFocused = true
             }
+        }
+        .onDisappear {
+            removeReturnMonitor()
         }
         .onChange(of: query) {
             selection = 0
@@ -408,6 +415,11 @@ struct CommandPaletteView: View {
         }
         .onKeyPress(.upArrow) {
             moveSelection(-1)
+            return .handled
+        }
+        .onKeyPress(.return) {
+            guard !hasMarkedText else { return .ignored }
+            runSelected()
             return .handled
         }
         .onExitCommand(perform: dismiss)
@@ -466,6 +478,10 @@ struct CommandPaletteView: View {
                 }
                 .padding(.horizontal, 7)
                 .padding(.vertical, 6)
+                .animation(
+                    FizzMotion.resolved(reduceMotion, FizzMotion.quick),
+                    value: selectedIndex
+                )
             }
             .frame(height: resultsHeight)
             .onChange(of: selectedIndex) {
@@ -573,6 +589,7 @@ struct CommandPaletteView: View {
                 if selected {
                     RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
                         .fill(FizzTheme.accent.opacity(0.09))
+                        .matchedGeometryEffect(id: "palette-selection", in: selectionNamespace)
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
@@ -651,6 +668,29 @@ struct CommandPaletteView: View {
     private func runSelected() {
         guard entries.indices.contains(selectedIndex), entries[selectedIndex].isEnabled else { return }
         execute(entries[selectedIndex])
+    }
+
+    private var hasMarkedText: Bool {
+        (NSApp.keyWindow?.firstResponder as? NSTextView)?.hasMarkedText() == true
+    }
+
+    private func installReturnMonitor() {
+        guard returnMonitor == nil else { return }
+        returnMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let keyCode = event.keyCode
+            guard keyCode == 36 || keyCode == 76 else { return event }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard flags.isEmpty else { return event }
+            guard !hasMarkedText else { return event }
+            runSelected()
+            return nil
+        }
+    }
+
+    private func removeReturnMonitor() {
+        guard let returnMonitor else { return }
+        NSEvent.removeMonitor(returnMonitor)
+        self.returnMonitor = nil
     }
 
     private func execute(_ entry: PaletteEntry) {

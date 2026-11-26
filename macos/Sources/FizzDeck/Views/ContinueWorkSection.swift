@@ -39,6 +39,11 @@ private struct ContinueWorkCard: View {
     let openProject: () -> Void
     @State private var hovering = false
 
+    private var summary: String {
+        let cleaned = SessionSummaryText.clean(item.summary)
+        return cleaned.isEmpty ? "\(item.toolTitle) 会话" : cleaned
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -58,7 +63,7 @@ private struct ContinueWorkCard: View {
                 HomeToolBadge(tool: item.session.tool, compact: false)
             }
 
-            Text(item.summary)
+            Text(summary)
                 .font(.system(size: 11.5))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
