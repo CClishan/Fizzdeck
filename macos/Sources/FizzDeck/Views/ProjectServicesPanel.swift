@@ -726,36 +726,15 @@ struct ProjectLogsPanel: View {
     }
 
     private var sourceSwitcher: some View {
-        GlassEffectContainer(spacing: 2) {
-            HStack(spacing: 1) {
-                ForEach(ProjectLogSource.allCases) { item in
-                    Button {
-                        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
-                            source = item
-                        }
-                    } label: {
-                        Text(item.title)
-                            .font(.system(size: 10, weight: source == item ? .semibold : .medium))
-                            .foregroundStyle(source == item ? Color.primary : Color.secondary)
-                            .padding(.horizontal, 7)
-                            .frame(height: 20)
-                            .background {
-                                if source == item {
-                                    Capsule()
-                                        .fill(FizzTheme.elevatedFill)
-                                        .fizzAdaptiveShadow(.subtle)
-                                }
-                            }
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(source == item ? .isSelected : [])
-                    .accessibilityRemoveTraits(source == item ? [] : .isSelected)
-                    .accessibilityLabel(item == .dev ? "开发日志" : "测试日志")
-                }
-            }
-            .padding(2)
-            .glassEffect(.regular.interactive(), in: Capsule())
+        FizzSegmentedCapsule(
+            items: ProjectLogSource.allCases,
+            selection: $source,
+            height: 20,
+            horizontalPadding: 7
+        ) { item, selected in
+            Text(item.title)
+                .font(.system(size: 10, weight: selected ? .semibold : .medium))
+                .accessibilityLabel(item == .dev ? "开发日志" : "测试日志")
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("日志来源")

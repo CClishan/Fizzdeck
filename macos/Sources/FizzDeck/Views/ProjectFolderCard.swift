@@ -10,6 +10,7 @@ struct ProjectFolderCard: View {
     var toggleSelection: () -> Void = {}
 
     @State private var hovering = false
+    @State private var pressed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -97,6 +98,8 @@ struct ProjectFolderCard: View {
                 )
         }
         .fizzAdaptiveShadow(hovering ? .raised : .subtle)
+        .scaleEffect(pressed ? 0.988 : 1)
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: pressed)
         .contentShape(RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous))
         .onTapGesture {
             if selecting {
@@ -106,10 +109,19 @@ struct ProjectFolderCard: View {
             }
         }
         .onHover { value in
-            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                 hovering = value
             }
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !pressed { pressed = true }
+                }
+                .onEnded { _ in
+                    pressed = false
+                }
+        )
         .help(selecting
             ? (selected ? "取消选择 \(project.displayName)" : "选择 \(project.displayName)")
             : "打开 \(project.displayName)")

@@ -30,6 +30,11 @@ struct ContentView: View {
                         FizzMotion.resolved(reduceMotion, FizzMotion.standard),
                         value: sidebarCollapsed
                     )
+
+                    ToastOverlayView(center: ToastCenter.shared)
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 20)
+                        .zIndex(30)
                 }
             }
         }
@@ -58,7 +63,10 @@ struct ContentView: View {
                     .accessibilityLabel("返回工作台")
 
                     Button {
-                        Task { await store.rescanProjects([project]) }
+                        Task {
+                            await store.rescanProjects([project])
+                            announceProjectRescan(project)
+                        }
                     } label: {
                         FizzIcon(symbol: "arrow.clockwise", size: FizzIconScale.toolbar)
                     }
@@ -67,7 +75,10 @@ struct ContentView: View {
                     .disabled(store.phase == .scanning)
                 } else {
                     Button {
-                        Task { await store.scan() }
+                        Task {
+                            await store.scan()
+                            announceWorkspaceRescan()
+                        }
                     } label: {
                         Label {
                             Text("重新扫描")
@@ -133,28 +144,60 @@ struct ContentView: View {
     }
 
     private var detail: some View {
-        Group {
-            switch store.destination {
-            case .dashboard:
-                WorkbenchDashboardView()
-            case .library(let query):
-                LibraryView(query: query)
-            case .cleanup:
-                CleanupWorkspaceView()
-            case .project:
-                if let project = store.selectedProject {
-                    ProjectDetailView(project: project)
-                } else {
-                    WelcomeView()
-                }
-            }
+        ZStack {
+            detailContent
+                .id(store.destination)
+                .transition(.opacity.combined(with: .scale(scale: 0.992)))
         }
         .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
-        .overlay(alignment: .top) {
-            ToastOverlayView(center: ToastCenter.shared)
-                .padding(.top, 12)
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: store.destination)
+    }
+
+    @ViewBuilder
+    private var detailContent: some View {
+        switch store.destination {
+        case .dashboard:
+            WorkbenchDashboardView()
+        case .library(let query):
+            LibraryView(query: query)
+        case .cleanup:
+            CleanupWorkspaceView()
+        case .project:
+            if let project = store.selectedProject {
+                ProjectDetailView(project: project)
+            } else {
+                WelcomeView()
+            }
         }
+    }
+
+    private func announceWorkspaceRescan() {
+        let counts = Dictionary(grouping: store.projects, by: \.group)
+            .values
+            .map { Double($0.count) }
+            .sorted(by: >)
+        ToastCenter.shared.show(
+            "重新扫描完成",
+            symbol: "arrow.clockwise.circle.fill",
+            tint: FizzTheme.accent,
+            subtitle: "\(store.projects.count) 个项目 · \(Format.relative(store.scannedAt ?? Date()))",
+            microViz: .bars(values: counts, improved: false)
+        )
+    }
+
+    private func announceProjectRescan(_ project: RepoProject) {
+        let values = project.weekly
+            .sorted { $0.key < $1.key }
+            .suffix(8)
+            .map { Double($0.value) }
+        ToastCenter.shared.show(
+            "已刷新 \(project.displayName)",
+            symbol: "arrow.clockwise.circle.fill",
+            tint: FizzTheme.accent,
+            subtitle: project.branch ?? project.group,
+            microViz: .bars(values: values, improved: false)
+        )
     }
 
     private func openPendingProject() {

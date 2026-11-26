@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import Observation
+import SwiftUI
 
 enum ProjectAction: String, Sendable {
     case launching
@@ -65,6 +66,7 @@ final class ProjectActions {
     @ObservationIgnored private var scriptProcesses: [String: Process] = [:]
     @ObservationIgnored private var scriptLogs: [String: FileHandle] = [:]
     @ObservationIgnored private var cancelledScriptKeys: Set<String> = []
+    @ObservationIgnored private var serviceToastIDs: [String: UUID] = [:]
 
     func isBusy(_ path: String) -> Bool {
         busy[path] != nil
@@ -117,18 +119,33 @@ final class ProjectActions {
 
         if PortProbe.isOpen(run.port) {
             let conflict = await PortConflictService.inspect(port: run.port)
-            portConflicts[project.path] = conflict ?? PortConflict(
+            let resolvedConflict = conflict ?? PortConflict(
                 port: run.port,
                 occupants: [],
                 note: "端口已有监听进程"
             )
+            portConflicts[project.path] = resolvedConflict
             store.setPort(.stopped, for: project.path)
-            messages[project.path] = "端口 \(run.port) 被占用：\(conflict?.occupantSummary ?? "占用进程未知")"
+            messages[project.path] = "端口 \(run.port) 被占用：\(resolvedConflict.occupantSummary)"
+            showPortConflictToast(
+                project: project,
+                conflict: resolvedConflict,
+                store: store
+            )
             return
         }
 
         portConflicts[project.path] = nil
         messages[project.path] = nil
+        updateServiceToast(
+            path: project.path,
+            title: "正在启动 \(project.displayName)",
+            subtitle: run.command,
+            step: 0,
+            state: .running,
+            tint: FizzTheme.accent,
+            action: nil
+        )
         busy[project.path] = .launching
         defer { busy[project.path] = nil }
 
@@ -136,6 +153,15 @@ final class ProjectActions {
         let header = "\n--- \(Date().ISO8601Format()) \(run.command)\n"
         guard let log = openLog(logURL, header: header) else {
             messages[project.path] = "无法写入 \(PathTools.displayPath(logURL.path))"
+            updateServiceToast(
+                path: project.path,
+                title: "无法启动服务",
+                subtitle: "日志目录不可写",
+                step: 0,
+                state: .failed,
+                tint: .orange,
+                action: retryAction(for: project, store: store)
+            )
             return
         }
 
@@ -154,6 +180,15 @@ final class ProjectActions {
         } catch {
             try? log.close()
             messages[project.path] = "启动失败：\(error.localizedDescription)"
+            updateServiceToast(
+                path: project.path,
+                title: "启动失败",
+                subtitle: error.localizedDescription,
+                step: 0,
+                state: .failed,
+                tint: .red,
+                action: retryAction(for: project, store: store)
+            )
             return
         }
 
@@ -183,6 +218,20 @@ final class ProjectActions {
                         tab: .overview
                     )
                 }
+                updateServiceToast(
+                    path: project.path,
+                    title: "服务已启动",
+                    subtitle: "localhost:\(run.port)",
+                    step: 4,
+                    state: .live,
+                    tint: .green,
+                    action: ToastAction(
+                        title: "打开预览",
+                        symbol: "arrow.up.forward.square"
+                    ) {
+                        SystemActions.openURL("http://127.0.0.1:\(run.port)")
+                    }
+                )
                 return
             }
             if !process.isRunning { break }
@@ -191,10 +240,28 @@ final class ProjectActions {
 
         if process.isRunning {
             messages[project.path] = "进程已启动（PID \(process.processIdentifier)），端口 \(run.port) 尚未就绪"
+            updateServiceToast(
+                path: project.path,
+                title: "服务启动中",
+                subtitle: "PID \(process.processIdentifier) · 等待 localhost:\(run.port)",
+                step: 2,
+                state: .running,
+                tint: FizzTheme.accent,
+                action: nil
+            )
         } else {
             store.setPort(.stopped, for: project.path)
             let tail = FileTools.tail(logURL, bytes: 800).trimmingCharacters(in: .whitespacesAndNewlines)
             messages[project.path] = tail.isEmpty ? "启动失败，进程已退出" : "启动失败：\(tail)"
+            updateServiceToast(
+                path: project.path,
+                title: "启动失败",
+                subtitle: tail.isEmpty ? "进程已退出" : String(tail.prefix(100)),
+                step: 0,
+                state: .failed,
+                tint: .red,
+                action: retryAction(for: project, store: store)
+            )
         }
     }
 
@@ -251,6 +318,15 @@ final class ProjectActions {
             return
         }
 
+        updateServiceToast(
+            path: project.path,
+            title: "正在释放端口",
+            subtitle: conflict.occupants.map { "PID \($0.pid)" }.joined(separator: " · "),
+            step: 0,
+            state: .running,
+            tint: FizzTheme.accent,
+            action: nil
+        )
         busy[project.path] = .launching
         let result = await PortConflictService.terminateConfirmed(conflict)
         if result.succeeded {
@@ -261,7 +337,30 @@ final class ProjectActions {
         messages[project.path] = result.message
         busy[project.path] = nil
 
-        guard result.succeeded else { return }
+        guard result.succeeded else {
+            updateServiceToast(
+                path: project.path,
+                title: "释放端口失败",
+                subtitle: result.message,
+                step: 0,
+                state: .failed,
+                tint: .orange,
+                action: ToastAction(
+                    title: "再次尝试",
+                    symbol: "arrow.clockwise"
+                ) { [weak self] in
+                    guard let self else { return }
+                    Task {
+                        await self.resolvePortConflictAndLaunch(
+                            project,
+                            conflict: conflict,
+                            store: store
+                        )
+                    }
+                }
+            )
+            return
+        }
         await launch(project, store: store)
     }
 
@@ -573,6 +672,19 @@ final class ProjectActions {
             try? log.close()
             scriptLogs[key] = nil
         }
+        if !wasStopped {
+            let succeeded = state.status == .succeeded
+            ToastCenter.shared.show(
+                succeeded ? "脚本完成" : "脚本失败",
+                symbol: succeeded ? "checkmark.circle.fill" : "xmark.circle.fill",
+                tint: succeeded ? .green : .red,
+                subtitle: state.script.name,
+                microViz: .bars(
+                    values: [max(0, state.duration ?? 0)],
+                    improved: succeeded
+                )
+            )
+        }
     }
 
     private func finishTest(_ project: RepoProject, exitCode: Int32) {
@@ -597,5 +709,105 @@ final class ProjectActions {
                 )
             }
         }
+        if wasStopped {
+            ToastCenter.shared.show(
+                "测试已停止",
+                symbol: "stop.circle.fill",
+                tint: .secondary,
+                subtitle: project.displayName,
+                microViz: .compact(state: .warning)
+            )
+        } else {
+            let summary = TestOutcomeSummary.parse(state.output, status: state.status)
+            let passed = state.status == .passed
+            ToastCenter.shared.show(
+                passed ? "测试通过" : "测试失败",
+                symbol: passed ? "checkmark.seal.fill" : "xmark.octagon.fill",
+                tint: passed ? .green : .red,
+                subtitle: "\(summary.passed) 通过 · \(summary.failed) 失败 · \(durationLabel(state.duration))",
+                microViz: .tests(passed: summary.passed, failed: summary.failed),
+                action: ToastAction(
+                    title: "查看日志",
+                    symbol: "doc.text"
+                ) { [weak self] in
+                    self?.openLog(for: project, test: true)
+                }
+            )
+        }
+    }
+
+    private func retryAction(
+        for project: RepoProject,
+        store: RepositoryStore
+    ) -> ToastAction {
+        ToastAction(title: "重试", symbol: "arrow.clockwise") { [weak self] in
+            guard let self else { return }
+            Task { await self.launch(project, store: store) }
+        }
+    }
+
+    private func showPortConflictToast(
+        project: RepoProject,
+        conflict: PortConflict,
+        store: RepositoryStore
+    ) {
+        updateServiceToast(
+            path: project.path,
+            title: "端口 :\(conflict.port) 被占用",
+            subtitle: conflict.occupantSummary,
+            step: 0,
+            state: .failed,
+            tint: .orange,
+            action: ToastAction(
+                title: "释放并重试",
+                symbol: "arrow.clockwise"
+            ) { [weak self] in
+                guard let self else { return }
+                Task {
+                    await self.resolvePortConflictAndLaunch(
+                        project,
+                        conflict: conflict,
+                        store: store
+                    )
+                }
+            }
+        )
+    }
+
+    private func updateServiceToast(
+        path: String,
+        title: String,
+        subtitle: String?,
+        step: Int,
+        state: ToastPipelineState,
+        tint: Color,
+        action: ToastAction?
+    ) {
+        let microViz = ToastMicroViz.pipeline(step: step, state: state)
+        if let id = serviceToastIDs[path],
+           ToastCenter.shared.update(id, mutate: { message in
+               message.title = title
+               message.subtitle = subtitle
+               message.tint = tint
+               message.microViz = microViz
+               message.action = action
+               message.duration = nil
+           }) {
+            return
+        }
+
+        serviceToastIDs[path] = ToastCenter.shared.show(
+            title,
+            symbol: "bolt.horizontal.fill",
+            tint: tint,
+            duration: nil,
+            subtitle: subtitle,
+            microViz: microViz,
+            action: action
+        )
+    }
+
+    private func durationLabel(_ duration: TimeInterval?) -> String {
+        String(format: "%.1fs", duration ?? 0)
     }
 }

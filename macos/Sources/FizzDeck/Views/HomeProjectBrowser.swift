@@ -42,14 +42,19 @@ struct HomeProjectBrowser: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            switch mode {
-            case .cards:
-                cards
-            case .list:
-                LibraryTableView(projects: projects, selectedPaths: $selectedPaths)
+            Group {
+                switch mode {
+                case .cards:
+                    cards
+                case .list:
+                    LibraryTableView(projects: projects, selectedPaths: $selectedPaths)
+                }
             }
+            .id(mode)
+            .transition(.opacity.combined(with: .scale(scale: 0.992, anchor: .top)))
         }
-        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: selectionMode)
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: selectionMode)
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: mode)
     }
 
     private var batchBar: some View {

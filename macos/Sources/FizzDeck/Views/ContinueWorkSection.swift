@@ -35,9 +35,11 @@ struct ContinueWorkSection: View {
 }
 
 private struct ContinueWorkCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: ContinueWorkItem
     let openProject: () -> Void
     @State private var hovering = false
+    @State private var pressed = false
 
     private var summary: String {
         let cleaned = SessionSummaryText.clean(item.summary)
@@ -87,6 +89,21 @@ private struct ContinueWorkCard: View {
                 .strokeBorder(hovering ? FizzTheme.accent.opacity(0.24) : FizzTheme.stroke, lineWidth: 1)
         }
         .fizzAdaptiveShadow(hovering ? .raised : .subtle)
-        .onHover { hovering = $0 }
+        .scaleEffect(pressed ? 0.988 : 1)
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: pressed)
+        .onHover { value in
+            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
+                hovering = value
+            }
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !pressed { pressed = true }
+                }
+                .onEnded { _ in
+                    pressed = false
+                }
+        )
     }
 }

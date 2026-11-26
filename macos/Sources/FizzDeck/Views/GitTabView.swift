@@ -774,8 +774,10 @@ struct GitTabView: View {
         if result.succeeded {
             ToastCenter.shared.show(
                 result.message,
-                symbol: "checkmark.circle.fill",
-                tint: .green
+                symbol: "arrow.triangle.branch",
+                tint: FizzTheme.accent,
+                subtitle: project.displayName,
+                microViz: .gitMerge
             )
         }
         await refreshAfterWrite()
@@ -801,7 +803,9 @@ struct GitTabView: View {
                 ToastCenter.shared.show(
                     result.message,
                     symbol: "checkmark.circle.fill",
-                    tint: .green
+                    tint: .green,
+                    subtitle: project.displayName,
+                    microViz: microViz(for: operation)
                 )
             }
             if result.didMutate {
@@ -922,6 +926,15 @@ struct GitTabView: View {
         if change.displayCode.contains("A") { return .green }
         if change.displayCode.contains("M") { return .orange }
         return .secondary
+    }
+
+    private func microViz(for operation: String) -> ToastMicroViz {
+        if operation.contains("暂存") || operation.contains("Stash") {
+            let additions = diffs.values.reduce(0) { $0 + $1.additions }
+            let deletions = diffs.values.reduce(0) { $0 + $1.deletions }
+            return .diff(added: additions, removed: deletions)
+        }
+        return .gitMerge
     }
 }
 

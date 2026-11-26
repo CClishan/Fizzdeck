@@ -89,7 +89,10 @@ struct CleanupTabView: View {
             Spacer(minLength: 8)
 
             Button {
-                SystemActions.copy(project.cleanup.removalCommand(for: item))
+                SystemActions.copy(
+                    project.cleanup.removalCommand(for: item),
+                    microViz: .compact(state: .done)
+                )
             } label: {
                 FizzIcon(symbol: "doc.on.doc", size: 12)
             }

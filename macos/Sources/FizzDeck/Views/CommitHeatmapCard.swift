@@ -123,28 +123,16 @@ struct CommitHeatmapCard: View {
     }
 
     private var rangePicker: some View {
-        HStack(spacing: 2) {
-            ForEach(HeatmapRange.allCases) { item in
-                let selected = range == item
-                Button {
-                    rangeRaw = item.rawValue
-                } label: {
-                    Text(item.title)
-                        .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
-                        .foregroundStyle(selected ? Color.primary : Color.secondary)
-                        .padding(.horizontal, 8)
-                        .frame(height: 22)
-                        .background(
-                            selected ? FizzTheme.elevatedFill : Color.clear,
-                            in: Capsule()
-                        )
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
+        FizzSegmentedCapsule(
+            items: HeatmapRange.allCases,
+            selection: Binding(
+                get: { range },
+                set: { rangeRaw = $0.rawValue }
+            )
+        ) { item, selected in
+            Text(item.title)
+                .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
             }
-        }
-        .padding(2)
-        .background(FizzTheme.recessedFill, in: Capsule())
     }
 
     private func dotMatrix(columns: [[HeatmapDayCell]]) -> some View {

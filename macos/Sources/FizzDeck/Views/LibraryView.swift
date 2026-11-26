@@ -330,7 +330,7 @@ struct LibraryView: View {
     private func idleSection(_ idleProjects: [RepoProject]) -> some View {
         VStack(alignment: .leading, spacing: FizzSpacing.grid) {
             Button {
-                withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                     showIdleProjects.toggle()
                 }
             } label: {
@@ -391,6 +391,10 @@ struct LibraryView: View {
                 }
             }
         }
+        .animation(
+            FizzMotion.resolved(reduceMotion, FizzMotion.spring),
+            value: showIdleProjects
+        )
     }
 
     private var emptyResults: some View {
@@ -512,7 +516,7 @@ struct LibraryView: View {
 
     private func setMode(_ value: HomeViewMode) {
         guard mode != value else { return }
-        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.standard)) {
+        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
             modeRaw = value.rawValue
         }
     }
@@ -612,7 +616,12 @@ struct LibraryView: View {
         let result = HomeDashboardModel.batchCleanupCommands(for: selectedProjects)
         if let script = result.script {
             SystemActions.copy(script, feedback: nil)
-            ToastCenter.shared.show(result.feedback, symbol: "doc.on.doc.fill", tint: FizzTheme.accent)
+            ToastCenter.shared.show(
+                result.feedback,
+                symbol: "doc.on.doc.fill",
+                tint: FizzTheme.accent,
+                microViz: .compact(state: .done)
+            )
         }
         batchFeedback = result.feedback
     }
@@ -625,7 +634,12 @@ struct LibraryView: View {
             ? "已为 \(projects.count) 个项目设为星标"
             : "已取消 \(projects.count) 个项目的星标"
         batchFeedback = message
-        ToastCenter.shared.show(message, symbol: starred ? "star.fill" : "star", tint: .yellow)
+        ToastCenter.shared.show(
+            message,
+            symbol: starred ? "star.fill" : "star",
+            tint: .yellow,
+            microViz: .compact(state: .done)
+        )
     }
 
     private func batchGroup(_ group: String?) {
@@ -635,7 +649,12 @@ struct LibraryView: View {
         let message = group.map { "已将 \(projects.count) 个项目移至「\($0)」" }
             ?? "已将 \(projects.count) 个项目恢复自动分组"
         batchFeedback = message
-        ToastCenter.shared.show(message, symbol: "folder.fill", tint: FizzTheme.accent)
+        ToastCenter.shared.show(
+            message,
+            symbol: "folder.fill",
+            tint: FizzTheme.accent,
+            microViz: .compact(state: .done)
+        )
     }
 
     private func fetchSelected() async {
@@ -688,5 +707,15 @@ struct LibraryView: View {
         batchFeedback = missing == 0
             ? "已重新扫描 \(existing.count) 个项目"
             : "已重新扫描 \(existing.count) 个；\(missing) 个目录不存在"
+        ToastCenter.shared.show(
+            "批量扫描完成",
+            symbol: "arrow.clockwise.circle.fill",
+            tint: FizzTheme.accent,
+            subtitle: batchFeedback,
+            microViz: .bars(
+                values: existing.map { Double($0.weekly.values.reduce(0, +)) },
+                improved: false
+            )
+        )
     }
 }

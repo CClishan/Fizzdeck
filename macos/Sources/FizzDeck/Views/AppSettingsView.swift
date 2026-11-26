@@ -3,7 +3,9 @@ import SwiftUI
 
 struct AppSettingsView: View {
     @AppStorage(AppearancePreferences.key) private var appearance: AppAppearance = .system
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var page: SettingsPage = .general
+    @Namespace private var selectionNamespace
 
     var body: some View {
         HStack(spacing: 0) {
@@ -11,7 +13,8 @@ struct AppSettingsView: View {
                 ForEach(SettingsPage.allCases) { item in
                     SettingsNavigationRow(
                         page: item,
-                        selected: page == item
+                        selected: page == item,
+                        selectionNamespace: selectionNamespace
                     ) {
                         page = item
                     }
@@ -40,6 +43,7 @@ struct AppSettingsView: View {
         }
         .frame(width: 720, height: 500)
         .preferredColorScheme(appearance.colorScheme)
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: page)
     }
 }
 
@@ -70,6 +74,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 private struct SettingsNavigationRow: View {
     let page: SettingsPage
     let selected: Bool
+    let selectionNamespace: Namespace.ID
     let action: () -> Void
 
     @State private var hovering = false
@@ -89,9 +94,16 @@ private struct SettingsNavigationRow: View {
             .padding(.horizontal, 9)
             .frame(height: 32)
             .background {
-                if selected || hovering {
+                if selected {
                     RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                        .fill(FizzTheme.selectedFill.opacity(hovering && !selected ? 0.55 : 1))
+                        .fill(FizzTheme.selectedFill)
+                        .matchedGeometryEffect(
+                            id: "settings-selection",
+                            in: selectionNamespace
+                        )
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                        .fill(FizzTheme.selectedFill.opacity(0.55))
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))

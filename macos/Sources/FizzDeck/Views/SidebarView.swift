@@ -17,6 +17,7 @@ struct SidebarView: View {
 
     @State private var collapsedGroups: Set<String> = []
     @State private var disk: DiskCapacity?
+    @Namespace private var selectionNamespace
 
     var body: some View {
         Group {
@@ -38,6 +39,7 @@ struct SidebarView: View {
         }
         .fizzAdaptiveShadow(.raised)
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.standard), value: collapsed)
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: store.destination)
         .task {
             disk = DiskProbe.current()
         }
@@ -95,7 +97,8 @@ struct SidebarView: View {
                     symbol: "house",
                     label: "工作台",
                     selected: store.destination.isDashboard,
-                    showsDot: runningCount > 0
+                    showsDot: runningCount > 0,
+                    selectionNamespace: selectionNamespace
                 ) {
                     store.openDashboard()
                 }
@@ -104,7 +107,8 @@ struct SidebarView: View {
                     symbol: "square.grid.2x2",
                     label: "项目库",
                     selected: store.destination.isLibrary,
-                    showsDot: false
+                    showsDot: false,
+                    selectionNamespace: selectionNamespace
                 ) {
                     store.openLibrary()
                 }
@@ -113,7 +117,8 @@ struct SidebarView: View {
                     symbol: "archivebox",
                     label: "可清理 \(Format.bytes(cleanupBytes))",
                     selected: store.destination.isCleanup,
-                    showsDot: cleanupBytes > 0
+                    showsDot: cleanupBytes > 0,
+                    selectionNamespace: selectionNamespace
                 ) {
                     store.openCleanup()
                 }
@@ -130,7 +135,8 @@ struct SidebarView: View {
                     ForEach(starredProjects) { project in
                         SidebarRailProjectButton(
                             project: project,
-                            selected: store.selectedPath == project.path
+                            selected: store.selectedPath == project.path,
+                            selectionNamespace: selectionNamespace
                         ) {
                             store.selectedPath = project.path
                         }
@@ -150,7 +156,8 @@ struct SidebarView: View {
                     ForEach(railProjects) { project in
                         SidebarRailProjectButton(
                             project: project,
-                            selected: store.selectedPath == project.path
+                            selected: store.selectedPath == project.path,
+                            selectionNamespace: selectionNamespace
                         ) {
                             store.selectedPath = project.path
                         }
@@ -211,7 +218,8 @@ struct SidebarView: View {
                 title: "工作台",
                 detail: runningCount > 0 ? "\(runningCount) 运行中" : nil,
                 detailColor: .green,
-                selected: store.destination.isDashboard
+                selected: store.destination.isDashboard,
+                selectionNamespace: selectionNamespace
             ) {
                 store.openDashboard()
             }
@@ -220,7 +228,8 @@ struct SidebarView: View {
                 symbol: "square.grid.2x2",
                 title: "项目库",
                 detail: "\(store.projects.count)",
-                selected: store.destination.isLibrary
+                selected: store.destination.isLibrary,
+                selectionNamespace: selectionNamespace
             ) {
                 store.openLibrary()
             }
@@ -229,7 +238,8 @@ struct SidebarView: View {
                 symbol: "archivebox",
                 title: "可清理",
                 detail: Format.bytes(cleanupBytes),
-                selected: store.destination.isCleanup
+                selected: store.destination.isCleanup,
+                selectionNamespace: selectionNamespace
             ) {
                 store.openCleanup()
             }
@@ -351,7 +361,8 @@ struct SidebarView: View {
         SidebarProjectRow(
             project: project,
             selected: store.selectedPath == project.path,
-            portText: portText
+            portText: portText,
+            selectionNamespace: selectionNamespace
         ) {
             store.selectedPath = project.path
         }
@@ -508,6 +519,7 @@ private struct SidebarSignalRow: View {
     var detail: String?
     var detailColor: Color = .secondary
     var selected = false
+    let selectionNamespace: Namespace.ID
     let action: () -> Void
 
     @State private var hovering = false
@@ -535,9 +547,16 @@ private struct SidebarSignalRow: View {
             .padding(.horizontal, 8)
             .frame(height: 30)
             .background {
-                if selected || hovering {
+                if selected {
                     RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                        .fill(FizzTheme.selectedFill.opacity(hovering && !selected ? 0.55 : 1))
+                        .fill(FizzTheme.selectedFill)
+                        .matchedGeometryEffect(
+                            id: "sidebar-expanded-selection",
+                            in: selectionNamespace
+                        )
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                        .fill(FizzTheme.selectedFill.opacity(0.55))
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
@@ -553,6 +572,7 @@ private struct SidebarProjectRow: View {
     let project: RepoProject
     let selected: Bool
     let portText: String?
+    let selectionNamespace: Namespace.ID
     let action: () -> Void
 
     @State private var hovering = false
@@ -579,9 +599,16 @@ private struct SidebarProjectRow: View {
             .padding(.horizontal, 7)
             .frame(height: 27)
             .background {
-                if selected || hovering {
+                if selected {
                     RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                        .fill(FizzTheme.selectedFill.opacity(hovering && !selected ? 0.55 : 1))
+                        .fill(FizzTheme.selectedFill)
+                        .matchedGeometryEffect(
+                            id: "sidebar-expanded-selection",
+                            in: selectionNamespace
+                        )
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                        .fill(FizzTheme.selectedFill.opacity(0.55))
                 }
             }
             .contentShape(Rectangle())
@@ -600,6 +627,7 @@ private struct SidebarRailButton: View {
     let label: String
     let selected: Bool
     let showsDot: Bool
+    let selectionNamespace: Namespace.ID
     let action: () -> Void
 
     @State private var hovering = false
@@ -611,9 +639,16 @@ private struct SidebarRailButton: View {
                     .foregroundStyle(selected ? Color.primary : Color.secondary)
                     .frame(width: 34, height: 30)
                     .background {
-                        if selected || hovering {
+                        if selected {
                             RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                                .fill(FizzTheme.selectedFill.opacity(hovering && !selected ? 0.55 : 1))
+                                .fill(FizzTheme.selectedFill)
+                                .matchedGeometryEffect(
+                                    id: "sidebar-rail-selection",
+                                    in: selectionNamespace
+                                )
+                        } else if hovering {
+                            RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                                .fill(FizzTheme.selectedFill.opacity(0.55))
                         }
                     }
 
@@ -636,6 +671,7 @@ private struct SidebarRailButton: View {
 private struct SidebarRailProjectButton: View {
     let project: RepoProject
     let selected: Bool
+    let selectionNamespace: Namespace.ID
     let action: () -> Void
 
     @State private var hovering = false
@@ -646,9 +682,16 @@ private struct SidebarRailProjectButton: View {
                 ProjectBadgeIcon(project: project, size: 20, framed: false)
                     .frame(width: 34, height: 28)
                     .background {
-                        if selected || hovering {
+                        if selected {
                             RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                                .fill(FizzTheme.selectedFill.opacity(hovering && !selected ? 0.55 : 1))
+                                .fill(FizzTheme.selectedFill)
+                                .matchedGeometryEffect(
+                                    id: "sidebar-rail-project-selection",
+                                    in: selectionNamespace
+                                )
+                        } else if hovering {
+                            RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                                .fill(FizzTheme.selectedFill.opacity(0.55))
                         }
                     }
 

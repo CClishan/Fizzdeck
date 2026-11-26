@@ -115,7 +115,10 @@ struct CleanupWorkspaceView: View {
                     .foregroundStyle(.orange)
 
                 Button("复制") {
-                    SystemActions.copy("# \(project.displayName)\n\(project.cleanup.removalCommand)")
+                    SystemActions.copy(
+                        "# \(project.displayName)\n\(project.cleanup.removalCommand)",
+                        microViz: .compact(state: .done)
+                    )
                     feedback = "已复制 \(project.displayName) 的清理命令"
                 }
                 .buttonStyle(.glass)
@@ -174,7 +177,10 @@ struct CleanupWorkspaceView: View {
             Spacer(minLength: 8)
 
             Button {
-                SystemActions.copy(project.cleanup.removalCommand(for: item))
+                SystemActions.copy(
+                    project.cleanup.removalCommand(for: item),
+                    microViz: .compact(state: .done)
+                )
                 feedback = "已复制 \(project.displayName)/\(item.label) 清理命令"
             } label: {
                 FizzIcon(symbol: "doc.on.doc", size: 11)
@@ -194,7 +200,10 @@ struct CleanupWorkspaceView: View {
             return "# \(project.displayName)\n\(command)"
         }
         guard !blocks.isEmpty else { return }
-        SystemActions.copy(blocks.joined(separator: "\n"))
+        SystemActions.copy(
+            blocks.joined(separator: "\n"),
+            microViz: .compact(state: .done)
+        )
         feedback = "已复制 \(blocks.count) 个项目的全部清理命令"
     }
 }

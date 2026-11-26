@@ -192,51 +192,30 @@ struct AttentionQueueView: View {
 
     private var categoryTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                tabButton(title: "全部", count: items.count, selected: selectedKind == nil) {
-                    selectedKind = nil
+            FizzSegmentedCapsule(
+                items: [nil] + availableKinds.map(\.kind),
+                selection: $selectedKind,
+                height: 22,
+                horizontalPadding: 9,
+                selectionFill: FizzTheme.accent,
+                selectionForeground: .white
+            ) { kind, selected in
+                HStack(spacing: 4) {
+                    Text(kind?.shortTitle ?? "全部")
+                    Text("\(tabCount(for: kind))")
+                        .monospacedDigit()
+                        .foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
                 }
-                ForEach(availableKinds, id: \.kind) { entry in
-                    tabButton(
-                        title: entry.kind.shortTitle,
-                        count: entry.count,
-                        selected: selectedKind == entry.kind
-                    ) {
-                        selectedKind = entry.kind
-                    }
-                }
+                .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
     }
 
-    private func tabButton(
-        title: String,
-        count: Int,
-        selected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Text(title)
-                Text("\(count)")
-                    .monospacedDigit()
-                    .foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
-            }
-            .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
-            .foregroundStyle(selected ? .white : .primary)
-            .padding(.horizontal, 9)
-            .frame(height: 22)
-            .background(
-                selected ? FizzTheme.accent : FizzTheme.recessedFill,
-                in: Capsule()
-            )
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityRemoveTraits(selected ? [] : .isSelected)
+    private func tabCount(for kind: ProjectAttentionKind?) -> Int {
+        guard let kind else { return items.count }
+        return availableKinds.first { $0.kind == kind }?.count ?? 0
     }
 
     private var suppressedMenu: some View {
@@ -299,7 +278,7 @@ struct AttentionQueueView: View {
         case .copyCleanup:
             let command = item.project.cleanup.removalCommand
             guard !command.isEmpty else { return }
-            SystemActions.copy(command)
+            SystemActions.copy(command, microViz: .compact(state: .done))
             copiedItemID = item.id
             Task {
                 try? await Task.sleep(for: .seconds(1.2))

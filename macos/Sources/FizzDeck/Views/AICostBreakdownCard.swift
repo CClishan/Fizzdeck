@@ -41,28 +41,13 @@ struct AICostBreakdownCard: View {
 
                     Spacer(minLength: 8)
 
-                    HStack(spacing: 2) {
-                        ForEach(CostBreakdownMode.allCases) { item in
-                            let selected = mode == item
-                            Button {
-                                mode = item
-                            } label: {
-                                Text(item.title)
-                                    .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
-                                    .foregroundStyle(selected ? Color.primary : Color.secondary)
-                                    .padding(.horizontal, 8)
-                                    .frame(height: 22)
-                                    .background(
-                                        selected ? FizzTheme.elevatedFill : Color.clear,
-                                        in: Capsule()
-                                    )
-                                    .contentShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
+                    FizzSegmentedCapsule(
+                        items: CostBreakdownMode.allCases,
+                        selection: $mode
+                    ) { item, selected in
+                        Text(item.title)
+                            .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
                     }
-                    .padding(2)
-                    .background(FizzTheme.recessedFill, in: Capsule())
                 }
 
                 HStack(alignment: .center, spacing: 18) {

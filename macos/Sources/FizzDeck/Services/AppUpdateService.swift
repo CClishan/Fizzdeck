@@ -2,6 +2,7 @@ import AppKit
 import CryptoKit
 import Foundation
 import Observation
+import SwiftUI
 
 struct AppReleaseAsset: Sendable, Equatable {
     let name: String
@@ -676,6 +677,7 @@ final class AppUpdateController {
     private var machine = AppUpdateStateMachine()
     private var downloadTask: Task<Void, Never>?
     private var pendingRelease: AppRelease?
+    private var updateToastID: UUID?
 
     init() {}
 
@@ -793,8 +795,128 @@ final class AppUpdateController {
     }
 
     private func apply(_ event: AppUpdateEvent) {
+        let previous = state
         machine.apply(event)
         state = machine.state
+        if previous != state {
+            syncToast()
+        }
+    }
+
+    private func syncToast() {
+        switch state {
+        case .idle, .checking, .upToDate:
+            dismissUpdateToast()
+
+        case .available(let release):
+            upsertUpdateToast(
+                title: "发现 FizzDeck v\(release.version)",
+                subtitle: "可下载 arm64 DMG",
+                microViz: .pipeline(step: 0, state: .live),
+                tint: FizzTheme.accent,
+                action: ToastAction(
+                    title: "下载更新",
+                    symbol: "arrow.down.circle"
+                ) { [weak self] in
+                    self?.startDownload()
+                }
+            )
+
+        case .downloading(let progress, let received, let total):
+            let version = pendingRelease.map { " v\($0.version)" } ?? ""
+            let percent = Int((progress * 100).rounded())
+            upsertUpdateToast(
+                title: "正在下载更新\(version)",
+                subtitle: "\(percent)% · \(Format.bytes(received)) / \(Format.bytes(total))",
+                microViz: .pipeline(step: 0, state: .running),
+                tint: FizzTheme.accent,
+                action: nil
+            )
+
+        case .verifying:
+            upsertUpdateToast(
+                title: "正在校验更新",
+                subtitle: "SHA-256 · Bundle ID · codesign",
+                microViz: .pipeline(step: 1, state: .running),
+                tint: FizzTheme.accent,
+                action: nil
+            )
+
+        case .readyToInstall:
+            upsertUpdateToast(
+                title: "更新已就绪",
+                subtitle: "校验通过，可安装并重启",
+                microViz: .pipeline(step: 2, state: .live),
+                tint: .green,
+                action: ToastAction(
+                    title: "安装并重启",
+                    symbol: "arrow.triangle.2.circlepath"
+                ) { [weak self] in
+                    guard let self else { return }
+                    Task { await self.installAndRestart() }
+                }
+            )
+
+        case .installing:
+            upsertUpdateToast(
+                title: "正在安装更新",
+                subtitle: "应用将自动重启",
+                microViz: .pipeline(step: 3, state: .running),
+                tint: FizzTheme.accent,
+                action: nil
+            )
+
+        case .failed(let message):
+            upsertUpdateToast(
+                title: "更新失败",
+                subtitle: message,
+                microViz: .pipeline(step: 1, state: .failed),
+                tint: .orange,
+                action: ToastAction(
+                    title: "重新检查",
+                    symbol: "arrow.clockwise"
+                ) { [weak self] in
+                    guard let self else { return }
+                    Task { await self.check() }
+                }
+            )
+        }
+    }
+
+    private func upsertUpdateToast(
+        title: String,
+        subtitle: String?,
+        microViz: ToastMicroViz,
+        tint: Color,
+        action: ToastAction?
+    ) {
+        if let updateToastID,
+           ToastCenter.shared.update(updateToastID, mutate: { message in
+               message.title = title
+               message.subtitle = subtitle
+               message.tint = tint
+               message.microViz = microViz
+               message.action = action
+               message.duration = nil
+           }) {
+            return
+        }
+
+        updateToastID = ToastCenter.shared.show(
+            title,
+            symbol: "arrow.triangle.2.circlepath",
+            tint: tint,
+            duration: nil,
+            subtitle: subtitle,
+            microViz: microViz,
+            action: action
+        )
+    }
+
+    private func dismissUpdateToast() {
+        guard let updateToastID else { return }
+        ToastCenter.shared.dismiss(id: updateToastID)
+        self.updateToastID = nil
     }
 }
 

@@ -138,6 +138,75 @@ struct RunningPulseDot: View {
     }
 }
 
+struct FizzSegmentedCapsule<Item: Hashable, Label: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let items: [Item]
+    @Binding var selection: Item
+    var height: CGFloat
+    var horizontalPadding: CGFloat
+    var selectionFill: Color
+    var selectionForeground: Color
+    let label: (Item, Bool) -> Label
+
+    @Namespace private var namespace
+
+    init(
+        items: [Item],
+        selection: Binding<Item>,
+        height: CGFloat = 22,
+        horizontalPadding: CGFloat = 8,
+        selectionFill: Color = FizzTheme.elevatedFill,
+        selectionForeground: Color = .primary,
+        @ViewBuilder label: @escaping (Item, Bool) -> Label
+    ) {
+        self.items = items
+        self._selection = selection
+        self.height = height
+        self.horizontalPadding = horizontalPadding
+        self.selectionFill = selectionFill
+        self.selectionForeground = selectionForeground
+        self.label = label
+    }
+
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(items, id: \.self) { item in
+                let selected = selection == item
+
+                Button {
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
+                        selection = item
+                    }
+                } label: {
+                    label(item, selected)
+                        .foregroundStyle(selected ? selectionForeground : Color.secondary)
+                        .padding(.horizontal, horizontalPadding)
+                        .frame(height: height)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .background {
+                    if selected {
+                        Capsule()
+                            .fill(selectionFill)
+                            .fizzAdaptiveShadow(.subtle)
+                            .matchedGeometryEffect(
+                                id: "fizz-segmented-selection",
+                                in: namespace
+                            )
+                    }
+                }
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityRemoveTraits(selected ? [] : .isSelected)
+            }
+        }
+        .padding(2)
+        .background(FizzTheme.recessedFill, in: Capsule())
+        .fixedSize()
+    }
+}
+
 struct KeyValueRow: View {
     let key: String
     let value: String

@@ -114,9 +114,9 @@ struct MenuBarMenu: View {
             Section("正在运行的服务") {
                 ForEach(runningProjects) { project in
                     if let port = project.run?.port, port > 0 {
-                        Button {
+                        MenuBarServiceRow {
                             SystemActions.openURL("http://127.0.0.1:\(port)")
-                        } label: {
+                        } content: {
                             HStack(spacing: 8) {
                                 RunningPulseDot(size: 5)
                                 Text("打开 \(project.displayName) 预览")
@@ -126,13 +126,11 @@ struct MenuBarMenu: View {
                                     .font(.system(size: 10.5, design: .monospaced))
                                     .foregroundStyle(.secondary)
                             }
-                            .padding(.vertical, 2)
-                            .contentShape(Rectangle())
                         }
                     }
-                    Button {
+                    MenuBarServiceRow {
                         Task { await actions.stop(project, store: store) }
-                    } label: {
+                    } content: {
                         HStack(spacing: 8) {
                             FizzIcon(symbol: "stop.fill", size: 9)
                                 .foregroundStyle(.secondary)
@@ -141,8 +139,6 @@ struct MenuBarMenu: View {
                                 .lineLimit(1)
                             Spacer(minLength: 12)
                         }
-                        .padding(.vertical, 2)
-                        .contentShape(Rectangle())
                     }
                 }
             }
@@ -224,4 +220,34 @@ private struct MenuBarSession: Identifiable {
     let session: SessionRecord
 
     var id: String { "\(project.path):\(session.stableID)" }
+}
+
+private struct MenuBarServiceRow<Content: View>: View {
+    @State private var hovering = false
+
+    let action: () -> Void
+    @ViewBuilder let content: Content
+
+    init(
+        action: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.action = action
+        self.content = content()
+    }
+
+    var body: some View {
+        Button(action: action) {
+            content
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(
+                    hovering ? FizzTheme.selectedFill.opacity(0.65) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
 }
