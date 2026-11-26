@@ -144,6 +144,8 @@ struct CopyButton: View {
 
 struct PortStatusBadge: View {
     let state: PortState
+    /// When running, show `:port` instead of the generic label.
+    var port: Int? = nil
 
     var body: some View {
         HStack(spacing: 4) {
@@ -151,8 +153,8 @@ struct PortStatusBadge: View {
                 .fill(tint)
                 .frame(width: 5, height: 5)
 
-            Text(state.badgeLabel)
-                .font(.system(size: 9.5, weight: .medium))
+            Text(displayLabel)
+                .font(.system(size: 9.5, weight: .medium).monospacedDigit())
         }
         .foregroundStyle(tint)
         .padding(.horizontal, 6)
@@ -162,6 +164,15 @@ struct PortStatusBadge: View {
         .help(state.badgeLabel)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(state.badgeLabel)
+    }
+
+    private var displayLabel: String {
+        Self.displayLabel(for: state, port: port)
+    }
+
+    static func displayLabel(for state: PortState, port: Int?) -> String {
+        if state == .running, let port { return ":\(port)" }
+        return state.badgeLabel
     }
 
     private var tint: Color {

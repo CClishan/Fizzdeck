@@ -64,4 +64,20 @@ final class FizzDesignSystemTests: XCTestCase {
         XCTAssertNil(FizzBackground.glowOpacity(for: .light))
         XCTAssertEqual(FizzBackground.glowOpacity(for: .dark), 0.06)
     }
+
+    func testIconScaleAndBundledSidebarAssets() {
+        XCTAssertEqual(FizzIconScale.toolbar, 13)
+        XCTAssertEqual(FizzIconScale.nav, 12)
+        XCTAssertEqual(FizzIconScale.micro, 8)
+        XCTAssertTrue(FizzIcon.hasBundledAsset(for: "sidebar.left"))
+        XCTAssertTrue(FizzIcon.hasBundledAsset(for: "gearshape"))
+        XCTAssertTrue(FizzIcon.hasBundledAsset(for: "archivebox"))
+        XCTAssertTrue(FizzIcon.hasBundledAsset(for: "checkmark.circle"))
+    }
+
+    func testPortStatusBadgeShowsPortWhenRunning() {
+        XCTAssertEqual(PortStatusBadge.displayLabel(for: .running, port: 5173), ":5173")
+        XCTAssertEqual(PortStatusBadge.displayLabel(for: .running, port: nil), "端口运行中")
+        XCTAssertEqual(PortStatusBadge.displayLabel(for: .stopped, port: 5173), "端口未启动")
+    }
 }

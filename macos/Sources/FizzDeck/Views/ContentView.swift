@@ -41,7 +41,7 @@ struct ContentView: View {
                     Button {
                         sidebarCollapsed.toggle()
                     } label: {
-                        FizzIcon(symbol: "sidebar.left", size: 13)
+                        FizzIcon(symbol: "sidebar.left", size: FizzIconScale.toolbar)
                     }
                     .help(sidebarCollapsed ? "展开侧栏" : "折叠侧栏")
                     .accessibilityLabel(sidebarCollapsed ? "展开侧栏" : "折叠侧栏")
@@ -51,7 +51,7 @@ struct ContentView: View {
                     Button {
                         store.selectedPath = RepositoryStore.homeSelection
                     } label: {
-                        FizzIcon(symbol: "chevron.left", size: 13)
+                        FizzIcon(symbol: "chevron.left", size: FizzIconScale.toolbar)
                     }
                     .help("返回总览")
                     .accessibilityLabel("返回总览")
@@ -59,7 +59,7 @@ struct ContentView: View {
                     Button {
                         Task { await store.rescanProjects([project]) }
                     } label: {
-                        FizzIcon(symbol: "arrow.clockwise", size: 13)
+                        FizzIcon(symbol: "arrow.clockwise", size: FizzIconScale.toolbar)
                     }
                     .help("重新扫描 \(project.displayName)")
                     .accessibilityLabel("重新扫描项目")
@@ -71,7 +71,7 @@ struct ContentView: View {
                         Label {
                             Text("重新扫描")
                         } icon: {
-                            FizzIcon(symbol: "arrow.clockwise", size: 13)
+                            FizzIcon(symbol: "arrow.clockwise", size: FizzIconScale.toolbar)
                         }
                     }
                     .help("重新扫描受管目录")
@@ -83,7 +83,7 @@ struct ContentView: View {
                         Label {
                             Text("文件夹")
                         } icon: {
-                            FizzIcon(symbol: "folder", size: 13)
+                            FizzIcon(symbol: "folder", size: FizzIconScale.toolbar)
                         }
                     }
                     .help("查看已加入文件夹，或扫描新目录")
@@ -94,7 +94,7 @@ struct ContentView: View {
                 Button {
                     store.toggleCommandPalette()
                 } label: {
-                    FizzIcon(symbol: "magnifyingglass", size: 14)
+                    FizzIcon(symbol: "magnifyingglass", size: FizzIconScale.toolbar)
                 }
                 .help("搜索项目、分支、远程或动作（⌘K）")
                 .accessibilityLabel("搜索")

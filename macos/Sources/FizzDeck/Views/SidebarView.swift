@@ -56,10 +56,6 @@ struct SidebarView: View {
                     searchButton
                     globalLinks
 
-                    if !starredProjects.isEmpty {
-                        starredGrid
-                    }
-
                     projectSections
                 }
                 .padding(.horizontal, 9)
@@ -77,7 +73,7 @@ struct SidebarView: View {
             Button {
                 store.toggleCommandPalette()
             } label: {
-                FizzIcon(symbol: "magnifyingglass", size: 12)
+                FizzIcon(symbol: "magnifyingglass", size: FizzIconScale.nav)
                     .foregroundStyle(.secondary)
                     .frame(width: 36, height: 30)
                     .background(
@@ -114,7 +110,7 @@ struct SidebarView: View {
                 }
 
                 SidebarRailButton(
-                    symbol: "trash.slash",
+                    symbol: "archivebox",
                     label: "可清理 \(Format.bytes(cleanupBytes))",
                     selected: false,
                     showsDot: cleanupBytes > 0
@@ -134,7 +130,6 @@ struct SidebarView: View {
                     ForEach(starredProjects) { project in
                         SidebarRailProjectButton(
                             project: project,
-                            framed: true,
                             selected: store.selectedPath == project.path
                         ) {
                             store.selectedPath = project.path
@@ -155,7 +150,6 @@ struct SidebarView: View {
                     ForEach(railProjects) { project in
                         SidebarRailProjectButton(
                             project: project,
-                            framed: false,
                             selected: store.selectedPath == project.path
                         ) {
                             store.selectedPath = project.path
@@ -180,7 +174,7 @@ struct SidebarView: View {
             store.toggleCommandPalette()
         } label: {
             HStack(spacing: 6) {
-                FizzIcon(symbol: "magnifyingglass", size: 10)
+                FizzIcon(symbol: "magnifyingglass", size: FizzIconScale.nav)
                     .foregroundStyle(.secondary)
 
                 Text("搜索")
@@ -232,7 +226,7 @@ struct SidebarView: View {
             }
 
             SidebarSignalRow(
-                symbol: "trash.slash",
+                symbol: "archivebox",
                 title: "可清理",
                 detail: Format.bytes(cleanupBytes)
             ) {
@@ -241,47 +235,12 @@ struct SidebarView: View {
         }
     }
 
-    private var starredGrid: some View {
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3),
-            spacing: 6
-        ) {
-            ForEach(starredProjects) { project in
-                Button {
-                    store.selectedPath = project.path
-                } label: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                            .fill(FizzTheme.elevatedFill)
-
-                        RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                            .strokeBorder(
-                                store.selectedPath == project.path
-                                    ? FizzTheme.accent.opacity(0.55)
-                                    : FizzTheme.stroke,
-                                lineWidth: 1
-                            )
-
-                        ProjectBadgeIcon(project: project, size: 24, framed: false)
-                    }
-                    .frame(height: 42)
-                    .overlay(alignment: .topTrailing) {
-                        runningDot(project)
-                    }
-                    .contentShape(RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .help(project.displayName)
-                .accessibilityLabel(project.displayName)
-                .contextMenu {
-                    projectMenu(project)
-                }
-            }
-        }
-    }
-
     private var projectSections: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if !starredProjects.isEmpty {
+                starredSection
+            }
+
             if !runningProjects.isEmpty {
                 runningSection
             }
@@ -292,21 +251,31 @@ struct SidebarView: View {
         }
     }
 
+    private var starredSection: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            SidebarSectionHeader(title: "星标") {
+                FizzIcon(symbol: "star.fill", size: FizzIconScale.micro)
+                    .foregroundStyle(.yellow)
+            }
+
+            ForEach(starredProjects) { project in
+                projectRow(
+                    project,
+                    portText: project.port == .running ? project.run.map { ":\($0.port)" } : nil
+                )
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("星标项目")
+    }
+
     private var runningSection: some View {
         VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 5) {
+            SidebarSectionHeader(title: "正在运行") {
                 Circle()
                     .fill(.green)
-                    .frame(width: 4, height: 4)
-
-                Text("正在运行")
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 0)
+                    .frame(width: 5, height: 5)
             }
-            .padding(.horizontal, 9)
-            .frame(height: 22)
 
             ForEach(runningProjects) { project in
                 projectRow(
@@ -337,7 +306,7 @@ struct SidebarView: View {
 
                         Spacer(minLength: 0)
 
-                        FizzIcon(symbol: "chevron.right", size: 7)
+                        FizzIcon(symbol: "chevron.right", size: FizzIconScale.micro)
                             .foregroundStyle(.tertiary)
                             .rotationEffect(.degrees(isCollapsed ? 0 : 90))
                     }
@@ -352,7 +321,7 @@ struct SidebarView: View {
                 Button {
                     Task { await store.addRoot() }
                 } label: {
-                    FizzIcon(symbol: "plus", size: 8)
+                    FizzIcon(symbol: "plus", size: FizzIconScale.micro)
                         .foregroundStyle(.secondary)
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
@@ -502,16 +471,27 @@ struct SidebarView: View {
             _ = collapsedGroups.remove(group)
         }
     }
+}
 
-    @ViewBuilder
-    private func runningDot(_ project: RepoProject) -> some View {
-        if project.port == .running {
-            Circle()
-                .fill(.green)
-                .frame(width: 5, height: 5)
-                .padding(5)
-                .accessibilityHidden(true)
+private struct SidebarSectionHeader<Marker: View>: View {
+    let title: String
+    @ViewBuilder let marker: () -> Marker
+
+    var body: some View {
+        HStack(spacing: 6) {
+            marker()
+                .frame(width: 8, height: 8)
+
+            Text(title)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 9)
+        .frame(height: 26)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -535,7 +515,7 @@ private struct SidebarSignalRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                FizzIcon(symbol: symbol, size: 12)
+                FizzIcon(symbol: symbol, size: FizzIconScale.nav)
                     .frame(width: 16)
 
                 Text(title)
@@ -627,7 +607,7 @@ private struct SidebarRailButton: View {
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .topTrailing) {
-                FizzIcon(symbol: symbol, size: 12)
+                FizzIcon(symbol: symbol, size: FizzIconScale.nav)
                     .foregroundStyle(selected ? Color.primary : Color.secondary)
                     .frame(width: 34, height: 30)
                     .background {
@@ -658,7 +638,6 @@ private struct SidebarRailButton: View {
 
 private struct SidebarRailProjectButton: View {
     let project: RepoProject
-    let framed: Bool
     let selected: Bool
     let action: () -> Void
 
@@ -667,34 +646,24 @@ private struct SidebarRailProjectButton: View {
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .topTrailing) {
-                ProjectBadgeIcon(
-                    project: project,
-                    size: framed ? 36 : 20,
-                    framed: framed
-                )
-                .frame(width: framed ? 36 : 34, height: framed ? 36 : 28)
-                .background {
-                    if !framed, selected || hovering {
-                        RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                            .fill(FizzTheme.selectedFill.opacity(hovering && !selected ? 0.55 : 1))
+                ProjectBadgeIcon(project: project, size: 20, framed: false)
+                    .frame(width: 34, height: 28)
+                    .background {
+                        if selected || hovering {
+                            RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                                .fill(FizzTheme.selectedFill.opacity(hovering && !selected ? 0.55 : 1))
+                        }
                     }
-                }
-                .overlay {
-                    if framed, selected {
-                        RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                            .strokeBorder(FizzTheme.accent.opacity(0.55), lineWidth: 1.5)
-                    }
-                }
 
-                if framed, project.port == .running {
+                if project.port == .running {
                     Circle()
                         .fill(.green)
                         .frame(width: 5, height: 5)
-                        .padding(3)
+                        .padding(2)
                         .accessibilityHidden(true)
                 }
             }
-            .frame(width: 38, height: framed ? 38 : 30)
+            .frame(width: 38, height: 30)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -712,7 +681,7 @@ private struct SidebarSettingsRow: View {
     var body: some View {
         SettingsLink {
             HStack(spacing: 8) {
-                FizzIcon(symbol: "gearshape", size: 12)
+                FizzIcon(symbol: "gearshape", size: FizzIconScale.nav)
                     .frame(width: 16)
 
                 Text("设置")
@@ -747,7 +716,7 @@ private struct SidebarRailSettingsButton: View {
 
     var body: some View {
         SettingsLink {
-            FizzIcon(symbol: "gearshape", size: 13)
+            FizzIcon(symbol: "gearshape", size: FizzIconScale.nav)
                 .foregroundStyle(.secondary)
                 .frame(width: 34, height: 30)
                 .background {

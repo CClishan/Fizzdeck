@@ -1,6 +1,16 @@
 import AppKit
 import SwiftUI
 
+/// Shared icon sizes so toolbar, navigation and micro controls stay visually consistent.
+enum FizzIconScale {
+    /// Window toolbar buttons (sidebar toggle, back, refresh, folder, search).
+    static let toolbar: CGFloat = 13
+    /// Sidebar navigation rows, search field and rail buttons.
+    static let nav: CGFloat = 12
+    /// Disclosure chevrons, add buttons and section markers.
+    static let micro: CGFloat = 8
+}
+
 struct FizzIcon: View {
     let symbol: String
     var size: CGFloat = 14
@@ -19,6 +29,10 @@ struct FizzIcon: View {
                 .frame(width: side, height: side)
         }
     }
+
+    static func hasBundledAsset(for symbol: String) -> Bool {
+        FizzIconAsset.image(for: symbol) != nil
+    }
 }
 
 private enum FizzIconAsset {
@@ -36,6 +50,7 @@ private enum FizzIconAsset {
         "arrow.up.right": "arrow-up-right",
         "arrow.up.right.square": "external-link",
         "arrow.uturn.backward": "undo",
+        "archivebox": "archive",
         "at": "mention",
         "bell.slash": "bell-off",
         "bubble.left.and.bubble.right": "message",
@@ -65,6 +80,7 @@ private enum FizzIconAsset {
         "folder.badge.plus": "folder-plus",
         "folder.badge.questionmark": "folder",
         "folder.fill": "folder",
+        "gearshape": "settings",
         "house": "home",
         "info.circle": "info",
         "internaldrive": "hard-drive",
@@ -82,6 +98,7 @@ private enum FizzIconAsset {
         "play.circle": "play-circle",
         "play.fill": "play",
         "rectangle.on.rectangle": "layers",
+        "sidebar.left": "sidebar",
         "slider.horizontal.3": "sliders",
         "square.and.pencil": "edit",
         "square.grid.2x2": "grid",

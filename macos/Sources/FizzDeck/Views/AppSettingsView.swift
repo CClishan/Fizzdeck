@@ -29,6 +29,8 @@ struct AppSettingsView: View {
                 switch page {
                 case .general:
                     GeneralSettingsPage()
+                case .sessions:
+                    SessionsSettingsPage()
                 case .about:
                     AboutSettingsPage()
                 }
@@ -43,6 +45,7 @@ struct AppSettingsView: View {
 
 private enum SettingsPage: String, CaseIterable, Identifiable {
     case general
+    case sessions
     case about
 
     var id: String { rawValue }
@@ -50,6 +53,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: "通用"
+        case .sessions: "会话与终端"
         case .about: "关于"
         }
     }
@@ -57,6 +61,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .general: "slider.horizontal.3"
+        case .sessions: "terminal"
         case .about: "info.circle"
         }
     }
@@ -103,10 +108,6 @@ private struct GeneralSettingsPage: View {
     @State private var loginError: String?
     @State private var notificationPermission: NotificationPermission = .unknown
     @State private var fullDiskAccess = SystemPermissionService.hasFullDiskAccess
-    @State private var preferredTerminal: PreferredTerminal = .terminal
-    @State private var availableTerminals: [PreferredTerminal] = [.terminal]
-    @State private var codexTarget: ResumeTarget = .auto
-    @State private var automationPermission: AutomationPermissionState = .unknown
 
     var body: some View {
         ScrollView {
@@ -190,57 +191,6 @@ private struct GeneralSettingsPage: View {
                     }
                 }
 
-                SettingsCard {
-                    SettingsPickerRow(
-                        symbol: "terminal",
-                        title: "默认终端",
-                        detail: "打开项目目录和继续会话时使用，只显示已安装项。"
-                    ) {
-                        Picker("", selection: terminalBinding) {
-                            ForEach(availableTerminals) { terminal in
-                                Text(terminal.title).tag(terminal)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .controlSize(.small)
-                        .fixedSize()
-                    }
-
-                    Divider()
-                        .padding(.leading, 34)
-
-                    SettingsPickerRow(
-                        symbol: "arrow.uturn.backward",
-                        title: "Codex 默认继续方式",
-                        detail: "自动会优先 CLI；也可固定使用 CLI 或 Codex Desktop。"
-                    ) {
-                        Picker("", selection: codexTargetBinding) {
-                            ForEach(ResumeTarget.allCases) { target in
-                                Text(target.title).tag(target)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .controlSize(.small)
-                        .fixedSize()
-                    }
-
-                    Divider()
-                        .padding(.leading, 34)
-
-                    SettingsPermissionRow(
-                        symbol: "hand.raised",
-                        title: "自动化权限",
-                        detail: automationDetail,
-                        status: automationStatusText,
-                        statusColor: automationStatusColor,
-                        actionTitle: preferredTerminal == .warp ? nil : "打开设置"
-                    ) {
-                        SystemPermissionService.openAutomationSettings()
-                    }
-                }
-
                 Spacer(minLength: 0)
             }
             .padding(28)
@@ -279,27 +229,6 @@ private struct GeneralSettingsPage: View {
             set: { value in
                 appearance = value
                 AppearancePreferences.apply(value)
-            }
-        )
-    }
-
-    private var terminalBinding: Binding<PreferredTerminal> {
-        Binding(
-            get: { preferredTerminal },
-            set: { terminal in
-                preferredTerminal = terminal
-                TerminalPreferences.setPreferredTerminal(terminal)
-                automationPermission = AutomationPermissionStore.state(for: terminal)
-            }
-        )
-    }
-
-    private var codexTargetBinding: Binding<ResumeTarget> {
-        Binding(
-            get: { codexTarget },
-            set: { target in
-                codexTarget = target
-                SessionResumePreferences.setCodexTarget(target)
             }
         )
     }
@@ -358,6 +287,118 @@ private struct GeneralSettingsPage: View {
         }
     }
 
+    private func handleNotificationAction() {
+        if notificationPermission == .notDetermined {
+            Task {
+                notificationPermission = await SystemPermissionService.requestNotifications()
+            }
+        } else {
+            SystemPermissionService.openNotificationSettings()
+        }
+    }
+
+    @MainActor
+    private func refreshPermissions() async {
+        loginState = LoginItemService.state
+        notificationPermission = await SystemPermissionService.notificationPermission()
+        fullDiskAccess = SystemPermissionService.hasFullDiskAccess
+    }
+}
+
+private struct SessionsSettingsPage: View {
+    @State private var preferredTerminal: PreferredTerminal = .terminal
+    @State private var availableTerminals: [PreferredTerminal] = [.terminal]
+    @State private var codexTarget: ResumeTarget = .auto
+    @State private var automationPermission: AutomationPermissionState = .unknown
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                SettingsCard {
+                    SettingsPickerRow(
+                        symbol: "terminal",
+                        title: "默认终端",
+                        detail: "打开项目目录和继续会话时使用，只显示已安装项。"
+                    ) {
+                        Picker("", selection: terminalBinding) {
+                            ForEach(availableTerminals) { terminal in
+                                Text(terminal.title).tag(terminal)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .fixedSize()
+                    }
+
+                    Divider()
+                        .padding(.leading, 34)
+
+                    SettingsPermissionRow(
+                        symbol: "hand.raised",
+                        title: "自动化权限",
+                        detail: automationDetail,
+                        status: automationStatusText,
+                        statusColor: automationStatusColor,
+                        actionTitle: preferredTerminal == .warp ? nil : "打开设置"
+                    ) {
+                        SystemPermissionService.openAutomationSettings()
+                    }
+                }
+
+                SettingsCard {
+                    SettingsPickerRow(
+                        symbol: "arrow.uturn.backward",
+                        title: "Codex 默认继续方式",
+                        detail: "自动会优先 CLI；也可固定使用 CLI 或 Codex Desktop。"
+                    ) {
+                        Picker("", selection: codexTargetBinding) {
+                            ForEach(ResumeTarget.allCases) { target in
+                                Text(target.title).tag(target)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .fixedSize()
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(28)
+        }
+        .task {
+            refresh()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+        ) { _ in
+            refresh()
+        }
+    }
+
+    private var terminalBinding: Binding<PreferredTerminal> {
+        Binding(
+            get: { preferredTerminal },
+            set: { terminal in
+                preferredTerminal = terminal
+                TerminalPreferences.setPreferredTerminal(terminal)
+                automationPermission = AutomationPermissionStore.state(for: terminal)
+            }
+        )
+    }
+
+    private var codexTargetBinding: Binding<ResumeTarget> {
+        Binding(
+            get: { codexTarget },
+            set: { target in
+                codexTarget = target
+                SessionResumePreferences.setCodexTarget(target)
+            }
+        )
+    }
+
     private var automationDetail: String {
         preferredTerminal == .warp
             ? "Warp 通过 URL 打开目录，不需要自动化权限。"
@@ -382,21 +423,8 @@ private struct GeneralSettingsPage: View {
         }
     }
 
-    private func handleNotificationAction() {
-        if notificationPermission == .notDetermined {
-            Task {
-                notificationPermission = await SystemPermissionService.requestNotifications()
-            }
-        } else {
-            SystemPermissionService.openNotificationSettings()
-        }
-    }
-
     @MainActor
-    private func refreshPermissions() async {
-        loginState = LoginItemService.state
-        notificationPermission = await SystemPermissionService.notificationPermission()
-        fullDiskAccess = SystemPermissionService.hasFullDiskAccess
+    private func refresh() {
         availableTerminals = TerminalLauncher.installedTerminals()
         if availableTerminals.isEmpty {
             availableTerminals = [.terminal]

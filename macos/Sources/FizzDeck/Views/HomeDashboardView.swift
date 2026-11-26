@@ -349,7 +349,7 @@ struct HomeDashboardView: View {
                 }
             }
         } label: {
-            FizzIcon(symbol: selectionMode ? "checkmark.circle.fill" : "checklist", size: 13)
+            FizzIcon(symbol: selectionMode ? "checkmark.circle.fill" : "checkmark.circle", size: 13)
                 .foregroundStyle(selectionMode ? FizzTheme.accent : Color.secondary)
                 .frame(width: 24, height: 24)
                 .contentShape(Circle())
@@ -986,6 +986,13 @@ private struct ProjectFolderCard: View {
                             FizzIcon(symbol: "star.fill", size: 9)
                                 .foregroundStyle(.yellow)
                         }
+                    }
+
+                    HStack(spacing: 5) {
+                        Text(projectSubtitle)
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
 
                         if project.dirtyCount > 0 {
                             TagChip(
@@ -993,14 +1000,10 @@ private struct ProjectFolderCard: View {
                                 tint: .orange,
                                 compact: true
                             )
+                            .fixedSize()
                             .help("\(project.dirtyCount) 处未提交改动")
                         }
                     }
-
-                    Text(projectSubtitle)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
 
                 Spacer(minLength: 4)
@@ -1013,8 +1016,8 @@ private struct ProjectFolderCard: View {
                     .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
                     .frame(width: 18, height: 18)
                     .accessibilityHidden(true)
-                } else {
-                    PortStatusBadge(state: project.port)
+                } else if project.port == .running {
+                    PortStatusBadge(state: project.port, port: project.run?.port)
                 }
             }
 
@@ -1045,10 +1048,6 @@ private struct ProjectFolderCard: View {
 
                 if let stack = firstStack {
                     TagChip(text: stack.0, tint: stack.1, compact: true)
-                }
-
-                if !selecting {
-                    SessionContinueButton(project: project, style: .compact)
                 }
             }
             .lineLimit(1)
@@ -1183,10 +1182,8 @@ private struct ProjectListRow: View {
             Text(project.sizeLoadState == .ready ? Format.bytes(project.size.totalBytes) : "统计中")
                 .frame(width: 62, alignment: .trailing)
                 .foregroundStyle(.secondary)
-            PortStatusBadge(state: project.port)
-
-            if !selecting {
-                SessionContinueButton(project: project, style: .compact)
+            if project.port == .running {
+                PortStatusBadge(state: project.port, port: project.run?.port)
             }
         }
         .font(.caption2.monospacedDigit())
