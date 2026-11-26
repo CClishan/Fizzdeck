@@ -55,7 +55,8 @@ To work in Xcode, open `Package.swift`.
 - Menu bar pending count with quick access to the overview and recent projects
 - Local notifications when a dev server becomes ready or a test fails
 - `⌘K` command palette for projects, branches, and actions
-- Finder, Terminal, and editor quick actions for Cursor, VS Code, Zed, Antigravity, JetBrains IDEs, and top-level or nested Xcode targets, including `⌘⇧T` for Terminal
+- Finder, preferred terminal, and editor quick actions for Cursor, VS Code, Zed, Antigravity, JetBrains IDEs, and top-level or nested Xcode targets, including `⌘⇧T` for the terminal
+- Terminal preference for Terminal, iTerm2, Ghostty, or Warp, plus automatic or Codex Desktop resume routing
 - Collapsible project groups with automatic path-based classification plus manual group assignment, new-group creation, and restore-to-automatic
 - Search across projects, paths, stacks, and branches
 - Dashboard and list layouts, with a half-width attention card beside four summary cards
@@ -65,12 +66,12 @@ To work in Xcode, open `Package.swift`.
 - Git status, ahead/behind state, dirty files, and recent commits
 - Branch switching, confirmed fetch, fast-forward pull, and push with inline results
 - Project documentation discovery and reading
-- Codex and Claude Code session list with tool filters, last user request, resume commands, and confirmed ending of dedicated CLI processes
+- Codex, Claude Code, and Grok session list with tool filters, last user request, resume in the preferred terminal or Codex Desktop, and confirmed ending of dedicated CLI processes
 - Start/stop and test controls in a floating Liquid Glass action dock
 - Port readiness checks and log access
 - Background test execution with live output
 - Stars, color tags, and notes
-- Fixed light appearance with native glass controls and a floating Liquid Glass action dock
+- Light and low-saturation charcoal dark appearances with native glass controls and a floating Liquid Glass action dock
 
 ## Shared state
 
@@ -82,6 +83,7 @@ FizzDeck keeps its state in `~/.repodeck`, a path retained for backward compatib
 | `state.json` | Stars, tags, groups, notes, and UI state |
 | `roots-cache.json` | Scan cache |
 | `logs/` | Development server logs |
+| `launchers/` | Short-lived resume scripts, cleaned after 24 hours |
 
 The native app and web UI can use the same state without an export step.
 
@@ -110,6 +112,6 @@ script/build_and_run.sh      Build and launch entry point
 
 ## Not implemented yet
 
-- Background file watching
+- Warp auto-running resume commands; FizzDeck opens the project directory and offers the command to copy
 - Ending Codex Desktop sessions; FizzDeck never terminates the shared app-server
 - Code signing and notarization
