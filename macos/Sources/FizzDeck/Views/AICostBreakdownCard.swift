@@ -89,7 +89,9 @@ struct AICostBreakdownCard: View {
                                 Text("\(Int((segment.fraction * 100).rounded()))%")
                                     .font(.system(size: 10.5, weight: .medium).monospacedDigit())
                                     .foregroundStyle(.tertiary)
-                                    .frame(width: 30, alignment: .trailing)
+                                    .lineLimit(1)
+                                    .fixedSize()
+                                    .frame(minWidth: 36, alignment: .trailing)
                             }
                         }
                     }

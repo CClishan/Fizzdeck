@@ -42,28 +42,34 @@ struct WeeklyTimelineCard: View {
                     )
             }
 
-            GeometryReader { proxy in
-                let trackHeight = proxy.size.height
-                ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                        .fill(FizzTheme.recessedFill)
+            let visibleBlocks = Array(column.blocks.prefix(4))
+            let overflowCount = max(0, column.blocks.count - visibleBlocks.count)
 
-                    ForEach(column.blocks) { block in
-                        blockPill(block, trackHeight: trackHeight)
-                    }
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(visibleBlocks) { block in
+                    blockPill(block)
                 }
+
+                if overflowCount > 0 {
+                    Text("+\(overflowCount)")
+                        .font(.system(size: 9, weight: .medium).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                }
+
+                Spacer(minLength: 0)
             }
-            .frame(height: 112)
+            .padding(4)
+            .frame(maxWidth: .infinity, minHeight: 112, maxHeight: 112, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                    .fill(FizzTheme.recessedFill)
+            )
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func blockPill(_ block: TimelineBlock, trackHeight: CGFloat) -> some View {
-        let clampedStart = min(22.5, max(6.0, block.startHour))
-        let topFraction = (clampedStart - 6.0) / 18.0
-        let heightFraction = min(1.0 - topFraction, max(0.12, block.durationHours / 18.0))
-        let yOffset = topFraction * max(0, trackHeight - 14)
-        let blockHeight = max(14, heightFraction * trackHeight)
+    private func blockPill(_ block: TimelineBlock) -> some View {
         let tint: Color = block.kind == .commit ? .green : FizzTheme.accent
 
         return Button {
@@ -73,13 +79,12 @@ struct WeeklyTimelineCard: View {
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.white)
                 .lineLimit(1)
+                .truncationMode(.tail)
                 .padding(.horizontal, 4)
-                .frame(maxWidth: .infinity, minHeight: blockHeight, maxHeight: blockHeight, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 20, maxHeight: 20, alignment: .leading)
                 .background(tint.opacity(0.88), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 3)
-        .offset(y: yOffset)
         .help("\(block.projectName) · \(block.detail)")
     }
 

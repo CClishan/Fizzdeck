@@ -243,14 +243,29 @@ final class DashboardMetricsTests: XCTestCase {
         XCTAssertEqual(continueItems.map(\.project.path), ["/tmp/a"])
         XCTAssertEqual(continueItems.first?.summary, "Refactor sidebar")
 
+        let commitTs1 = Int(now.timeIntervalSince1970)
+        let commitTs2 = Int(now.addingTimeInterval(-3600).timeIntervalSince1970)
+        let commitActivity = CommitActivitySnapshot(
+            byProject: [
+                "/tmp/a": RepoCommitActivity(
+                    path: "/tmp/a",
+                    head: "abc",
+                    authorEmails: [],
+                    windowDays: 371,
+                    timestamps: [commitTs1, commitTs2],
+                    updatedAt: now
+                )
+            ]
+        )
         let timeline = DashboardMetrics.weeklyTimeline(
             projects: [pActive],
-            commitActivity: .empty,
+            commitActivity: commitActivity,
             now: now,
             calendar: calendar
         )
         XCTAssertEqual(timeline.count, 7)
-        XCTAssertEqual(timeline.last?.blocks.count, 1)
+        XCTAssertEqual(timeline.last?.blocks.count, 2)
+        XCTAssertEqual(timeline.last?.blocks.first(where: { $0.kind == .commit })?.detail, "2 次提交")
         XCTAssertTrue(timeline.last?.isToday == true)
 
         let alerts = DashboardMetrics.healthAlerts(

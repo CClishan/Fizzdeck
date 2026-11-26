@@ -492,9 +492,10 @@ enum DashboardMetrics {
         )
 
         var blocksByDay: [String: [TimelineBlock]] = [:]
+        var commitGroups: [String: [String: (earliestHour: Double, count: Int)]] = [:]
 
         for (path, activity) in commitActivity.byProject {
-            guard let project = projectByPath[path] else { continue }
+            guard projectByPath[path] != nil else { continue }
             for ts in activity.timestamps {
                 let date = Date(timeIntervalSince1970: TimeInterval(ts))
                 let day = calendar.startOfDay(for: date)
@@ -502,14 +503,28 @@ enum DashboardMetrics {
                 let key = WorkbenchMetrics.dayKey(day, calendar: calendar)
                 let comps = calendar.dateComponents([.hour, .minute], from: date)
                 let hour = Double(comps.hour ?? 12) + Double(comps.minute ?? 0) / 60.0
+                if let existing = commitGroups[key]?[path] {
+                    commitGroups[key, default: [:]][path] = (
+                        earliestHour: min(existing.earliestHour, hour),
+                        count: existing.count + 1
+                    )
+                } else {
+                    commitGroups[key, default: [:]][path] = (earliestHour: hour, count: 1)
+                }
+            }
+        }
+
+        for (key, byPath) in commitGroups {
+            for (path, group) in byPath {
+                guard let project = projectByPath[path] else { continue }
                 blocksByDay[key, default: []].append(TimelineBlock(
-                    id: "c:\(path):\(ts)",
-                    startHour: hour,
-                    durationHours: 0.75,
+                    id: "c:\(path):\(key)",
+                    startHour: group.earliestHour,
+                    durationHours: min(2.5, 0.75 + Double(group.count - 1) * 0.25),
                     projectName: project.displayName,
                     projectPath: path,
                     kind: .commit,
-                    detail: "提交"
+                    detail: group.count == 1 ? "提交" : "\(group.count) 次提交"
                 ))
             }
         }
