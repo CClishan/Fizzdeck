@@ -19,14 +19,47 @@ final class RepositoryStore {
 
     var projects: [RepoProject] = []
     var roots: [String] = []
-    var selectedPath: String? = homeSelection {
+    var destination: AppDestination = .dashboard {
         didSet {
-            guard let selectedPath,
-                  selectedPath != Self.homeSelection,
-                  !selectedPath.hasPrefix(Self.filterPrefix),
-                  projects.contains(where: { $0.path == selectedPath })
+            guard case let .project(path) = destination,
+                  projects.contains(where: { $0.path == path })
             else { return }
-            recordRecentProject(selectedPath)
+            recordRecentProject(path)
+        }
+    }
+    var selectedPath: String? {
+        get {
+            switch destination {
+            case .dashboard:
+                Self.homeSelection
+            case .project(let path):
+                path
+            case .library, .cleanup:
+                nil
+            }
+        }
+        set {
+            guard let newValue else {
+                destination = .dashboard
+                return
+            }
+            if newValue == Self.homeSelection {
+                destination = .dashboard
+            } else if newValue.hasPrefix(Self.filterPrefix) {
+                let raw = String(newValue.dropFirst(Self.filterPrefix.count))
+                switch HomeFilter(rawValue: raw) ?? .all {
+                case .all:
+                    destination = .library()
+                case .starred:
+                    destination = .library(LibraryQuery(starredOnly: true))
+                case .dirty:
+                    destination = .library(LibraryQuery(dirtyOnly: true))
+                case .running:
+                    destination = .library(LibraryQuery(runningOnly: true))
+                }
+            } else {
+                destination = .project(newValue)
+            }
         }
     }
     var query = ""
@@ -74,18 +107,22 @@ final class RepositoryStore {
     }
 
     var selectedProject: RepoProject? {
-        guard let selectedPath,
-              selectedPath != Self.homeSelection,
-              !selectedPath.hasPrefix(Self.filterPrefix)
-        else { return nil }
-        return projects.first { $0.path == selectedPath }
+        guard let path = destination.projectPath else { return nil }
+        return projects.first { $0.path == path }
     }
 
     var selectedHomeFilter: HomeFilter? {
-        guard let selectedPath else { return nil }
-        if selectedPath == Self.homeSelection { return .all }
-        guard selectedPath.hasPrefix(Self.filterPrefix) else { return nil }
-        return HomeFilter(rawValue: String(selectedPath.dropFirst(Self.filterPrefix.count))) ?? .all
+        switch destination {
+        case .dashboard:
+            return .all
+        case .library(let query):
+            if query.starredOnly { return .starred }
+            if query.dirtyOnly { return .dirty }
+            if query.runningOnly { return .running }
+            return .all
+        case .cleanup, .project:
+            return nil
+        }
     }
 
     var runningCount: Int {
@@ -332,21 +369,18 @@ final class RepositoryStore {
         self.roots = roots
         projects.removeAll { $0.path == project.path }
         ScanCacheStore.save(projects)
-        if selectedPath == project.path {
-            selectedPath = Self.homeSelection
+        if destination.projectPath == project.path {
+            destination = .dashboard
             requestedTab = nil
         }
     }
 
     private func ensureValidSelection() {
-        if selectedPath == Self.homeSelection
-            || selectedPath?.hasPrefix(Self.filterPrefix) == true {
+        guard case let .project(path) = destination else { return }
+        if projects.contains(where: { $0.path == path }) {
             return
         }
-        if let selectedPath, projects.contains(where: { $0.path == selectedPath }) {
-            return
-        }
-        selectedPath = Self.homeSelection
+        destination = .dashboard
     }
 
     private func startSizeEnrichment(for paths: [String]) {
@@ -418,15 +452,33 @@ final class RepositoryStore {
         recentProjectPaths.removeAll { $0 == project.path }
         UserDefaults.standard.set(recentProjectPaths, forKey: Self.recentProjectsKey)
 
-        if selectedPath == project.path {
-            selectedPath = Self.homeSelection
+        if destination.projectPath == project.path {
+            destination = .dashboard
             requestedTab = nil
         }
         return result
     }
 
+    func openDashboard() {
+        destination = .dashboard
+        requestedTab = nil
+        isCommandPalettePresented = false
+    }
+
+    func openLibrary(_ query: LibraryQuery = LibraryQuery()) {
+        destination = .library(query)
+        requestedTab = nil
+        isCommandPalettePresented = false
+    }
+
+    func openCleanup() {
+        destination = .cleanup
+        requestedTab = nil
+        isCommandPalettePresented = false
+    }
+
     func openProject(_ project: RepoProject, tab: ProjectTab? = nil) {
-        selectedPath = project.path
+        destination = .project(project.path)
         requestedTab = tab
         isCommandPalettePresented = false
     }

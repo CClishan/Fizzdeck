@@ -92,30 +92,30 @@ struct SidebarView: View {
 
             VStack(spacing: 2) {
                 SidebarRailButton(
-                    symbol: "square.grid.2x2",
-                    label: "总览",
-                    selected: store.selectedHomeFilter == .all,
+                    symbol: "house",
+                    label: "工作台",
+                    selected: store.destination.isDashboard,
                     showsDot: runningCount > 0
                 ) {
-                    selectHome(.all)
+                    store.openDashboard()
                 }
 
                 SidebarRailButton(
-                    symbol: "arrow.triangle.branch",
-                    label: "有改动",
-                    selected: store.selectedHomeFilter == .dirty,
-                    showsDot: dirtyCount > 0
+                    symbol: "square.grid.2x2",
+                    label: "项目库",
+                    selected: store.destination.isLibrary,
+                    showsDot: false
                 ) {
-                    selectHome(.dirty)
+                    store.openLibrary()
                 }
 
                 SidebarRailButton(
                     symbol: "archivebox",
                     label: "可清理 \(Format.bytes(cleanupBytes))",
-                    selected: false,
+                    selected: store.destination.isCleanup,
                     showsDot: cleanupBytes > 0
                 ) {
-                    selectHome(.all)
+                    store.openCleanup()
                 }
             }
 
@@ -207,30 +207,31 @@ struct SidebarView: View {
     private var globalLinks: some View {
         VStack(spacing: 1) {
             SidebarSignalRow(
-                symbol: "square.grid.2x2",
-                title: "总览",
+                symbol: "house",
+                title: "工作台",
                 detail: runningCount > 0 ? "\(runningCount) 运行中" : nil,
                 detailColor: .green,
-                selected: store.selectedHomeFilter == .all
+                selected: store.destination.isDashboard
             ) {
-                selectHome(.all)
+                store.openDashboard()
             }
 
             SidebarSignalRow(
-                symbol: "arrow.triangle.branch",
-                title: "有改动",
-                detail: "\(dirtyCount)",
-                selected: store.selectedHomeFilter == .dirty
+                symbol: "square.grid.2x2",
+                title: "项目库",
+                detail: "\(store.projects.count)",
+                selected: store.destination.isLibrary
             ) {
-                selectHome(.dirty)
+                store.openLibrary()
             }
 
             SidebarSignalRow(
                 symbol: "archivebox",
                 title: "可清理",
-                detail: Format.bytes(cleanupBytes)
+                detail: Format.bytes(cleanupBytes),
+                selected: store.destination.isCleanup
             ) {
-                selectHome(.all)
+                store.openCleanup()
             }
         }
     }
@@ -292,7 +293,7 @@ struct SidebarView: View {
         return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 2) {
                 Button {
-                    toggleGroup(group.name)
+                    store.openLibrary(LibraryQuery(group: group.name))
                 } label: {
                     HStack(spacing: 6) {
                         Circle()
@@ -305,14 +306,23 @@ struct SidebarView: View {
                             .lineLimit(1)
 
                         Spacer(minLength: 0)
-
-                        FizzIcon(symbol: "chevron.right", size: FizzIconScale.micro)
-                            .foregroundStyle(.tertiary)
-                            .rotationEffect(.degrees(isCollapsed ? 0 : 90))
                     }
-                    .padding(.horizontal, 9)
+                    .padding(.leading, 9)
                     .frame(height: 26)
                     .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("在项目库中筛选「\(group.name)」")
+                .accessibilityLabel("筛选 \(group.name) 分组")
+
+                Button {
+                    toggleGroup(group.name)
+                } label: {
+                    FizzIcon(symbol: "chevron.right", size: FizzIconScale.micro)
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(group.name) 分组")
@@ -425,10 +435,6 @@ struct SidebarView: View {
         runningProjects.count
     }
 
-    private var dirtyCount: Int {
-        store.projects.filter { $0.changes.total > 0 }.count
-    }
-
     private var cleanupBytes: Int64 {
         store.projects.reduce(0) { $0 + $1.cleanup.reusableBytes }
     }
@@ -446,10 +452,6 @@ struct SidebarView: View {
             let items = store.projects.filter { $0.group == group }
             return items.isEmpty ? nil : SidebarGroup(name: group, items: items)
         }
-    }
-
-    private func selectHome(_ filter: HomeFilter) {
-        store.selectedPath = RepositoryStore.selection(for: filter)
     }
 
     private func toggleGroup(_ name: String) {

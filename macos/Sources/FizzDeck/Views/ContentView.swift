@@ -49,12 +49,12 @@ struct ContentView: View {
 
                 if let project = store.selectedProject {
                     Button {
-                        store.selectedPath = RepositoryStore.homeSelection
+                        store.openDashboard()
                     } label: {
                         FizzIcon(symbol: "chevron.left", size: FizzIconScale.toolbar)
                     }
-                    .help("返回总览")
-                    .accessibilityLabel("返回总览")
+                    .help("返回工作台")
+                    .accessibilityLabel("返回工作台")
 
                     Button {
                         Task { await store.rescanProjects([project]) }
@@ -133,12 +133,19 @@ struct ContentView: View {
 
     private var detail: some View {
         Group {
-            if let filter = store.selectedHomeFilter {
-                HomeDashboardView(filter: filter)
-            } else if let project = store.selectedProject {
-                ProjectDetailView(project: project)
-            } else {
-                WelcomeView()
+            switch store.destination {
+            case .dashboard:
+                HomeDashboardView(filter: .all)
+            case .library(let query):
+                LibraryView(query: query)
+            case .cleanup:
+                CleanupWorkspaceView()
+            case .project:
+                if let project = store.selectedProject {
+                    ProjectDetailView(project: project)
+                } else {
+                    WelcomeView()
+                }
             }
         }
         .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)

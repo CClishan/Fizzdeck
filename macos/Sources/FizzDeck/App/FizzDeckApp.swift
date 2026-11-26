@@ -39,8 +39,23 @@ struct FizzDeckApp: App {
 
                 Divider()
 
-                Button("总览") {
-                    store.selectedPath = RepositoryStore.homeSelection
+                Button("工作台") {
+                    store.openDashboard()
+                }
+                .keyboardShortcut("1", modifiers: [.command])
+
+                Button("项目库") {
+                    store.openLibrary()
+                }
+                .keyboardShortcut("2", modifiers: [.command])
+
+                Button("可清理") {
+                    store.openCleanup()
+                }
+                .keyboardShortcut("3", modifiers: [.command])
+
+                Button("返回工作台") {
+                    store.openDashboard()
                 }
                 .keyboardShortcut("0", modifiers: [.command])
                 Button("重新扫描") {
