@@ -10,6 +10,8 @@ struct ProjectDetailView: View {
     @State private var detail: ProjectDetail = .empty
     @State private var loadingDetail = false
     @State private var noteDraft = ""
+    @Namespace private var tabNamespace
+    @Namespace private var dockNamespace
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,7 +22,10 @@ struct ProjectDetailView: View {
                     OverviewTabView(
                         project: project,
                         noteDraft: $noteDraft,
-                        saveNote: { store.setNote(noteDraft, for: project) }
+                        saveNote: {
+                            store.setNote(noteDraft, for: project)
+                            ToastCenter.shared.show("备注已保存", symbol: "checkmark.circle.fill", tint: .green)
+                        }
                     )
                 case .git:
                     GitTabView(project: project, detail: detail, loading: loadingDetail) {
@@ -43,18 +48,22 @@ struct ProjectDetailView: View {
             .contentMargins(.bottom, 76, for: .scrollContent)
             .scrollEdgeEffectHidden(true, for: .bottom)
             .overlay(alignment: .bottom) {
-                HStack(spacing: 10) {
-                    if showsActionDock {
-                        ProjectActionDock(project: project, tab: tab)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                GlassEffectContainer(spacing: 10) {
+                    HStack(spacing: 10) {
+                        if showsActionDock {
+                            ProjectActionDock(project: project, tab: tab)
+                                .glassEffectID("actionDock", in: dockNamespace)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        SessionContinueButton(project: project, style: .dock)
+                            .glassEffectID("continueDock", in: dockNamespace)
                     }
-                    SessionContinueButton(project: project, style: .dock)
                 }
                 .padding(.horizontal, FizzSpacing.page)
                 .padding(.bottom, 16)
             }
             .animation(
-                FizzMotion.resolved(reduceMotion, FizzMotion.panel),
+                FizzMotion.resolved(reduceMotion, FizzMotion.morph),
                 value: showsActionDock
             )
         }
@@ -114,7 +123,7 @@ struct ProjectDetailView: View {
         let selected = tab == item
 
         return Button {
-            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                 tab = item
             }
         } label: {
@@ -123,10 +132,13 @@ struct ProjectDetailView: View {
                 .foregroundStyle(selected ? Color.white : Color.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(
-                    selected ? FizzTheme.accent : Color.clear,
-                    in: Capsule()
-                )
+                .background {
+                    if selected {
+                        Capsule()
+                            .fill(FizzTheme.accent)
+                            .matchedGeometryEffect(id: "projectTabSelection", in: tabNamespace)
+                    }
+                }
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -170,10 +182,7 @@ private struct ProjectHero: View {
                         .truncationMode(.tail)
 
                     if project.port == .running {
-                        Circle()
-                            .fill(.green)
-                            .frame(width: 6, height: 6)
-                            .accessibilityHidden(true)
+                        RunningPulseDot(size: 7)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -220,6 +229,18 @@ private struct ProjectHero: View {
         }
         .padding(17)
         .fizzCard(radius: FizzRadius.panel)
+        .overlay {
+            if project.artwork != nil {
+                RadialGradient(
+                    colors: [accent.opacity(0.05), .clear],
+                    center: .topLeading,
+                    startRadius: 10,
+                    endRadius: 340
+                )
+                .clipShape(RoundedRectangle(cornerRadius: FizzRadius.panel, style: .continuous))
+                .allowsHitTesting(false)
+            }
+        }
         .padding(.horizontal, FizzSpacing.page)
         .padding(.top, FizzSpacing.row)
     }
@@ -233,6 +254,7 @@ private struct ProjectHeroActions: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     let project: RepoProject
 
     @State private var hovering: Action?
@@ -248,6 +270,10 @@ private struct ProjectHeroActions: View {
         case more
     }
 
+    private var utilityIconStyle: Color {
+        colorScheme == .dark ? Color.primary.opacity(0.86) : Color.secondary
+    }
+
     var body: some View {
         GlassEffectContainer(spacing: 0) {
             HStack(spacing: 0) {
@@ -257,7 +283,7 @@ private struct ProjectHeroActions: View {
                     }
                 } label: {
                     FizzIcon(symbol: project.starred ? "star.fill" : "star", size: 13)
-                        .foregroundStyle(project.starred ? Color.yellow : Color.secondary)
+                        .foregroundStyle(project.starred ? Color.yellow : utilityIconStyle)
                         .frame(width: 30, height: 30)
                         .background(segmentBackground(.star), in: segmentShape)
                         .contentShape(segmentShape)
@@ -275,10 +301,10 @@ private struct ProjectHeroActions: View {
                 } label: {
                     HStack(spacing: 3) {
                         FizzIcon(symbol: "folder", size: 12)
+                            .foregroundStyle(utilityIconStyle)
                         FizzIcon(symbol: "chevron.down", size: 7)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(colorScheme == .dark ? Color.primary.opacity(0.65) : Color.secondary.opacity(0.7))
                     }
-                    .foregroundStyle(.secondary)
                     .frame(width: 39, height: 30)
                     .background(segmentBackground(.open), in: segmentShape)
                     .contentShape(segmentShape)
@@ -303,8 +329,9 @@ private struct ProjectHeroActions: View {
                     ProjectGroupingMenu(project: project)
                     Divider()
                     Button {
-                        if let url = ArtworkFilePicker.pickImageURL() {
-                            _ = store.setCustomArtwork(from: url, for: project)
+                        if let url = ArtworkFilePicker.pickImageURL(),
+                           store.setCustomArtwork(from: url, for: project) {
+                            ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: FizzTheme.accent)
                         }
                     } label: {
                         Label(
@@ -315,6 +342,7 @@ private struct ProjectHeroActions: View {
                     if project.customArtwork != nil {
                         Button {
                             store.clearCustomArtwork(for: project)
+                            ToastCenter.shared.show("已恢复自动识别封面", symbol: "arrow.uturn.backward.circle.fill", tint: .secondary)
                         } label: {
                             Label("恢复自动识别截图", systemImage: "arrow.uturn.backward")
                         }
@@ -358,7 +386,7 @@ private struct ProjectHeroActions: View {
                     }
                 } label: {
                     FizzIcon(symbol: "ellipsis", size: 12)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(utilityIconStyle)
                         .frame(width: 30, height: 30)
                         .background(segmentBackground(.more), in: segmentShape)
                         .contentShape(segmentShape)

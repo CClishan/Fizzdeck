@@ -22,6 +22,7 @@ struct ContentView: View {
                             )
                             .padding(.leading, SidebarLayout.outerInset)
                             .padding(.vertical, SidebarLayout.outerInset)
+                            .zIndex(1)
 
                         detail
                     }
@@ -148,7 +149,12 @@ struct ContentView: View {
                 }
             }
         }
-        .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .overlay(alignment: .top) {
+            ToastOverlayView(center: ToastCenter.shared)
+                .padding(.top, 12)
+        }
     }
 
     private func openPendingProject() {

@@ -111,6 +111,7 @@ struct SessionContinueButton: View {
                             .foregroundStyle(FizzTheme.accent)
                         Text("打开 \(editor.title)")
                             .font(.system(size: fontSize, weight: .semibold))
+                            .foregroundStyle(.primary)
                     }
                 }
                 .buttonStyle(.glass)
@@ -147,6 +148,7 @@ struct SessionContinueButton: View {
                         }
                         Text("继续")
                             .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(.primary)
                     }
                 }
                 .buttonStyle(.glass)
@@ -190,6 +192,7 @@ struct SessionContinueButton: View {
                             }
                             Text("继续 · \(toolTitle(primary.tool))")
                                 .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.primary)
                         }
                     }
                     .buttonStyle(.glass)
@@ -234,6 +237,7 @@ struct SessionContinueButton: View {
                             }
                             Text("继续 · \(toolTitle(primary.tool))")
                                 .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(.primary)
                         }
                     }
                     .buttonStyle(.glass)
@@ -268,6 +272,7 @@ struct SessionContinueButton: View {
                             .foregroundStyle(FizzTheme.accent)
                         Text("打开 \(editor.title)")
                             .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(.primary)
                     }
                 }
                 .buttonStyle(.glass)
@@ -298,6 +303,7 @@ struct SessionContinueButton: View {
             toolMenuItems
         } label: {
             FizzIcon(symbol: "chevron.down", size: iconSize)
+                .foregroundStyle(.primary)
         }
         .menuStyle(.button)
         .buttonStyle(.glass)

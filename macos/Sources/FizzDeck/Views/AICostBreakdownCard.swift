@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AICostBreakdownCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let projects: [RepoProject]
     let kpi: DashboardKPISummary
 
@@ -84,10 +85,12 @@ struct AICostBreakdownCard: View {
                                 Text(valueLabel(for: segment))
                                     .font(.system(size: 11, design: .monospaced))
                                     .monospacedDigit()
+                                    .contentTransition(.numericText())
                                     .foregroundStyle(.secondary)
 
                                 Text("\(Int((segment.fraction * 100).rounded()))%")
                                     .font(.system(size: 10.5, weight: .medium).monospacedDigit())
+                                    .contentTransition(.numericText())
                                     .foregroundStyle(.tertiary)
                                     .lineLimit(1)
                                     .fixedSize()
@@ -100,6 +103,7 @@ struct AICostBreakdownCard: View {
             }
             .padding(16)
             .fizzCard(radius: FizzRadius.panel)
+            .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: mode)
         }
     }
 
@@ -124,6 +128,7 @@ struct AICostBreakdownCard: View {
                 Text(centerPrimary)
                     .font(.system(size: 16, weight: .semibold))
                     .monospacedDigit()
+                    .contentTransition(.numericText())
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(centerSubtitle)
@@ -153,7 +158,7 @@ struct AICostBreakdownCard: View {
         if segment.costUSD > 0, let formatted = Format.cost(segment.costUSD, estimated: false) {
             return formatted
         }
-        return Format.tokens(segment.tokens)
+        return "\(Format.tokens(segment.tokens)) tok"
     }
 
     private func segmentColor(_ segment: CostSegment, index: Int) -> Color {

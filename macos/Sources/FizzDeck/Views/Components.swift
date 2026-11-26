@@ -105,6 +105,39 @@ struct Panel<Content: View, Accessory: View>: View {
     }
 }
 
+struct RunningPulseDot: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var size: CGFloat = 7
+    @State private var pulsing = false
+
+    var body: some View {
+        ZStack {
+            if !reduceMotion {
+                Circle()
+                    .fill(Color.green.opacity(0.32))
+                    .frame(width: size, height: size)
+                    .scaleEffect(pulsing ? 2.2 : 1.0)
+                    .opacity(pulsing ? 0 : 0.65)
+                    .animation(
+                        .easeOut(duration: 2.4).repeatForever(autoreverses: false),
+                        value: pulsing
+                    )
+            }
+
+            Circle()
+                .fill(.green)
+                .frame(width: size, height: size)
+        }
+        .frame(width: size, height: size)
+        .onAppear {
+            if !reduceMotion {
+                pulsing = true
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 struct KeyValueRow: View {
     let key: String
     let value: String

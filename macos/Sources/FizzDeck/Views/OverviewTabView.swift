@@ -24,7 +24,6 @@ struct OverviewTabView: View {
 
     @State private var devLogExists = false
     @State private var testLogExists = false
-    @State private var contentWidth: CGFloat = 960
 
     private var weekDays: [WorkbenchDay] {
         WorkbenchMetrics.lastSevenDays(counts: project.weekly)
@@ -74,25 +73,27 @@ struct OverviewTabView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: FizzSpacing.section) {
-                projectSummaryPanel
-                metricGrid
+        GeometryReader { proxy in
+            let outerWidth = max(320, proxy.size.width)
+            let contentWidth = max(260, outerWidth - FizzSpacing.page * 2)
 
-                if project.run != nil || project.test != nil {
-                    ServicesPanel(project: project)
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: FizzSpacing.section) {
+                    projectSummaryPanel(width: contentWidth)
+                    metricGrid
+
+                    if project.run != nil || project.test != nil {
+                        ServicesPanel(project: project)
+                    }
+
+                    logsAndActivitySection(width: contentWidth)
+
+                    notePanel
                 }
-
-                logsAndActivitySection
-
-                notePanel
+                .frame(width: contentWidth, alignment: .leading)
+                .padding(FizzSpacing.page)
             }
-            .onGeometryChange(for: CGFloat.self) {
-                $0.size.width
-            } action: { newWidth in
-                contentWidth = newWidth
-            }
-            .padding(FizzSpacing.page)
+            .frame(width: outerWidth, height: proxy.size.height)
         }
         .task(id: logAvailabilityKey) {
             await refreshLogAvailability()
@@ -244,15 +245,15 @@ struct OverviewTabView: View {
     }
 
     @ViewBuilder
-    private var logsAndActivitySection: some View {
+    private func logsAndActivitySection(width: CGFloat) -> some View {
         let hasActivity = !activityEntries.isEmpty
         if OverviewLayoutPolicy.showsLogsAndActivitySideBySide(
-            width: contentWidth,
+            width: width,
             hasLogs: logsVisible,
             hasActivity: hasActivity
         ) {
             let widths = OverviewLayoutPolicy.splitWidths(
-                totalWidth: contentWidth,
+                totalWidth: width,
                 spacing: FizzSpacing.grid
             )
             HStack(alignment: .top, spacing: FizzSpacing.grid) {
@@ -280,10 +281,10 @@ struct OverviewTabView: View {
         }
     }
 
-    private var projectSummaryPanel: some View {
+    private func projectSummaryPanel(width: CGFloat) -> some View {
         Panel(title: "项目", symbol: "text.quote") {
             switch OverviewLayoutPolicy.summaryLayout(
-                width: contentWidth,
+                width: width,
                 hasArtwork: true
             ) {
             case .threeColumns:
@@ -334,15 +335,19 @@ struct OverviewTabView: View {
         ArtworkThumbnail(
             project: project,
             onPickImage: {
-                if let url = ArtworkFilePicker.pickImageURL() {
-                    _ = store.setCustomArtwork(from: url, for: project)
+                if let url = ArtworkFilePicker.pickImageURL(),
+                   store.setCustomArtwork(from: url, for: project) {
+                    ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: FizzTheme.accent)
                 }
             },
             onDropImage: { url in
-                _ = store.setCustomArtwork(from: url, for: project)
+                if store.setCustomArtwork(from: url, for: project) {
+                    ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: FizzTheme.accent)
+                }
             },
             onResetCustom: {
                 store.clearCustomArtwork(for: project)
+                ToastCenter.shared.show("已恢复自动识别封面", symbol: "arrow.uturn.backward.circle.fill", tint: .secondary)
             }
         )
     }
@@ -583,6 +588,19 @@ private struct ArtworkThumbnail: View {
                             Text("上传项目截图")
                                 .font(.system(size: 10.5, weight: .medium))
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if isDropTargeted {
+                        ZStack {
+                            Rectangle().fill(.ultraThinMaterial)
+                            VStack(spacing: 4) {
+                                FizzIcon(symbol: "photo.badge.plus", size: 16)
+                                    .foregroundStyle(FizzTheme.accent)
+                                Text("松开以替换封面")
+                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                            }
                         }
                     }
                 }

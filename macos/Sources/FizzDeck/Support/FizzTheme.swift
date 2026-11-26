@@ -152,6 +152,8 @@ enum FizzMotion {
     static let quick = Animation.snappy(duration: 0.16)
     static let standard = Animation.snappy(duration: 0.22)
     static let panel = Animation.easeOut(duration: 0.12)
+    static let spring = Animation.spring(response: 0.34, dampingFraction: 0.84)
+    static let morph = Animation.spring(response: 0.38, dampingFraction: 0.82)
 
     static func resolved(_ reduceMotion: Bool, _ animation: Animation) -> Animation? {
         reduceMotion ? nil : animation
