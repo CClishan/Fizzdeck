@@ -10,15 +10,20 @@ struct HomeHeaderView: View {
     let facets: HomeFacets
     let availableGroups: [String]
     let availableTools: [String]
+    var availableFrameworks: [String] = []
+    var selectedFramework: String? = nil
     let selectionMode: Bool
     let groupCount: (String) -> Int
     let colorCount: (TagColor) -> Int
     let toolCount: (String) -> Int
+    var frameworkCount: (String) -> Int = { _ in 0 }
     let onSelectMode: (HomeViewMode) -> Void
     let onSelectSort: (HomeSort) -> Void
     let onSetGroup: (String?) -> Void
     let onSetColor: (TagColor?) -> Void
     let onSetTool: (String?) -> Void
+    var onSetFramework: (String?) -> Void = { _ in }
+    var extraActiveFilterCount: Int = 0
     let onClearFacets: () -> Void
     let onToggleSelection: () -> Void
 
@@ -45,12 +50,15 @@ struct HomeHeaderView: View {
                 .padding(.top, 2)
             }
 
-            if facets.hasAny {
+            if facets.hasAny || selectedFramework != nil {
                 activeFilterChips
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.standard), value: facets.hasAny)
+        .animation(
+            FizzMotion.resolved(reduceMotion, FizzMotion.standard),
+            value: facets.hasAny || selectedFramework != nil
+        )
     }
 
     private var modePicker: some View {
@@ -183,7 +191,38 @@ struct HomeHeaderView: View {
             }
             .disabled(availableTools.isEmpty)
 
-            if facets.hasAny {
+            if !availableFrameworks.isEmpty {
+                Menu {
+                    Button {
+                        onSetFramework(nil)
+                    } label: {
+                        Label(
+                            "全部框架",
+                            systemImage: selectedFramework == nil ? "checkmark" : "chevron.left.forwardslash.chevron.right"
+                        )
+                    }
+
+                    Divider()
+
+                    ForEach(availableFrameworks, id: \.self) { framework in
+                        Button {
+                            onSetFramework(framework)
+                        } label: {
+                            Label(
+                                "\(framework) · \(frameworkCount(framework))",
+                                systemImage: selectedFramework == framework ? "checkmark" : "tag"
+                            )
+                        }
+                    }
+                } label: {
+                    Label(
+                        selectedFramework.map { "框架 · \($0)" } ?? "框架",
+                        systemImage: "chevron.left.forwardslash.chevron.right"
+                    )
+                }
+            }
+
+            if facets.hasAny || selectedFramework != nil || extraActiveFilterCount > 0 {
                 Divider()
                 Button(role: .destructive) {
                     onClearFacets()
@@ -203,7 +242,10 @@ struct HomeHeaderView: View {
         .controlSize(.small)
         .glassEffect(.regular.interactive(), in: Capsule())
         .help("排序与筛选")
-        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: facets.hasAny)
+        .animation(
+            FizzMotion.resolved(reduceMotion, FizzMotion.quick),
+            value: facets.hasAny || selectedFramework != nil || extraActiveFilterCount > 0
+        )
     }
 
     private var selectionToggle: some View {
@@ -248,6 +290,11 @@ struct HomeHeaderView: View {
             if let tool = facets.tool {
                 ActiveFilterChip(text: HomeDashboardModel.toolTitle(tool), tint: .purple) {
                     onSetTool(nil)
+                }
+            }
+            if let selectedFramework {
+                ActiveFilterChip(text: selectedFramework, tint: .teal) {
+                    onSetFramework(nil)
                 }
             }
 

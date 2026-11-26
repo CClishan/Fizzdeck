@@ -67,32 +67,20 @@ struct ProjectFolderCard: View {
                 .frame(maxWidth: .infinity, minHeight: 14, alignment: .topLeading)
 
             HStack(spacing: 5) {
-                Text(project.sizeLoadState == .ready ? Format.bytes(project.size.totalBytes) : "统计中")
-                    .font(.system(size: 10, weight: .medium).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                if let stack = firstStack {
+                    TagChip(text: stack.0, tint: stack.1, compact: true)
+                }
 
-                Text("·")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                Spacer(minLength: 4)
 
                 Text(Format.relative(project.recent))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
-
-                Spacer(minLength: 4)
-
-                if let tool = project.sessions.lastTool ?? project.detectedTools.first?.rawValue {
-                    HomeToolBadge(tool: tool, compact: true)
-                }
-
-                if let stack = firstStack {
-                    TagChip(text: stack.0, tint: stack.1, compact: true)
-                }
             }
             .lineLimit(1)
         }
         .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 128, maxHeight: 134, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 122, maxHeight: 128, alignment: .topLeading)
         .background(FizzTheme.cardFill, in: RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous)

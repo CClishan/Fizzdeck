@@ -207,4 +207,72 @@ final class HomeDashboardModelTests: XCTestCase {
         XCTAssertEqual(all.script, "# AppA\nrm -rf '/tmp/a/dist'\n# AppC\nrm -rf '/tmp/c/build'")
         XCTAssertEqual(all.feedback, "已复制 2 个项目的清理命令")
     }
+
+    func testLibraryProjectsFilterSortAndDirtySort() {
+        var p1 = makeProject(
+            path: "/tmp/a",
+            displayName: "Alpha",
+            group: "网页",
+            recent: Date(timeIntervalSince1970: 2_000),
+            dirtyCount: 2,
+            starred: true,
+            port: .running,
+            sessionTools: ["codex"]
+        )
+        p1.ahead = 3
+        p1.stacks = [StackGroup(key: "framework", label: "框架", items: ["Next.js"])]
+
+        var p2 = makeProject(
+            path: "/tmp/b",
+            displayName: "Beta",
+            group: "工具",
+            recent: Date(timeIntervalSince1970: 3_000),
+            dirtyCount: 8,
+            starred: false,
+            port: .stopped
+        )
+        p2.stacks = [StackGroup(key: "framework", label: "框架", items: ["SwiftUI"])]
+
+        XCTAssertEqual(HomeSort.dirty.sort([p1, p2]).map(\.name), ["b", "a"])
+        XCTAssertEqual(HomeDashboardModel.availableFrameworks(in: [p1, p2]), ["Next.js", "SwiftUI"])
+
+        var query = LibraryQuery()
+        query.starredOnly = true
+        query.dirtyOnly = true
+        query.runningOnly = true
+        query.hasSessionsOnly = true
+        query.unpushedOnly = true
+        query.framework = "Next.js"
+        query.searchText = "alpha"
+
+        let matched = HomeDashboardModel.libraryProjects(
+            from: [p1, p2],
+            query: query,
+            sort: .dirty,
+            commitActivity: .empty
+        )
+        XCTAssertEqual(matched.map(\.path), ["/tmp/a"])
+
+        var tzCal = Calendar(identifier: .gregorian)
+        tzCal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let commitDay = Date(timeIntervalSince1970: 1_700_000_000) // 2023-11-14
+        let snapshot = CommitActivitySnapshot(byProject: [
+            "/tmp/b": RepoCommitActivity(
+                path: "/tmp/b",
+                head: "1",
+                authorEmails: [],
+                windowDays: 371,
+                timestamps: [1_700_000_100],
+                updatedAt: commitDay
+            ),
+        ])
+        let dayMatches = HomeDashboardModel.libraryProjects(
+            from: [p1, p2],
+            query: LibraryQuery(commitDayKey: "2023-11-14"),
+            sort: .recent,
+            commitActivity: snapshot,
+            calendar: tzCal
+        )
+        XCTAssertEqual(dayMatches.map(\.path), ["/tmp/b"])
+    }
 }

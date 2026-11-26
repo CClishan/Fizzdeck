@@ -25,6 +25,7 @@ enum HomeSort: String, CaseIterable, Identifiable, Sendable {
     case recent
     case name
     case size
+    case dirty
 
     var id: String { rawValue }
 
@@ -33,6 +34,7 @@ enum HomeSort: String, CaseIterable, Identifiable, Sendable {
         case .recent: "最近活动"
         case .name: "名称"
         case .size: "体积"
+        case .dirty: "改动数"
         }
     }
 
@@ -41,6 +43,7 @@ enum HomeSort: String, CaseIterable, Identifiable, Sendable {
         case .recent: "clock"
         case .name: "textformat.abc"
         case .size: "internaldrive"
+        case .dirty: "exclamationmark.circle"
         }
     }
 
@@ -53,6 +56,11 @@ enum HomeSort: String, CaseIterable, Identifiable, Sendable {
                 return left.displayName.localizedStandardCompare(right.displayName) == .orderedAscending
             case .size:
                 return left.size.totalBytes > right.size.totalBytes
+            case .dirty:
+                if left.dirtyCount != right.dirtyCount {
+                    return left.dirtyCount > right.dirtyCount
+                }
+                return (left.recent ?? .distantPast) > (right.recent ?? .distantPast)
             }
         }
     }
@@ -114,6 +122,66 @@ enum HomeDashboardModel {
         let detected = Set(matching.flatMap(\.allTools))
         let preferred = DetectedTool.allCases.map(\.rawValue).filter(detected.contains)
         return preferred + detected.subtracting(preferred).sorted()
+    }
+
+    static func availableFrameworks(in projects: [RepoProject]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for project in projects {
+            if let primary = project.stacks.first?.items.first,
+               seen.insert(primary).inserted {
+                result.append(primary)
+            }
+        }
+        return result.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    static func libraryProjects(
+        from projects: [RepoProject],
+        query: LibraryQuery,
+        sort: HomeSort,
+        commitActivity: CommitActivitySnapshot,
+        calendar: Calendar = .current
+    ) -> [RepoProject] {
+        let committedOnDay: Set<String>? = query.commitDayKey.map {
+            DashboardMetrics.projectPathsCommitted(
+                onDayKey: $0,
+                snapshot: commitActivity,
+                projects: projects,
+                calendar: calendar
+            )
+        }
+        let needle = query.searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        let filtered = projects.filter { project in
+            if query.starredOnly && !project.starred { return false }
+            if query.dirtyOnly && project.dirtyCount == 0 { return false }
+            if query.runningOnly && project.port != .running { return false }
+            if query.hasSessionsOnly && project.sessions.sessionCount == 0 { return false }
+            if query.unpushedOnly && project.ahead == 0 { return false }
+            if let group = query.group, project.group != group { return false }
+            if let color = query.color, project.color != color { return false }
+            if let tool = query.tool, !project.allTools.contains(tool) { return false }
+            if let framework = query.framework {
+                let matchesFramework = project.stacks.contains { $0.items.contains(framework) }
+                if !matchesFramework { return false }
+            }
+            if let committedOnDay, !committedOnDay.contains(project.path) { return false }
+            if !needle.isEmpty {
+                let matchesSearch = project.displayName.lowercased().contains(needle)
+                    || project.name.lowercased().contains(needle)
+                    || project.path.lowercased().contains(needle)
+                    || (project.branch?.lowercased().contains(needle) ?? false)
+                    || project.kind.title.lowercased().contains(needle)
+                    || project.stacks.contains(where: { group in
+                        group.items.contains(where: { $0.lowercased().contains(needle) })
+                    })
+                if !matchesSearch { return false }
+            }
+            return true
+        }
+
+        return sort.sort(filtered)
     }
 
     static func groupCount(
