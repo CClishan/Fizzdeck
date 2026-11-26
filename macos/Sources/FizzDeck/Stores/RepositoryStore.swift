@@ -31,6 +31,9 @@ final class RepositoryStore {
     }
     var query = ""
     var phase: Phase = .idle
+    var isFirstRunPresented = false
+    var isEnriching = false
+    var pendingSizeCount = 0
     var scannedAt: Date?
     var scanDuration: TimeInterval = 0
     var requestedTab: ProjectTab?
@@ -43,6 +46,11 @@ final class RepositoryStore {
 
     private var metadata: [String: ProjectMeta] = [:]
     private var remoteTasks: [String: Task<GitRemote?, Never>] = [:]
+    private var sizeEnrichmentTask: Task<Void, Never>?
+    private var workspaceWatcher: WorkspaceWatcher?
+    private var isRefreshingSessions = false
+    private var refreshSessionsAfterScan = false
+    private var scheduledSessionRefresh: Task<Void, Never>?
     private var didPrepare = false
 
     init() {
@@ -58,6 +66,7 @@ final class RepositoryStore {
             project.displayName.lowercased().contains(needle)
                 || project.name.lowercased().contains(needle)
                 || project.path.lowercased().contains(needle)
+                || project.kind.title.lowercased().contains(needle)
                 || project.stacks.contains(where: { group in
                     group.items.contains(where: { $0.lowercased().contains(needle) })
                 })
@@ -88,30 +97,136 @@ final class RepositoryStore {
         didPrepare = true
         metadata = MetaStore.load()
         roots = RootStore.load()
+
+        if OnboardingStore.isNeeded {
+            isFirstRunPresented = true
+            phase = .ready
+            startWorkspaceWatcher()
+            return
+        }
+
+        let cached = ScanCacheStore.load(for: roots, meta: metadata)
+        if !cached.isEmpty {
+            projects = cached
+            phase = .ready
+        }
         await scan()
+        startWorkspaceWatcher()
+    }
+
+    func presentFirstRunScan() {
+        isCommandPalettePresented = false
+        isFolderManagerPresented = false
+        isFirstRunPresented = true
+    }
+
+    func completeFirstRun(selectedPaths: [String], skipped: Bool) async {
+        let existing = Set(RootStore.load())
+        var nextRoots = RootStore.load()
+        for rawPath in selectedPaths {
+            let path = PathTools.normalize(rawPath)
+            guard FileTools.isDirectory(URL(fileURLWithPath: path)),
+                  !existing.contains(path),
+                  !nextRoots.contains(path)
+            else { continue }
+            nextRoots.append(path)
+        }
+
+        try? RootStore.save(nextRoots)
+        try? OnboardingStore.markCompleted(skipped: skipped)
+        roots = nextRoots
+        isFirstRunPresented = false
+
+        if !nextRoots.isEmpty {
+            await scan()
+            startWorkspaceWatcher()
+            await requestNotificationsIfNeeded()
+        } else {
+            projects = []
+            phase = .ready
+        }
     }
 
     func scan() async {
         guard phase != .scanning else { return }
-        phase = .scanning
-        let roots = RootStore.load()
-        let metadata = metadata
-        let output = await RepositoryScanner.scan(roots: roots, meta: metadata)
-        self.roots = output.roots
-        projects = output.projects
-        scannedAt = output.scannedAt
-        scanDuration = output.duration
-        phase = .ready
-        pruneRemotes(for: output.projects)
+        sizeEnrichmentTask?.cancel()
+        sizeEnrichmentTask = nil
+        pendingSizeCount = 0
+        isEnriching = false
 
-        if selectedPath == Self.homeSelection
-            || selectedPath?.hasPrefix(Self.filterPrefix) == true {
+        let roots = RootStore.load()
+        self.roots = roots
+        guard !roots.isEmpty else {
+            projects = []
+            scannedAt = Date()
+            scanDuration = 0
+            phase = .ready
+            flushDeferredSessionRefresh()
             return
         }
-        if let selectedPath, projects.contains(where: { $0.path == selectedPath }) {
-            return
+
+        phase = .scanning
+        let started = Date()
+        let metadata = metadata
+
+        // Stage 1: instant local manifest scan (or preserve cached metrics while refreshing)
+        let fast = await RepositoryScanner.scanFast(paths: roots, meta: metadata)
+        let existingByPath = Dictionary(
+            projects.map { ($0.path, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        projects = fast.map { fresh in
+            guard let existing = existingByPath[fresh.path] else { return fresh }
+            var merged = fresh
+            if existing.sizeLoadState == .ready {
+                merged.size = existing.size
+                merged.cleanup = existing.cleanup
+                merged.sizeLoadState = .ready
+            }
+            if existing.gitLoadState == .ready {
+                merged.branch = existing.branch
+                merged.lastCommit = existing.lastCommit
+                merged.dirtyCount = existing.dirtyCount
+                merged.changes = existing.changes
+                merged.ahead = existing.ahead
+                merged.behind = existing.behind
+                merged.weekly = existing.weekly
+                merged.recent = existing.recent ?? fresh.recent
+                merged.gitLoadState = .ready
+            }
+            if existing.sessionLoadState == .ready {
+                merged.sessions = existing.sessions
+                merged.sessionLoadState = .ready
+            }
+            return merged
         }
-        selectedPath = Self.homeSelection
+        phase = .ready
+        isEnriching = true
+
+        // Stage 2: Git + incremental SessionIndex + ports (single batch update)
+        let enriched = await RepositoryScanner.enrichGitAndSessions(projects: projects, meta: metadata)
+        let preservedSizes = Dictionary(
+            projects.map { ($0.path, ($0.size, $0.cleanup, $0.sizeLoadState)) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        projects = enriched.map { item in
+            var item = item
+            if let old = preservedSizes[item.path], old.2 == .ready {
+                item.size = old.0
+                item.cleanup = old.1
+                item.sizeLoadState = .ready
+            }
+            return item
+        }
+        scannedAt = Date()
+        scanDuration = Date().timeIntervalSince(started)
+        pruneRemotes(for: projects)
+        ensureValidSelection()
+        ScanCacheStore.save(projects)
+
+        // Stage 3: per-project du + cleanup enrichment in background (no re-sort)
+        startSizeEnrichment(for: projects.map(\.path))
+        flushDeferredSessionRefresh()
     }
 
     func rescanProjects(_ projects: [RepoProject]) async {
@@ -119,12 +234,19 @@ final class RepositoryStore {
         guard !paths.isEmpty else { return }
 
         let started = Date()
-        let scanned = await RepositoryScanner.scan(paths: paths, meta: metadata)
+        let fast = await RepositoryScanner.scanFast(paths: paths, meta: metadata)
+        let enriched = await RepositoryScanner.enrichGitAndSessions(projects: fast, meta: metadata)
         let replacements = Dictionary(
-            scanned.map { ($0.path, $0) },
+            enriched.map { ($0.path, $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        self.projects = self.projects.map { replacements[$0.path] ?? $0 }
+        self.projects = self.projects.map { existing in
+            guard var next = replacements[existing.path] else { return existing }
+            next.sizeLoadState = .loading
+            next.size = existing.size
+            next.cleanup = existing.cleanup
+            return next
+        }
         scanDuration = Date().timeIntervalSince(started)
         scannedAt = Date()
 
@@ -132,6 +254,8 @@ final class RepositoryStore {
         remotes = remotes.filter { !refreshed.contains($0.key) }
         missingRemotes.subtract(refreshed)
         remoteTasks = remoteTasks.filter { !refreshed.contains($0.key) }
+
+        startSizeEnrichment(for: paths)
     }
 
     func addRoot() async {
@@ -156,7 +280,7 @@ final class RepositoryStore {
     func addProjects(paths: [String]) async -> Int {
         var roots = RootStore.load()
         var existing = Set(roots)
-        var added = 0
+        var addedPaths: [String] = []
 
         for rawPath in paths {
             let path = PathTools.normalize(rawPath)
@@ -164,14 +288,37 @@ final class RepositoryStore {
                   existing.insert(path).inserted
             else { continue }
             roots.append(path)
-            added += 1
+            addedPaths.append(path)
         }
 
-        if added > 0 {
+        if !addedPaths.isEmpty {
+            let hadProjectsBefore = !projects.isEmpty
             try? RootStore.save(roots)
-            await scan()
+            try? OnboardingStore.markCompleted(skipped: false)
+            self.roots = roots
+
+            let fast = await RepositoryScanner.scanFast(paths: addedPaths, meta: metadata)
+            projects.append(contentsOf: fast)
+            phase = .ready
+            isEnriching = true
+
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let enriched = await RepositoryScanner.enrichGitAndSessions(projects: fast, meta: metadata)
+                let map = Dictionary(
+                    enriched.map { ($0.path, $0) },
+                    uniquingKeysWith: { first, _ in first }
+                )
+                projects = projects.map { map[$0.path] ?? $0 }
+                scannedAt = Date()
+                ScanCacheStore.save(projects)
+                startSizeEnrichment(for: addedPaths)
+                if !hadProjectsBefore {
+                    await requestNotificationsIfNeeded()
+                }
+            }
         }
-        return added
+        return addedPaths.count
     }
 
     func dismissFolderManager() {
@@ -182,11 +329,60 @@ final class RepositoryStore {
         var roots = RootStore.load()
         roots.removeAll { $0 == project.path }
         try? RootStore.save(roots)
+        self.roots = roots
+        projects.removeAll { $0.path == project.path }
+        ScanCacheStore.save(projects)
         if selectedPath == project.path {
             selectedPath = Self.homeSelection
             requestedTab = nil
         }
-        await scan()
+    }
+
+    private func ensureValidSelection() {
+        if selectedPath == Self.homeSelection
+            || selectedPath?.hasPrefix(Self.filterPrefix) == true {
+            return
+        }
+        if let selectedPath, projects.contains(where: { $0.path == selectedPath }) {
+            return
+        }
+        selectedPath = Self.homeSelection
+    }
+
+    private func startSizeEnrichment(for paths: [String]) {
+        let unique = Array(Set(paths.map(PathTools.normalize)))
+        guard !unique.isEmpty else {
+            pendingSizeCount = 0
+            isEnriching = false
+            return
+        }
+
+        sizeEnrichmentTask?.cancel()
+        pendingSizeCount = unique.count
+        isEnriching = true
+
+        sizeEnrichmentTask = Task { @MainActor [weak self] in
+            for await (path, size, cleanup) in RepositoryScanner.enrichSizesStream(paths: unique) {
+                guard let self, !Task.isCancelled else { return }
+                if let index = self.projects.firstIndex(where: { $0.path == path }) {
+                    self.projects[index].size = size
+                    self.projects[index].cleanup = cleanup
+                    self.projects[index].sizeLoadState = .ready
+                }
+                self.pendingSizeCount = max(0, self.pendingSizeCount - 1)
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.pendingSizeCount = 0
+            self.isEnriching = false
+            ScanCacheStore.save(self.projects)
+        }
+    }
+
+    private func requestNotificationsIfNeeded() async {
+        let status = await SystemPermissionService.notificationPermission()
+        if status == .notDetermined {
+            _ = await SystemPermissionService.requestNotifications()
+        }
     }
 
     func removeProject(
@@ -372,12 +568,13 @@ final class RepositoryStore {
         guard let index = projects.firstIndex(where: { $0.path == project.path }) else { return }
         let trimmed = group?.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = trimmed?.isEmpty == false ? trimmed : nil
-        projects[index].group = value ?? ProjectGrouping.detected(for: project.path)
+        projects[index].group = value ?? ProjectGrouping.detected(for: project.path, kind: project.kind)
 
         var meta = metadata[project.path] ?? ProjectMeta()
         meta.group = value
         metadata[project.path] = meta
         try? MetaStore.save(metadata)
+        ScanCacheStore.save(projects)
     }
 
     var knownGroups: [String] {
@@ -423,6 +620,92 @@ final class RepositoryStore {
             git.lastCommit?.date,
             projects[index].sessions.lastSessionAt,
         ].compactMap { $0 }.max()
+    }
+
+    func startWatchingGit(for path: String) {
+        workspaceWatcher?.setGitPath(path)
+    }
+
+    func stopWatchingGit() {
+        workspaceWatcher?.setGitPath(nil)
+    }
+
+    func refreshSessions() async {
+        guard !projects.isEmpty else { return }
+        if phase == .scanning || isRefreshingSessions {
+            refreshSessionsAfterScan = true
+            scheduleDeferredSessionRefresh()
+            return
+        }
+        isRefreshingSessions = true
+        defer { isRefreshingSessions = false }
+
+        let index = await Task.detached(priority: .utility) {
+            SessionIndex.build()
+        }.value
+        guard !Task.isCancelled else { return }
+
+        var updated = projects
+        for position in updated.indices {
+            let sessions = SessionIndex.summary(
+                for: URL(fileURLWithPath: updated[position].path),
+                in: index
+            )
+            var tools = updated[position].detectedTools
+            for rawTool in sessions.detected {
+                if let detected = DetectedTool(rawValue: rawTool), !tools.contains(detected) {
+                    tools.append(detected)
+                }
+            }
+            updated[position].detectedTools = DetectedTool.allCases.filter { tools.contains($0) }
+            updated[position].sessions = sessions
+            updated[position].sessionLoadState = .ready
+        }
+        projects = updated
+        ScanCacheStore.save(projects)
+        pruneRemotes(for: projects)
+    }
+
+    private func scheduleDeferredSessionRefresh() {
+        guard scheduledSessionRefresh == nil else { return }
+        scheduledSessionRefresh = Task { @MainActor [weak self] in
+            defer { self?.scheduledSessionRefresh = nil }
+            try? await Task.sleep(for: .seconds(3))
+            guard let self else { return }
+            guard self.phase != .scanning, self.refreshSessionsAfterScan else { return }
+            self.refreshSessionsAfterScan = false
+            await self.refreshSessions()
+        }
+    }
+
+    private func flushDeferredSessionRefresh() {
+        guard refreshSessionsAfterScan else { return }
+        refreshSessionsAfterScan = false
+        scheduledSessionRefresh?.cancel()
+        scheduledSessionRefresh = nil
+        Task { @MainActor [weak self] in
+            await self?.refreshSessions()
+        }
+    }
+
+    private func startWorkspaceWatcher() {
+        guard workspaceWatcher == nil else { return }
+        let watcher = WorkspaceWatcher { [weak self] change in
+            guard let self else { return }
+            switch change {
+            case .sessions:
+                Task { @MainActor [weak self] in
+                    await self?.refreshSessions()
+                }
+            case .git:
+                guard let path = self.selectedProject?.path else { return }
+                Task { @MainActor [weak self] in
+                    await self?.refreshGit(for: path)
+                }
+            }
+        }
+        watcher.start()
+        workspaceWatcher = watcher
     }
 
     func isAttentionSuppressed(
