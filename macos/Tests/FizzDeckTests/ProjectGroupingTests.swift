@@ -2,21 +2,22 @@ import XCTest
 @testable import FizzDeck
 
 final class ProjectGroupingTests: XCTestCase {
-    func testDetectsKnownGroups() {
-        XCTAssertEqual(ProjectGrouping.detected(for: "/Users/me/zoopfizz"), "产品站")
-        XCTAssertEqual(ProjectGrouping.detected(for: "/Users/me/dsh-workspace"), "工作区")
-        XCTAssertEqual(ProjectGrouping.detected(for: "/Users/me/converter-tools"), "工具库")
-        XCTAssertEqual(ProjectGrouping.detected(for: "/Users/me/noplan_officesite"), "官网")
-        XCTAssertEqual(ProjectGrouping.detected(for: "/Users/me/tsys-web"), "上屏管家")
-        XCTAssertEqual(ProjectGrouping.detected(for: "/Users/me/random-repo"), "其他")
+    func testDetectsGroupsFromProjectKind() {
+        XCTAssertEqual(ProjectGrouping.detected(for: "/tmp/nonexistent-web", kind: .web), "网页")
+        XCTAssertEqual(ProjectGrouping.detected(for: "/tmp/nonexistent-mac", kind: .macApp), "Mac 应用")
+        XCTAssertEqual(ProjectGrouping.detected(for: "/tmp/nonexistent-mini", kind: .miniProgram), "小程序")
+        XCTAssertEqual(ProjectGrouping.detected(for: "/tmp/nonexistent-flutter", kind: .flutter), "Flutter")
+        XCTAssertEqual(ProjectGrouping.detected(for: "/tmp/nonexistent-game", kind: .game), "游戏")
+        XCTAssertEqual(ProjectGrouping.detected(for: "/tmp/nonexistent-cli", kind: .cli), "命令行脚本")
+        XCTAssertEqual(ProjectGrouping.detected(for: "/tmp/nonexistent-other"), "其他")
     }
 
-    func testOrdersDefaultGroupsBeforeCustomGroups() {
+    func testOrdersDefaultKindGroupsBeforeCustomGroups() {
         let ordered = ProjectGrouping.ordered([
-            "自定义 B", "其他", "产品站", "自定义 A", "工作区",
+            "自定义 B", "其他", "网页", "自定义 A", "Mac 应用",
         ])
 
-        XCTAssertEqual(ordered, ["产品站", "工作区", "其他", "自定义 A", "自定义 B"])
+        XCTAssertEqual(ordered, ["网页", "Mac 应用", "其他", "自定义 A", "自定义 B"])
     }
 
     func testCustomGroupColorIsStable() {

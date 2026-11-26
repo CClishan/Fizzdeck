@@ -17,7 +17,7 @@ enum RunDetector {
             let envText = FileTools.readFileIfExists(directory.appendingPathComponent(".env"))
                 + FileTools.readFileIfExists(directory.appendingPathComponent(".dev.vars"))
             let envPort = firstPort(in: envText)
-            let port = envPort ?? AppPaths.knownPorts[directory.lastPathComponent] ?? 5173
+            let port = envPort ?? defaultPort(for: directory, package: package)
             return RunConfig(
                 command: "\(manager) run \(name)",
                 port: port,
@@ -25,16 +25,38 @@ enum RunDetector {
             )
         }
         if FileTools.exists(directory.appendingPathComponent("pom.xml")) {
+            let hasRuoyiAdmin = FileTools.isDirectory(directory.appendingPathComponent("ruoyi-admin"))
             return RunConfig(
-                command: "mvn spring-boot:run -pl ruoyi-admin",
-                port: 8988,
-                previewURL: "http://127.0.0.1:8988"
+                command: hasRuoyiAdmin ? "mvn spring-boot:run -pl ruoyi-admin" : "mvn spring-boot:run",
+                port: hasRuoyiAdmin ? 8988 : 8080,
+                previewURL: hasRuoyiAdmin ? "http://127.0.0.1:8988" : "http://127.0.0.1:8080"
             )
         }
         if FileTools.exists(directory.appendingPathComponent("build.gradle")) {
             return RunConfig(command: "gradle assembleDebug", port: 0, previewURL: nil)
         }
         return nil
+    }
+
+    private static func defaultPort(for directory: URL, package: [String: Any]) -> Int {
+        var deps = Set<String>()
+        for key in ["dependencies", "devDependencies"] {
+            if let values = package[key] as? [String: Any] {
+                deps.formUnion(values.keys)
+            }
+        }
+        if deps.contains("next") || deps.contains("nuxt") || deps.contains("react-scripts") {
+            return 3000
+        }
+        if deps.contains("astro") {
+            return 4321
+        }
+        if FileTools.exists(directory.appendingPathComponent("next.config.mjs"))
+            || FileTools.exists(directory.appendingPathComponent("next.config.ts"))
+            || FileTools.exists(directory.appendingPathComponent("next.config.js")) {
+            return 3000
+        }
+        return 5173
     }
 
     static func testCommand(_ directory: URL) -> TestCommand? {

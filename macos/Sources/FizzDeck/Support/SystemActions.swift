@@ -16,15 +16,7 @@ enum SystemActions {
     }
 
     static func openTerminal(_ path: String) {
-        let terminal = URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")
-        let directory = URL(fileURLWithPath: path)
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        NSWorkspace.shared.open(
-            [directory],
-            withApplicationAt: terminal,
-            configuration: configuration
-        )
+        TerminalLauncher.openDirectory(path)
     }
 
     static func open(_ path: String, in editor: ProjectEditor) {
@@ -47,6 +39,7 @@ enum SystemActions {
         pasteboard.setString(value, forType: .string)
     }
 
+    @MainActor
     static func promptForGroupName(defaultValue: String = "") -> String? {
         let alert = NSAlert()
         alert.messageText = "移动到分组"
@@ -69,6 +62,8 @@ enum SystemActions {
 
 enum ProjectEditor: String, CaseIterable, Identifiable, Sendable {
     case cursor
+    case trae
+    case windsurf
     case vscode
     case zed
     case xcode
@@ -88,6 +83,8 @@ enum ProjectEditor: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .cursor: "Cursor"
+        case .trae: "Trae"
+        case .windsurf: "Windsurf"
         case .vscode: "VS Code"
         case .zed: "Zed"
         case .xcode: "Xcode"
@@ -107,6 +104,8 @@ enum ProjectEditor: String, CaseIterable, Identifiable, Sendable {
     var bundleIdentifiers: [String] {
         switch self {
         case .cursor: ["com.todesktop.230313mzl4w4u92"]
+        case .trae: ["com.trae.app"]
+        case .windsurf: ["com.exafunction.windsurf"]
         case .vscode: ["com.microsoft.VSCode"]
         case .zed: ["dev.zed.Zed"]
         case .xcode: ["com.apple.dt.Xcode"]
@@ -125,6 +124,8 @@ enum ProjectEditor: String, CaseIterable, Identifiable, Sendable {
 
     var fallbackApplicationPaths: [String] {
         switch self {
+        case .trae: ["/Applications/Trae.app"]
+        case .windsurf: ["/Applications/Windsurf.app"]
         case .xcode: ["/Applications/Xcode.app"]
         case .antigravity: ["/Applications/Antigravity IDE.app"]
         case .intellij: ["/Applications/IntelliJ IDEA.app", "/Applications/IntelliJ IDEA CE.app"]

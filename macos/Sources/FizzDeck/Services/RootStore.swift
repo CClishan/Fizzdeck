@@ -1,22 +1,38 @@
 import Foundation
 
 enum RootStore {
+    static var hasSavedRootsFile: Bool {
+        FileTools.exists(AppPaths.rootsFile)
+    }
+
     static func load() -> [String] {
-        if let data = try? Data(contentsOf: AppPaths.rootsFile),
-           let values = try? JSONSerialization.jsonObject(with: data) as? [String] {
-            let existing = values
-                .map(PathTools.normalize)
-                .filter { FileTools.isDirectory(URL(fileURLWithPath: $0)) }
-            var seen = Set<String>()
-            return existing.filter { seen.insert($0).inserted }
-        }
-        return AppPaths.defaultRoots
-            .map(\.path)
+        guard let data = try? Data(contentsOf: AppPaths.rootsFile),
+              let values = try? JSONSerialization.jsonObject(with: data) as? [String]
+        else { return [] }
+        let existing = values
+            .map(PathTools.normalize)
             .filter { FileTools.isDirectory(URL(fileURLWithPath: $0)) }
+        var seen = Set<String>()
+        return existing.filter { seen.insert($0).inserted }
     }
 
     static func save(_ roots: [String]) throws {
         try FileTools.writeJSON(roots.map(PathTools.normalize), to: AppPaths.rootsFile)
+    }
+}
+
+enum OnboardingStore {
+    static var isNeeded: Bool {
+        !RootStore.hasSavedRootsFile && !FileTools.exists(AppPaths.onboardingFile)
+    }
+
+    static func markCompleted(skipped: Bool) throws {
+        let payload: [String: Any] = [
+            "completed": true,
+            "skipped": skipped,
+            "updatedAt": ISO8601DateFormatter().string(from: Date()),
+        ]
+        try FileTools.writeJSON(payload, to: AppPaths.onboardingFile)
     }
 }
 

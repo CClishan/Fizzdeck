@@ -5,7 +5,7 @@ import Foundation
 enum AppRouting {
     static let openProjectNotification = Notification.Name("FizzDeck.openProject")
 
-    struct ProjectRequest {
+    struct ProjectRequest: Sendable {
         let path: String
         let tab: ProjectTab?
     }
@@ -23,7 +23,7 @@ enum AppRouting {
         return pendingProject
     }
 
-    static func projectRequest(from userInfo: [AnyHashable: Any]) -> ProjectRequest? {
+    nonisolated static func projectRequest(from userInfo: [AnyHashable: Any]) -> ProjectRequest? {
         guard let path = userInfo["projectPath"] as? String, !path.isEmpty else {
             return nil
         }

@@ -16,14 +16,22 @@ enum CleanupScanner {
         CleanupRule(pattern: #"^(output|artifacts|releases|reports)$"#, reason: "历史归档，确认后再删", regen: "", kind: "archive"),
     ]
 
-    static func scan(_ root: URL) async -> CleanupInfo {
+    static func scan(
+        _ root: URL,
+        precomputedDirectoryBytes: [String: Int64]? = nil
+    ) async -> CleanupInfo {
         var items: [CleanupItem] = []
         for directory in FileTools.childDirectories(of: root) {
             let name = directory.lastPathComponent
             guard let rule = rules.first(where: { name.range(of: $0.pattern, options: .regularExpression) != nil }) else {
                 continue
             }
-            let bytes = await SizeScanner.directoryBytes(directory)
+            let bytes: Int64
+            if let precomputed = precomputedDirectoryBytes?[name] {
+                bytes = precomputed
+            } else {
+                bytes = await SizeScanner.directoryBytes(directory)
+            }
             guard bytes > 0 else { continue }
             items.append(CleanupItem(
                 label: name,

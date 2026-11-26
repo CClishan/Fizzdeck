@@ -22,7 +22,7 @@ struct FizzIcon: View {
 }
 
 private enum FizzIconAsset {
-    private static let cache = NSCache<NSString, NSImage>()
+    nonisolated(unsafe) private static let cache = NSCache<NSString, NSImage>()
 
     private static let aliases: [String: String] = [
         "arrow.clockwise": "refresh",

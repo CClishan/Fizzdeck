@@ -60,6 +60,8 @@ cat >"$INFO_PLIST" <<PLIST
   <true/>
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.developer-tools</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>用于在终端中启动并聚焦正在运行的 AI 会话窗口。</string>
 </dict>
 </plist>
 PLIST
