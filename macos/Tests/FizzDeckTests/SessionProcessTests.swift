@@ -20,6 +20,24 @@ final class SessionProcessTests: XCTestCase {
         lastUser: nil
     )
 
+    private let grok = SessionRecord(
+        tool: "grok",
+        id: "019a9f2c-grok-session",
+        cwd: "/tmp/project",
+        startedAt: nil,
+        modified: Date(),
+        lastUser: nil
+    )
+
+    private let gemini = SessionRecord(
+        tool: "gemini",
+        id: "gemini-session-9",
+        cwd: "/tmp/project",
+        startedAt: nil,
+        modified: Date(),
+        lastUser: nil
+    )
+
     func testMatchesOnlyExactResumeCommands() {
         let processes = """
           101 /usr/local/bin/codex resume 01a20cb9-cfa6-7e42-be3a-5f1072992852
@@ -38,14 +56,69 @@ final class SessionProcessTests: XCTestCase {
         XCTAssertEqual(result[claude.stableID], [104])
     }
 
+    func testMatchesGrokResumeForms() {
+        let processes = """
+          106 /usr/local/bin/grok -r 019a9f2c-grok-session
+          107 /usr/local/bin/grok --resume=019a9f2c-grok-session
+          108 /usr/local/bin/grok --resume 019a9f2c-grok-session-extra
+        """
+
+        let result = SessionProcessService.parse(
+            processList: processes,
+            sessions: [grok]
+        )
+
+        XCTAssertEqual(result[grok.stableID], [106, 107])
+    }
+
     func testIgnoresCodexDesktopAppServer() {
         let command = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex app-server --listen stdio://"
         XCTAssertFalse(SessionProcessService.matches(command, session: codex))
     }
 
+    func testMatchesGeminiResumeForms() {
+        let processes = """
+          201 /opt/homebrew/bin/gemini --resume gemini-session-9
+          202 /opt/homebrew/bin/gemini -r gemini-session-9
+          203 /opt/homebrew/bin/gemini --resume=gemini-session-9
+          204 /opt/homebrew/bin/gemini --resume gemini-session-9-extra
+          205 /opt/homebrew/bin/gemini --session-id gemini-session-9
+        """
+
+        let result = SessionProcessService.parse(
+            processList: processes,
+            sessions: [gemini]
+        )
+
+        XCTAssertEqual(result[gemini.stableID], [201, 202, 203])
+    }
+
     func testIgnoresArgumentsThatOnlyMentionResume() {
         let command = "grep codex resume 01a20cb9-cfa6-7e42-be3a-5f1072992852"
         XCTAssertFalse(SessionProcessService.matches(command, session: codex))
+    }
+
+    func testParseDetailedCapturesTTYAndCwdNonResumeProcesses() {
+        let processes = """
+          101 ttys003 /usr/local/bin/codex resume 01a20cb9-cfa6-7e42-be3a-5f1072992852
+          202 ttys005 /usr/local/bin/claude --continue
+          303 ??      /Applications/ChatGPT.app/Contents/Resources/codex-cli/codex app-server --listen stdio://
+        """
+
+        let result = SessionProcessService.parseDetailed(
+            processList: processes,
+            sessions: [codex, claude],
+            cwdByPID: [202: "/tmp/project", 303: "/tmp/project"],
+            projectPath: "/tmp/project"
+        )
+
+        XCTAssertEqual(result[codex.stableID]?.first?.pid, 101)
+        XCTAssertEqual(result[codex.stableID]?.first?.tty, "/dev/ttys003")
+        XCTAssertEqual(result[codex.stableID]?.first?.exactMatch, true)
+
+        XCTAssertEqual(result[claude.stableID]?.first?.pid, 202)
+        XCTAssertEqual(result[claude.stableID]?.first?.tty, "/dev/ttys005")
+        XCTAssertEqual(result[claude.stableID]?.first?.exactMatch, false)
     }
 
     func testEndsDedicatedCLIProcess() async throws {

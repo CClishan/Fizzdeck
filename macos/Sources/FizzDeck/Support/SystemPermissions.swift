@@ -62,6 +62,18 @@ enum SystemPermissionService {
         open("x-apple.systempreferences:com.apple.Notifications-Settings.extension")
     }
 
+    static func openFilesAndFoldersSettings() {
+        open(
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_FilesAndFolders"
+        )
+    }
+
+    static func openAutomationSettings() {
+        open(
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Automation"
+        )
+    }
+
     static func openFullDiskAccessSettings() {
         open(
             "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles"

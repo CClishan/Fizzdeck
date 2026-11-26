@@ -102,7 +102,7 @@ On a fresh install, use **Scan folder** in the sidebar to discover and add proje
 | Attention queue | Surfaces failing tests, behind-remote and unpushed commits, uncommitted files, and reclaimable disk. Ordered by urgency; each row opens the matching project tab and offers inline push, fast-forward pull, test rerun, or cleanup-command copy. Right-click a row to snooze or mute that project/type; silenced rules can be restored from the header. |
 | Menu bar | Keeps the pending-item count visible, opens the overview or a recent project, and sends local notifications when a dev server becomes ready or a test fails. |
 | Quick open | `⌘K` searches projects, branches, remote URLs, and actions with recent items, fuzzy matching, and pinned commands. Run project commands and app actions without leaving the keyboard. |
-| Project actions | Open a project in Finder, Terminal, or an installed editor (Cursor, VS Code, Zed, Antigravity, JetBrains IDEs, and Xcode including nested targets), or copy its path. `⌘⇧T` opens the current project in Terminal. |
+| Project actions | Open a project in Finder, the preferred terminal (Terminal, iTerm2, Ghostty, or Warp), or an installed editor (Cursor, VS Code, Zed, Antigravity, JetBrains IDEs, and Xcode including nested targets), or copy its path. `⌘⇧T` opens the current project in the preferred terminal. |
 | AI sessions | Lists matched Codex and Claude Code sessions with tool filters, shows the last user request, and copies `codex resume` / `claude --resume` commands. Dedicated CLI processes can be ended after confirmation; the shared Codex Desktop app-server is never terminated. |
 | Git | Shows the current branch, ahead/behind state, dirty files, recent commits, and the `origin` URL. Supports opening or copying the remote, branch switching, and confirmed fetch, fast-forward pull, and push with inline results; dirty worktrees are protected. |
 | Dev servers | Detects common dev scripts and ports; a floating Liquid Glass action dock provides run, test, logs, preview, and copy-command actions. |
@@ -159,10 +159,10 @@ scan-clean.mjs          CLI disk-usage report
 
 - The native app requires macOS 26+ on Apple Silicon. A DMG is published, but it uses an ad-hoc signature and is not notarized.
 - The native app includes batch rescan, cleanup-command copy, project removal, and ending dedicated AI CLI sessions.
-- The native theme is intentionally light-only.
-- There are no background file watchers yet.
+- The native theme supports light and low-saturation charcoal dark modes, following the system by default.
+- Lightweight background watchers refresh Git and AI-session state without full rescans.
 - Local notifications require system permission. The `--sign-local` build uses an ad-hoc signature, which is enough to register with Notification Center for local testing; distribution still needs a Developer ID signature and notarization.
-- AI session integration covers Codex and Claude Code; the shared Codex Desktop app-server cannot be ended from FizzDeck.
+- AI session integration covers Codex, Claude Code, and Grok; the shared Codex Desktop app-server cannot be ended from FizzDeck.
 - Port detection is heuristic; unusual development setups may need a mapping in `server.mjs`.
 - Initial scans run `du`-style size checks and take roughly a few seconds per large folder. Later loads use the scan cache until a rescan.
 

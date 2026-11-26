@@ -1,10 +1,10 @@
 # FizzDeck 交接文档
 
-- 更新时间：2026-11-25
+- 更新时间：2026-11-26
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
-- 当前分支：`main`（PR #1 已合并；`v0.2.3` 已发布）
-- 基线 HEAD：`b36d8b8 Release FizzDeck 0.2.3`
-- 状态：P0 完成，P1 功能完成，P2 5/5；原生删除和 AI 会话结束已补齐；2026-11-25 完成页签/底栏收口、项目自动发现、文件夹面板原生 Glass 覆盖层、设置页、IconMCP 图标替换和真实项目回归；上述 UI 改动已随 `v0.2.3` 发布，Release DMG 与 landing 均已上线。
+- 当前分支：`feat/macos-ui2-and-sessions`（从 `main` 的 `24ff3f4` 切出；本地分组提交已完成，待推送/提 PR）
+- 分支起点：`24ff3f4 Record v0.2.3 release and landing`（`main` 仍停在此提交）
+- 状态：`v0.2.3` 已发布；本轮新增首次启动发现、快扫/补全拆分、缓存、一键回到现场、Grok 会话与 token/费用估算、终端适配层与继续偏好、Gemini CLI / IDE 工作区会话适配、轻量后台文件监听、阶段 4 性能基线/可访问性收口，UI 2.0 的浅/暗双主题、双态悬浮侧栏、紧凑项目 Header、总览微柱 KPI / Services / 内嵌 Logs 四步，以及 Round 2 · Batch C1-C4 的设计 Token、原生 Liquid Glass 控件层、双主题 SVG Logo 与浅色纯色背景收口；代码已通过 142 例单测和干净构建 0 warning（含 `-strict-concurrency=complete`），各阶段已完成隔离 GUI 验收；已在特性分支本地提交，尚未推送或发版。
 
 ## 新对话开场提示
 
@@ -13,11 +13,11 @@
 ```text
 继续 FizzDeck 原生 macOS 项目，仓库在 /Users/a003/dsh-workspace/repo-dashboard。
 
-先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git status / git diff。当前 main 已完成 P0、P1 功能和 P2 5/5；v0.2.3 已发布，app 从 `https://github.com/CClishan/Fizzdeck/releases/latest` 下载。下一步优先补真实菜单栏/通知直测，或继续质量与性能任务。删除项目只能用临时目录验证，不要对用户真实项目点击确认。
+先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git log / git status。当前改动已在本地分支 `feat/macos-ui2-and-sessions` 分组提交，尚未推送或提 PR；首次启动、缓存、Grok/token、运行中检测和结束会话已在隔离环境验收，UI 2.0 四步与 Round 2 · Batch C1/C2/C3/C4 均已完成浅/暗截图与真实测试验收。下一步是 review 后 push / 开 PR，或补真实终端启动、菜单栏/通知直测。删除项目只能用临时目录验证，不要对用户真实项目点击确认。
 
 不要在没有明确确认时再发版、签名、公证或部署。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
 
-界面要求：纯 SwiftUI、浅色 Liquid Glass，不做整套暗色和吉祥物；UI 不加多余标签，让布局自己解释。
+界面要求：纯 SwiftUI，浅色与低饱和炭黑暗色双模式（跟随系统 / 浅色 / 暗色），主题走语义 Token；不做吉祥物；UI 不加多余标签，让布局自己解释。
 
 筛选按钮使用原生 `Menu`，配 `.menuStyle(.button)` + `.buttonStyle(.glass)`；不要改回自定义 HStack 或已废弃的 `.menuStyle(.borderlessButton)`。
 ```
@@ -26,13 +26,179 @@
 
 | 项目 | 当前状态 |
 |---|---|
-| 原生 app | P0 完成，P1 功能完成，P2 5/5；`swift build`、`swift test` 通过（49 例）；AI 会话列表/过滤/恢复/结束 CLI 可用；设置页和 IconMCP 图标已随 `v0.2.3` 发布 |
+| 原生 app | P0 完成，P1 功能完成，P2 5/5；`swift build`、`swift test` 通过（142 例，0 warning）；AI 会话列表/过滤/恢复/结束 CLI 可用，新增 Grok、Gemini CLI、IDE 工作区摘要、token/费用估算、多终端适配、后台增量监听、浅/暗双主题、双态悬浮侧栏与品牌微图标、紧凑项目 Header、微柱 KPI / Services / Logs 工作台、设计 Token、原生 Liquid Glass 控件层、双主题 SVG Logo 与 C1-C4 可读性收口；已在特性分支本地提交 |
 | 原生分发 | `v0.2.3` arm64 DMG 已发布，ad-hoc 签名；未做 Developer ID、公证和自动更新 |
 | Web UI | 保留在 `src/` + `server.mjs`，不是当前主入口 |
 | Landing | `https://koroo.top/fizzdeck` 已上线并显示 `v0.2.3` macOS 下载；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
-| 仓库 | PR #1 已合并到 `main`；v0.2.3 Release 和 landing 下载入口已发布 |
-| 验证基线 | Swift test 49 例、ESLint、TypeScript、35 页生产构建、Vercel 生产部署、线上 CTA 与 DMG SHA-256 一致 |
-| 任务进度 | P0 5/5；P1 5/5（功能完成，2 项真实环境直测待补）；P2 5/5；发布与交付 1/3；质量与性能 1/4 |
+| 仓库 | PR #1 已合并到 `main`；v0.2.3 Release 和 landing 下载入口已发布；本轮改造已在 `feat/macos-ui2-and-sessions` 本地提交，待推送/提 PR |
+| 验证基线 | Swift test 142 例、干净构建 0 warning（含 `-strict-concurrency=complete`）、`git diff --check` 通过；ESLint、TypeScript、35 页生产构建、Vercel 生产部署、线上 CTA 与 DMG SHA-256 为上一版记录 |
+| 任务进度 | P0 5/5；P1 6/6（终端适配已补，真实终端启动未直测）；P2 5/5；P2-A 会话适配、P2-B 后台监听、阶段 4 性能/可访问性、UI-1 双主题、UI-2 双态侧栏、UI-3 紧凑 Header、UI-4 总览工作台、Round 2 · Batch C1-C4 已收口；发布与交付 1/3；质量与性能 3/4（Instruments 长列表实测未做） |
+
+## 已提交改造（特性分支 `feat/macos-ui2-and-sessions`，2026-11-25/26）
+
+### Round 2 · Batch C4：双主题矢量 Logo 与浅色纯色背景（2026-11-26）
+
+- `FizzAsset` 新增 `logo(for:)`：浅色加载 `FizzDeck_logo_light.svg`，暗色加载 `FizzDeck_logo_dark.svg`；`Bundle.main` → `Resources/` → `macos/Resources/` 三路查找，静态缓存，SVG 缺失时回退旧 `FizzDeck_logo.png`。
+- 两份原始 SVG 从 `fizzdeck_{light,dark}.svg` 更名为 `FizzDeck_logo_{light,dark}.svg`，并移除自带的白色/黑色整块 `<rect>` 底板，改为真正透明底；`FizzLogo` 用 `scaledToFit()` 直接渲染，不再加 `logoPlate`、白底或描边，18/32/64pt 均无裁切。
+- `FizzBackground` 浅色只渲染 `FizzTheme.page`（`#F8F8F7`），不再叠加 `warmGlow` / `coolGlow` 的 `RadialGradient`；暗色保持两处 `0.06` 微光。新增静态 `glowOpacity(for:)` 便于断言。
+- `build_and_run.sh` 同时复制浅/暗 SVG 到 `$APP_RESOURCES/`，保留 PNG 兜底。
+- 验证：`swift test --package-path macos` 142/142 通过（新增 SVG 双主题加载与浅色无光晕断言）；`swift build --package-path macos --build-path /tmp/fizzdeck-c4-build -Xswiftc -strict-concurrency=complete` 干净构建 0 warning / 0 error；`git diff --check` 通过。
+- 隔离 GUI 验收：独立 bundle `com.a003.fizzdeck.c4audit` + 临时 `CFFIXED_USER_HOME`，路径 `/tmp/fizzdeck-c4-audit-o28LNa`，截图前缀 `/tmp/fizzdeck-c4-`。浅色首页与详情页背景为均匀纯色，无粉/紫渐变；浅/暗关于页分别为透明黑线/白线 Logo，无底板方块；浅/暗 `AddProjectsSheet` 的 18pt Logo 清晰、无裁切。验收后已退出 audit app、注销 LaunchServices 注册，无残留进程或 5199 监听。
+- 隔离边界：真实 `~/.repodeck` 与 `/Applications/FizzDeck.app` mtime 未变；截图与临时 bundle 未纳入版本控制。C4 只做本地提交，未 push、未提 PR、未发版、未签名/公证/部署。
+
+### Round 2 · Batch C3：P2 微瑕收口与本地分支提交（2026-11-26）
+
+- `CommandPaletteView`：新增 `Support/CommandPaletteLayout.swift`，把行高 43、分区标题 28、列表内边距 12 与最大高度 420 固化为同一套常量；可见高度只落在完整行末尾，空间不足时不渲染末尾孤立的分区标题。默认场景下「命令」分组要么至少露出 1–2 条，要么整组隐藏；新增 3 例布局单测。
+- `Formatting.bytes`：小于 1000 字节统一输出 `N B`，与 `WorkbenchMetrics.splitBytes` 对齐；首页 `82 B` 与详情 KPI 不再混用 `82 bytes`。新增 2 例格式单测。
+- `FizzLogo`：浅色与暗色都使用圆角 App Icon 底板；暗色为 `white 0.95` + 黑色 10% 描边，浅色为 `white 0.99` + `FizzTheme.stroke` 细描边，「关于」页双态对称且黑线清晰。
+- 验证：`swift test --package-path macos` 140/140 通过；`swift build --package-path macos --build-path /tmp/fizzdeck-c3-clean-build -Xswiftc -strict-concurrency=complete` 干净构建 0 warning / 0 error；`git diff --check` 通过。
+- 隔离 GUI 验收：独立 bundle `com.a003.fizzdeck.c3audit` + 临时 `CFFIXED_USER_HOME`，路径 `/tmp/fizzdeck-c3-audit-zFibD9`，截图前缀 `/tmp/fizzdeck-c3-`。暗色 `⌘K` 在 420pt 上限处停在项目行末尾，「命令」标题不再孤立出现；浅/暗关于页 Logo 底板对称；暗色详情页真实启动 `npm run dev` 后显示绿色「1 运行中」，「预览」「停止」对比度正常；首页 fixture 显示 `82 B`。验收后已停止 dev 服务（5199 释放）并退出 audit app。
+- 隔离边界：真实 `~/.repodeck` 与 `/Applications/FizzDeck.app` mtime 未变；未执行 commit 前的构建产物、临时 fixture 或截图未纳入版本控制。C3 只做本地分支提交，未 push、未提 PR、未发版、未签名/公证/部署。
+
+### Round 2 · Batch C2：C1 审核收口与玻璃可读性精修（2026-11-26）
+
+- C1 漏网清零：`OverviewTabView` 的 `WorkbenchMetricCard` 15、`AppSettingsView` 的 `SettingsCard` 14、`AttentionQueueView` 16 全部改为 `FizzRadius.card` / `FizzRadius.panel`；`AddProjectsSheet`「只添加当前文件夹」、`AppSettingsView`「前往下载」、`ProjectRemovalSheet`「取消」补齐 `.buttonStyle(.glass)`。
+- `ProjectLogsPanel`：新增 `Support/ProjectLogSourcePolicy.swift`，用 `ProjectLogContext` + `resolve(current:previous:selected:)` 纯逻辑记录上一项目路径与 `testRun.startedAt`；只有同一项目产生新的测试运行才自动切 `.test`，切项目时重置并按 `testActive` / 可用日志归一化。日志文本的 10pt 内边距与 `log-bottom` 锚点分离，末行不再被日志视口底部裁切。
+- 批量选择：复选框移入 `ProjectFolderCard` 头部右侧并替换端口徽章，删除 `.overlay(.topTrailing)`，不再遮挡；`batchBar` 的「完成」使用 `.glassProminent` + `.tint(FizzTheme.accent)` + `.controlSize(.regular)`，其余按钮逐个 `.glass`。GUI 验收发现外层 `.buttonStyle(.glass)` 会吞掉内层 prominent 样式，已改为逐个按钮设置，聚焦窗口下「完成」呈真实紫色。
+- 玻璃可读性：`AddProjectsSheet` 用近实底 `elevatedFill`（暗 0.97 / 浅 0.94）+ 低透明玻璃 tint + 1pt 描边，遮罩加深到暗 0.55 / 浅 0.32；关闭 `×` 移到顶部统一栏右侧。`CommandPaletteView` 同样改为近实底（暗 0.97 / 浅 0.92）+ 加深遮罩，分区标题顶部间距 7→12、结果高度补偿 27→32，暗色下不再透出底层 KPI 白字。
+- 暗色细节：`FizzLogo` 在暗色下增加浅色圆角底板与 1pt 黑描边，「关于」页图标清晰；`serviceButton` 明确 `.primary` 前景与 11pt medium，暗色下不再像禁用；`ProjectLogsPanel` 的 `dev / test` 从分段 Picker 改为与 Sessions/ProjectDetail 一致的紧凑胶囊切换器（`elevatedFill` 高亮 + glass 外壳）。
+- 文案与语义：详情页 `Services → 服务`、`Logs → 日志`、`N running → N 运行中`，命令标识 `dev / test` 保留；`PortStatusBadge` 的 `.stopped` 改为中性 `.secondary`，橙色只留给未提交改动与待处理告警；项目详情工具栏返回图标 `xmark → chevron.left`，文案「返回总览」。
+- 测试：新增 `ProjectLogSourcePolicyTests` 6 例（切项目不误切 test、新 test run 切 test、已有 test run 保持选择、初始来源、不可用回退）；`FizzDesignSystemTests` 增加 `PortStatusBadge` 色调/文案断言。`swift test --package-path macos` 135/135 通过；`swift build --package-path macos --build-path /tmp/fizzdeck-c2-clean-build -Xswiftc -strict-concurrency=complete` 干净构建 0 warning / 0 error；`git diff --check` 通过；`rg` 核查无 `.menuStyle(.borderlessButton)`、无 `.buttonStyle(.bordered/.borderedProminent)`、无数字 `cornerRadius:`、无数字 `.fizzCard(radius:)`，裸 `.shadow(` 仅 `FizzAdaptiveShadowModifier` 内部 1 处。
+- 隔离 GUI 验收：独立 bundle `com.a003.fizzdeck.c2audit` + 临时 `CFFIXED_USER_HOME`，截图前缀 `/tmp/fizzdeck-c2-`；覆盖浅/暗首页、暗色批量选择（复选框不遮挡）、浅/暗详情与 `npm run test` 日志末行、浅/暗 `⌘K`、浅/暗 `AddProjectsSheet`、暗色关于页（Logo 可见）、浅色 settings `.glassProminent` 紫色、`port = 0` fixture 仅显示「启动/运行」无「预览」、临时 fixture 永久删除确认红色 destructive 按钮（已取消，未删除）。焦点态截图使用 `osascript activate` + `screencapture -l <windowId>` 获取，避免后台截图把 `.glassProminent` 拍成灰色。
+- 窄窗：系统辅助权限拒绝 AX 设置窗口尺寸，CUA 拖拽也未改变尺寸；用临时 audit build 加 `.windowResizability(.contentSize)` + 1000pt 内容宽完成 1000pt 直测，Header/侧栏无裁切，截图后源码已恢复 `defaultSize(1320, 860)` 并重新构建。
+- 隔离边界：真实 `~/.repodeck` 未写入，`roots.json`（Nov 25 11:35）、`scan-cache.json`（Nov 26 10:54）、`state.json` 的 mtime 未变；`/Applications/FizzDeck.app` 未触碰，真实 FizzDeck 未启动。一次误用 LaunchServices 启动曾在隔离 profile 中读到真实 roots，已重建隔离 `roots.json`/`scan-cache.json` 并清除 audit domain 的 recentProjects，未修改真实文件。
+- 未直测：VoiceOver 顺序、纯键盘全路径、真实终端启动与菜单栏/通知 banner。C2 当轮未提交；后续已在 C3 统一本地分组提交，仍未 push/发版。
+
+### Round 2 · Batch C1：设计 Token + 原生 Liquid Glass 控件层（2026-11-26）
+
+- `FizzTheme.swift` 新增 `FizzRadius`：`frame` / `panel` 16、`card` 14、`inset` 10、`control` 8、`micro` 4；新增 `FizzSpacing`：`page` 24、`section` 20、`panel` 16、`grid` 12、`row` 8；新增 `FizzElevation`（`.subtle` / `.raised` / `.floating`）与 `fizzAdaptiveShadow(...)`。浅色保留克制柔和阴影；暗色收紧圆角半径与位移，主要用 `cardFill` / `elevatedFill` / `recessedFill` 明度差和 1pt `FizzTheme.stroke` 建立纵深。`fizzCard` 默认圆角改为 `FizzRadius.panel`。
+- 圆角与阴影收敛：清理 `7 / 9 / 15 / 17 / 28` 等散落数值，统一到 Token；`AddProjectsSheet` 外框 28 → `FizzRadius.frame`（16），内部选中行 7 → `control`。全站硬编码 `.shadow(color: .black...)` 替换为 `fizzAdaptiveShadow(.subtle/.raised/.floating)`；当前源码只剩 `FizzAdaptiveShadowModifier` 内部的一次 `.shadow(`。
+- 原生玻璃控件层：项目详情顶栏 6 个页签包进 `GlassEffectContainer(spacing: 2)` + `.glassEffect(.regular.interactive(), in: Capsule())`，保留 `.help(...)` 与 `accessibilityAddTraits(.isSelected)`；`⌘K` 面板外壳改为 `.glassEffect(.regular.tint(FizzTheme.elevatedFill.opacity(0.65)), in: RoundedRectangle(cornerRadius: FizzRadius.frame, style: .continuous))`，移除 `.thickMaterial` 与黑阴影；`CleanupTabView` 和 `SessionsTabView` 中只包裹哑光数据卡片的 `GlassEffectContainer` 已删除，Sessions 工具筛选等真正玻璃控件组保留。
+- 按钮层级：全站 `.buttonStyle(.bordered)` → `.glass`，`.borderedProminent` → `.glassProminent` + `.tint(FizzTheme.accent)`；永久删除确认保留 `role: .destructive` + `.tint(.red)`。菜单按钮继续统一 `.menuStyle(.button)` + `.buttonStyle(.plain)` / `.glass`，无 `.menuStyle(.borderlessButton)`。
+- UI-3/UI-4 收口：`WorkbenchMetrics.splitBytes` 在四舍五入达到 1000 且仍有更大单位时进位（`999_960 → 1 MB`、`999_999_999 → 1 GB`），`OverviewWorkbenchTests` 新增边界断言；`ProjectServicesPanel.devRow` 的「预览」仅在 `run.port > 0` 时出现；新的 `testRun.startedAt` 变化且测试日志存在/运行中时，`ProjectLogsPanel` 自动把 `source` 切到 `.test`，面板首次因测试运行出现时也默认 `.test`。
+- 测试：新增 `FizzDesignSystemTests`（圆角/间距 Token、浅/暗阴影收敛断言）；C1 当轮 `swift test --package-path macos` 128/128 通过（C2 后总计 135 例）；`swift build --package-path macos --build-path <tmp> -Xswiftc -strict-concurrency=complete` 干净构建 0 warning / 0 error；`git diff --check` 通过；`rg` 核查无 `.menuStyle(.borderlessButton)`、无 `.buttonStyle(.bordered/.borderedProminent)`、无数字 `cornerRadius`、视图层无裸 `.shadow(`（仅保留 `FizzAdaptiveShadowModifier` 内部实现）。
+- 隔离 GUI 验收：独立 bundle `com.a003.fizzdeck.c1audit` + 临时 `CFFIXED_USER_HOME`，fixture 项目真实执行 `npm run test`（3 passed），Logs 自动从 `dev` 切到 `test` 并显示输出；浅/暗截图统一前缀 `/tmp/fizzdeck-c1-`，含 home、home-batch、palette、detail、detail-test、settings、sheet 的 light/dark（home-batch 仅暗色）。真实 `~/.repodeck` 与 `/Applications/FizzDeck.app` 进程未触碰，验收后临时进程已退出、5199 端口无监听。
+- 未直测：dev 启动/预览按钮的 `port = 0` 异常场景、永久删除红色确认弹窗、VoiceOver 顺序与低于 1000pt 最小窗口。C1 当轮未提交；C2/C3 已补测并统一本地提交。
+
+### UI-1：语义化浅/暗双主题 Token 与外观设置（2026-11-26）
+
+- `FizzTheme` 的 page / sidebar / card / 描边 / 选中填充全部改为 `Color(nsColor: NSColor(name: nil) { … })` 动态语义 Token：浅色保持原 Liquid Glass 层级，暗色使用低饱和炭黑（page `#111315`、sidebar `#16181A`、card `#1B1D20`、recessed `#131517`、elevated `#25282C`）；新增 `recessedFill`、`elevatedFill`。`FizzBackground` 在暗色下把 warmGlow/coolGlow 透明度降到 0.06。
+- 新增 `AppAppearance`（system / light / dark）与 `AppearancePreferences`，UserDefaults key 为 `fizzdeck.appearance`，默认跟随系统；`FizzDeckApp` 与设置窗口用 `@AppStorage` 同步 `.preferredColorScheme`，AppDelegate 启动时应用 `NSApp.appearance`，不再写死 aqua / light。
+- 设置通用页新增「外观」选择器，切换后立即作用于主窗口与设置窗口。
+- 清理首页视图模式胶囊、会话工具胶囊、⌘K 面板、筛选 chip 和项目页 tab hover 的浅色硬编码；保留模态半透明遮罩与主题色按钮上的白字。
+- 同步 README、README.zh-CN、macos/README 的双主题描述，移除“固定浅色”旧说明。
+- 验证：`swift test --package-path macos` 105/105；`swift build --package-path macos -Xswiftc -strict-concurrency=complete` 0 warning；`git diff --check` 通过。当轮未做真实窗口截图，浅/暗双态截图已在 UI-2 验收中补齐。
+
+### UI-2：双态悬浮圆角侧栏与项目品牌微图标（2026-11-26）
+
+- UI-1 收口：`AddProjectsSheet` 的 `.regular.tint` 由 `.white.opacity(0.22)` 改为 `FizzTheme.elevatedFill.opacity(0.22)`，暗色模式弹窗不再泛白。
+- 新增 `macos/Sources/FizzDeck/Views/ProjectBadgeIcon.swift`：`ProjectBadgeKind.resolve(stacks:kind:)` 为纯数据映射，优先级 Next.js → Nuxt → Svelte → Astro → Vue → React → Vite，再到 Swift → Flutter → Unity/Godot/Unreal → Go → Rust → Python → Docker → Cloudflare，最后按 `ProjectKind` 回退（macApp / flutter / game / cli / miniProgram / web / other）。徽章混用 SF Symbol 与单字母，颜色走系统语义色，暗色下自动提亮。
+- `ProjectBadgeIcon(project:size:framed:)`：`framed == true` 用 `elevatedFill` 圆角底板 + 1px `stroke`，供星标瓷砖、折叠态置顶卡和后续项目 Header 使用；`framed == false` 为无底框轻量图标，供侧栏行、折叠态普通项目与首页卡片使用。
+- `HomeDashboardView` 删除 `FolderBadge`，首页卡片与批量选择工具条统一改为 `ProjectBadgeIcon(framed: false)`。
+- `SidebarView` 重写为悬浮圆角卡片：外留 9pt、radius 16、`FizzTheme.sidebar` 填充 + `FizzTheme.stroke` 描边；展开 236pt / 折叠 58pt，`@AppStorage("fizzdeck.sidebarCollapsed")` 持久化，切换动画走 `FizzMotion.resolved(reduceMotion, FizzMotion.standard)`。
+- 展开态三段式：内凹搜索框（放大镜 + 「搜索」+ 等宽 ⌘K，触发 `store.toggleCommandPalette()`）；总览/有改动/可清理三行指标（运行中数量绿色、脏项目数等宽、可回收空间 `Format.bytes`）；星标 3 列瓷砖（右上 5pt 运行绿点）；下方「正在运行」按 `:port` 展示，再按工作区分组（标题行 `+` 调 `store.addRoot()`），行内只有品牌图标 + 名称；底部磁盘余量 + SettingsLink。
+- 折叠态：圆角搜索按钮、总览/有改动/可清理三个图标按钮（状态绿点 + `.help` + `accessibilityLabel`）、星标 36×36 图标卡、普通项目无底框小图标、底部设置齿轮。右键菜单、tooltip、`accessibilityLabel` 与 selected trait 全部保留。
+- `ContentView` 移除 `NavigationSplitView`，改为 `FizzBackground` + `HStack(悬浮侧栏, 详情)`；工具栏在红黄绿旁新增 `sidebar.left` 折叠按钮（含 tooltip / accessibilityLabel）；`FizzDeckApp` 用 `CommandGroup(replacing: .sidebar)` 提供“显示/隐藏侧栏”（⌘⌃S）。⌘K、⌘0、⌘R、⌘⇧T、⌘, 与 `WindowFrameGuard` 行为不变。
+- 新增 `ProjectBadgeIconTests` 9 例：框架优先级、Vite 单栈、SwiftUI/macApp、Flutter、游戏引擎、语言、基础设施、CLI/kind 回退、每个 kind 都有字形。
+- 验证：`swift test --package-path macos` 114/114；`swift build --package-path macos -Xswiftc -strict-concurrency=complete` 干净构建 0 warning；`git diff --check` 通过；`rg` 无 `.menuStyle(.borderlessButton)`、无 `FolderBadge`、无新增纯白/纯黑背景（仅保留模态遮罩与主题色按钮白字）。
+- 隔离 GUI 验收：独立 bundle `com.a003.fizzdeck.ui2audit` + 临时 `CFFIXED_USER_HOME`，浅色/暗色 × 展开/折叠四套截图确认悬浮卡片、236/58 双态、星标瓷砖、`:5199` 运行行、品牌图标与暗色对比度正常；未触碰真实 `~/.repodeck` 与用户正在运行的 FizzDeck。
+- 未直测：右键菜单各项真实点击、纯键盘全路径、VoiceOver 顺序；低于 1000pt 最小窗口下的折叠态未单独截图。
+
+### UI-3：紧凑自适应项目 Header 与封面缩略图（2026-11-26）
+
+- `ProjectHero` 移除 300pt 全幅封面、`0.88` 黑色渐变叠底与 `fallbackArtwork`，改为 `.fizzCard(radius: 18)` 紧凑 Header：42pt `ProjectBadgeIcon(framed: true)` + 20pt 项目名（运行绿点）+ 11pt 等宽路径复制 + 分组 / 分支 / 改动 / 最近 AI 工具 / test 标签；右侧独立列放 `ProjectHeroActions` 与 `SessionContinueButton(.prominent)`，窄窗口只压缩标题，不裁切按钮。外层 `24pt` 横向、`8pt` 顶部留白，内边距 17pt，高度由内容决定（未写死）。
+- `SessionContinueButton.prominentControls` 反馈条由黑底白字改为 `FizzTheme.elevatedFill` + `FizzTheme.stroke` 1pt + `.primary`，前置橙色警告图标；“复制命令”“自动化设置”按钮保留。
+- 方案 A：`OverviewTabView.projectSummaryPanel` 在 `project.artwork != nil` 时展示 176×99（16:9）、圆角 10 的封面缩略图，占位底 `FizzTheme.recessedFill` + `FizzTheme.stroke`；`.task(id: path)` 在 `Task.detached(priority: .utility)` 读取 `Data`，回主线程解码 `NSImage`（避免 NSImage 跨 actor），读取前后检查取消；无封面时完全不渲染、不占位，点击调用 `SystemActions.open`。
+
+### UI-4：总览工作台：微柱 KPI + Services + 内嵌 Logs（2026-11-26）
+
+- 新增 `Support/OverviewWorkbench.swift` 纯函数：7 天窗口按日对齐、`SessionRecord` 按日聚合、微柱归一化与峰值强调、清理项占比、字节数值/单位拆分、日志尾部读取（最多 16 KB、UTF-8 边界修剪、最后 40 行）。
+- 顶部 KPI 改为自适应网格（最小 205pt）：本周提交（大数字 `次` + 近 7 日提交柱 + branch 底注）、磁盘占用（拆分数值与 KB/MB/GB 单位 + 清理项占比柱 + 可清理大小/目录数）、AI 会话（会话数 + 近 7 日会话柱 + 完整 `aiDetail`）、最近活动；移除独立 `weeklyPanel` 与旧 `WeeklyBars`，预览端口收敛到 Services。
+- 新增 `Views/ProjectServicesPanel.swift`：`Services` 面板展示 dev/test 两行真实命令与状态；dev 运行态绿点、`:port`、预览/停止，未运行启动；test 显示运行中/通过/失败 + 耗时与运行/停止；启动/停止中用 mini `ProgressView` 并禁用对应动作；底部单行反馈来自 `actions.messages` / `testMessages`。
+- `ProjectDetailView` 的总览页不再挂 `ProjectActionDock`（仅测试页且存在 test 命令时保留），避免浮条与 Services 重复并遮挡 Logs。
+- 新增内嵌 `Logs` 面板：dev/test 日志存在或运行中时展示；双日志提供 dev/test 切换、折叠、打开完整日志；视口 `recessedFill` + `stroke` + radius 10，11pt 等宽、210pt 高、支持文本选择并自动滚到底部。运行中（或启动/停止中）每 1.2 秒异步刷新，折叠/切项目/切页/销毁自动取消；test 有内存输出时优先读内存。
+- 保留备注编辑、200 字计数、最近活动时间线；顺序为 项目摘要 → KPI → Services → Logs → 备注 → 最近活动。
+- 新增 `OverviewWorkbenchTests` 10 例：7 天日期对齐、会话按日聚合、全 0/单峰归一化、峰值强调、清理柱补齐、字节拆分、日志缺失/空文件/40 行截断/16 KB 截断/多字节 UTF-8 边界。
+- 验证：`swift test --package-path macos` 124/124；`swift build --package-path macos -Xswiftc -strict-concurrency=complete` 干净构建 0 warning；`git diff --check` 通过；`rg` 无 `.menuStyle(.borderlessButton)`、无新增硬编码浅/暗背景。
+- 隔离 GUI 验收：独立 bundle `com.a003.fizzdeck.ui3audit` + 独立 home，真实启动 5199 静态服务、真实执行 `npm run test`（通过 0.2–0.5s）；浅/暗截图保存在 `/tmp/fizzdeck-ui3-light-atlas.png`、`/tmp/fizzdeck-ui3-dark-atlas.png`、`/tmp/fizzdeck-ui3-dark-services-test.png`、`/tmp/fizzdeck-ui3-light-rust.png`，覆盖有/无封面、Services 运行态、test 通过、Logs 展开/折叠与来源切换；未触碰真实 `~/.repodeck` 与用户正在运行的 FizzDeck。
+- 未直测：1000pt 极限宽度逐像素、VoiceOver 顺序、超长日志持续滚动帧率、test 失败态截图。
+
+### 阶段 4：质量与性能收口（2026-11-26）
+
+- 修复首页批量选择清理：`HomeDashboardView` 重新监听 `visibleProjects.map(\.path)`，应用分组/颜色/工具筛选后不会残留不可见项目的选择；切换首页分类仍会清空选择。
+- 修复 Git 监听精确性：`WorkspaceWatcher` 现在检查 FSEvents 事件路径，只接受当前项目 `.git/HEAD` 与 `.git/index`；`.git/config`、`packed-refs` 等不触发 `refreshGit`。新增真实 FSEvents 测试：写 `config` 不触发，写 `index` 仍触发。
+- 修复 FSEvents context 生命周期：删除回调里多余的 `release()`，避免 `stop()`/切换项目时对 sink 过度释放导致崩溃；8 例监听测试全部通过。
+- 修复扫描取消：`ProjectDiscovery.discoverStreaming` 的 `Task.detached` 现在通过 `withTaskCancellationHandler` 传递取消，取消后约 28ms 返回，不再在后台继续遍历。
+- 性能基线（本机 macOS 27.2，Apple Silicon，debug 测试构建）：50 个项目扫描冷启动 `18.2–18.5ms`、`scan-cache.json` 热读 `1.1–1.2ms`；50 个项目会话索引冷启动 `21.8–22.9ms`、热启动 `2.1–2.2ms`、单文件失效刷新 `2.7–2.9ms`；150 个项目 × 20 轮排序 `8.0–8.4ms`；扫描取消响应 `25–30ms`。数据由 `PerformanceBaselineTests` 输出，未使用 Instruments。
+- 可访问性：`FirstRunScanView` 的扫描目录行补充标签/勾选值/提示，扫描状态使用组合描述，“一键开始扫描”为默认动作，“取消扫描/返回重选目录”绑定 Esc；`ScanReportView` 的筛选 chip 补选中状态，候选行和复选框补标签/值/提示；`SessionContinueButton` 与 `SessionsTabView` 的继续/菜单/复制/结束按钮补标签和提示。
+- 长列表检查：`HomeDashboardView`、`SessionsTabView`、`ScanReportView` 的 `body` 内没有 `FileManager` I/O；首页筛选/排序为纯内存计算，150 项基线仍在 60fps 预算内。
+- 验证：`swift test --package-path macos` 96/96；`swift build --package-path macos --build-path /tmp/fizzdeck-clean-build` 与干净 test 构建均 0 warning；额外以 `-Xswiftc -strict-concurrency=complete` 构建源码和测试，均 0 warning；`git diff --check` 通过；`rg` 无 `.menuStyle(.borderlessButton)`、无调试 `print`、无新增个人路径。
+- 隔离 GUI 验收：独立 bundle `com.a003.fizzdeck.stage4` + 临时 `CFFIXED_USER_HOME` 启动 8 秒，未触碰真实 `~/.repodeck` 和用户正在运行的 `FizzDeck.app`；`scan-cache.json` / `session-cache.json` 正常生成并命中会话 fixture，无错误日志，退出后无残留进程。菜单栏截图显示 `(!) 2`，与两个脏项目的首页待处理队列一致。
+- 未直测：真实 Terminal 自动化权限弹窗、已有 tab 聚焦与 `-1743` 降级；菜单栏 60 秒静默到期（等待期间屏幕锁定，无法继续截取）；通知 banner 点击回跳；VoiceOver 顺序与 Instruments 长列表帧率；Gemini / Cursor / Trae / Windsurf 真实本机样本。
+
+### P1-A：终端适配层与继续偏好（2026-11-26）
+
+- 新增 `TerminalLauncher.swift`：`terminal` / `iterm2` / `ghostty` / `warp` 四种终端，按 Bundle ID + 应用路径检测已安装项，偏好写入 `UserDefaults`，未安装时回退 Terminal。
+- Terminal 复用按 TTY 精确聚焦和 `-1743` 降级；iTerm2 按 TTY 聚焦 session，启动时优先新建 tab；Ghostty 用 AppleScript `new window with configuration` 打开项目目录并执行启动脚本；Warp 只打开项目目录。
+- Ghostty / Warp 运行中不假装支持标签定位，统一降级为激活应用 + 提示。Warp 没有命令执行接口，继续时返回可复制的恢复命令。
+- 设置页新增“默认终端”“Codex 默认继续方式（自动 / 优先 CLI / 优先 Codex Desktop）”“自动化权限”三项；自动化状态记录最近一次 AppleScript 结果，不冒充实时 TCC 状态。
+- `SystemActions.openTerminal` 与 `SessionResumeService` 统一走 `TerminalLauncher`；启动脚本写入 `~/.repodeck/launchers`，创建前清理超过 24 小时且匹配 `resume-*.command` 的旧脚本。
+- 移除 `SessionContinueButton` 和 `AttentionQueueView` 中已废弃的 `.menuStyle(.borderlessButton)`。
+- 验证：`swift test --package-path macos` 77/77、`swift build --package-path macos`、`git diff --check` 通过。新增 11 例覆盖四种终端脚本/URL 生成与转义、终端检测回退、24 小时清理和偏好读写。
+- 本机检测到 Terminal 与 Ghostty；生成的 Terminal 启动/聚焦、Ghostty 启动 AppleScript 均通过 `osacompile` 语法检查。iTerm2 未安装，只验证了脚本生成与转义；未实际点击“继续”以免触发自动化权限弹窗和真实进程。
+
+### P2-B：轻量后台文件监听（2026-11-26）
+
+- 新增 `WorkspaceWatcher.swift`：会话根目录（`~/.codex/sessions`、`~/.claude/projects`、`~/.grok/sessions`、`~/.gemini/tmp`）使用 FSEvents 递归监听；当前项目 `.git` 目录单独监听。监听只触发 `SessionIndex.build()` 增量刷新或 `store.refreshGit(for:)`，不触发 `du`、Git 全量扫描或项目重排。
+- 防抖 2 秒；`WorkspaceDebouncer` 合并短时间内的 sessions/git 事件，只回调一次。事件里不改 `recent`、不重排 `projects`，首页卡片不会因监听跳动。
+- `ProjectDetailView` 进入时把当前项目路径交给 watcher，离开时清除；切换项目只重建 `.git` 监听，不碰其他项目源码树。
+- 前后台：`didResignActive` 暂停所有流，`didBecomeActive` 重建并合并执行一次增量刷新；后台启动的进程在首次激活前保持监听，避免“从未激活 → 永远暂停”。新增 15 秒轻量检查，仅用 `stat` 处理首次出现的新会话目录。
+- 资源释放：`stop()` 取消防抖、计时器、观察者并释放 FSEvents 流；FSEvents context 使用配对 retain/release，回调只保留弱引用，流释放后不会访问已释放 watcher。
+- 验证：新增 7 例监听单测（防抖合并、取消、生命周期、`.git/HEAD` 变更、会话目录写入、git 路径匹配）；`swift test` 90/90、`swift build`、`git diff --check` 通过。隔离 `CFFIXED_USER_HOME` + `LSEnvironment` 前台启动验收：新增 Gemini 会话文件后 6 秒内 `session-cache.json` 自动包含 `watch-gemini`，无需手动重扫。
+
+### P2-A：Gemini CLI 与 IDE 工作区会话适配（2026-11-26）
+
+- `SessionIndex.swift` 新增 Gemini 读取：按官方 `~/.gemini/tmp/<projectSlug>/chats/*.jsonl` 结构解析首条 metadata（`sessionId` / `startTime` / `directories`），cwd 优先取 `~/.gemini/projects.json` 的绝对路径映射，回退 `.project_root`；最近用户消息跳过 `<...>` 上下文和 `/` 斜杠命令；`tokens.input/output/cached/thoughts/total` 与 `model` 进入现有用量展示，因价目表无 Gemini 价格，费用保持 `nil`。
+- Gemini 恢复命令为 `gemini --resume <sessionId>`；CLI 可用时走 `TerminalLauncher`，不可用时提示安装并保留 `cd '<cwd>' && gemini --resume <id>` 复制兜底；进程匹配支持 `--resume <id>`、`-r <id>`、`--resume=<id>`，不把 `--session-id` 当恢复。
+- IDE 工作区摘要：只读读取 `~/Library/Application Support/{Cursor,Trae,Windsurf}/User/workspaceStorage/*/workspace.json`，生成 `kind = workspaceSummary` 的会话记录；`state.vscdb` 以 `SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX` + `sqlite3_busy_timeout(120ms)` 打开，仅查 `ItemTable` 已知键，损坏、被占用或 schema 变化时静默降级为工作区标题，不崩溃、不阻塞扫描。
+- IDE 记录不生成 `resumeCommand`；`SessionContinueButton` 的菜单新增“在 Cursor / Trae / Windsurf 中打开项目”，复用 `SystemActions.open(_:in:)`，只对本机已安装且项目有该工具痕迹的 IDE 显示；只有 IDE 痕迹、没有可恢复 CLI 会话时按钮显示“打开 <IDE>”。
+- `ProjectEditor` 新增 Trae / Windsurf 的 bundle ID 与 `/Applications` 回退路径；`SessionsTabView` 的筛选从固定枚举改为按当前项目实际出现的工具动态渲染，切换项目重置为“全部”。
+- `session-cache.json` 版本升到 3；Gemini chat 与 IDE 工作区都按 `mtime + fileSize` 增量缓存，IDE 缓存键为 `ide:<tool>:<workspaceHash>`，最多扫描每个 IDE 300 个工作区。轻量 cwd 索引只读 `workspace.json`，不碰 SQLite。
+- 验证：新增 3 例 Gemini/IDE fixture（含真实 SQLite `ItemTable` 与损坏数据库降级）、1 例 Gemini 进程匹配、1 例 Gemini 工具证据、2 例 IDE 编辑器元数据；`swift test` 84/84、`swift build`、`git diff --check` 通过。隔离 `CFFIXED_USER_HOME` 启动验收生成了 Gemini 会话与 Cursor 工作区记录，应用运行 10 秒无崩溃。
+- 本机未安装标准 Gemini CLI，也没有 Cursor / Trae / Windsurf 的 workspaceStorage；Gemini schema 来自官方仓库格式，IDE 结构来自 VS Code 系真实目录格式，均未在本机真实样本上直测。
+
+### P0-A：首次启动发现、快扫/补全与缓存
+
+- 移除个人目录、项目名和端口硬编码；`roots.json` 缺失时进入首次扫描，不再自动写入个人路径。
+- 新增范围勾选、流式发现、权限拒绝恢复、工具/类型 chip 与分组选择；扫描取消不写 `roots.json`。
+- 新增确定性项目类型识别（网页、macOS、小程序、Flutter、游戏、CLI、其他）和工具证据识别（Codex、Claude、Grok、Cursor、Trae、Windsurf、Gemini CLI）。
+- 首屏读取 `scan-cache.json`，随后依次补全 Git、会话和目录体积；`du` 并发受限，并复用 `CleanupScanner` 已算体积。
+- 新增 `session-cache.json`，按 `mtime` / `fileSize` 增量解析会话。
+
+### P0-B：一键回到现场
+
+- 新增运行中会话检测、TTY/cwd 匹配、Terminal 聚焦和“继续”按钮；多选时隐藏。
+- 未运行时按工具能力路由到一次性 `.command` 启动脚本或桌面端 URL；失败时保留 `cd '<cwd>' && <cmd>` 复制兜底。
+- 结束会话仍只终止明确带 `session.id` 的 CLI 进程，不碰 `codex app-server`。
+
+### 会话用量与 Grok
+
+- 新增 `PricingCatalog`，只对已知模型估算费用；未知模型只显示 token，不编造价格。
+- 解析 Codex `token_count` / `turn_context.model`、Claude `message.usage` / `cost-state`、Grok `updates.jsonl` 的 `_meta.totalTokens`。
+- 会话页新增 token/费用/模型展示；总览新增“最近活动”时间线。
+- Grok 支持 `grok -r <id>` 恢复、CLI 进程匹配和 `~/.grok/sessions` 读取；Grok 桌面端不支持直达。
+
+### 验证与限制
+
+- 隔离 GUI 验收：用 `CFFIXED_USER_HOME` 指向临时目录，启动独立 bundle `com.a003.fizzdeck.acceptance`，未触碰真实 `~/.repodeck`，也未关闭用户正在运行的 `FizzDeck.app`。
+- 首启默认只勾选 `~/Projects`；主目录、桌面/文稿/下载和外置卷默认不选。扫描报告正确显示 Codex/Grok 工具、网页/Mac 应用类型和项目多选。
+- 加入 2 个临时项目后，缓存重开直接进入总览；“跳过，稍后添加”进入空状态并写入 `onboarding.json`（`skipped: true`）；空状态可重新打开扫描视图。
+- Codex 会话显示 1.6K tokens、`~<$0.01` 估算和 `gpt-5.1`；Grok 显示 2.3K tokens、未知模型不显示价格；过滤、复制恢复命令、运行中徽章、结束会话和 10 秒进程轮询均已实测。
+- 验收中发现并修复：Grok 会话目录未被工具索引识别；结束会话后“仍在退出”提示不会随进程消失而清除；小于 1 KB 的目录显示为 `0 KB`。
+- `swift test --package-path macos`：66/66 通过。
+- `swift build --package-path macos -c release`：通过。
+- `git diff --check`：通过。
+- 未点击真实 Terminal 启动（会触发 macOS 自动化权限弹窗）；真实 Grok 桌面端不支持直达；未提交、未发版。
 
 ## 项目是什么
 
@@ -42,7 +208,7 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 
 - 原生 macOS 是主推版本，网页版是快速方案。
 - 左侧导航保持清爽，信息尽量少。
-- 不使用大面积深色主题，不做吉祥物。
+- 支持浅色与低饱和炭黑暗色双模式，不做吉祥物。
 - 默认中文、结论先行、短句。
 - 生产代码禁止 Mock。
 - 本轮已授权合并、部署和打包；后续版本、Developer ID、公证仍需明确确认。
@@ -288,7 +454,7 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 - 覆盖待处理队列的五类优先级、最近项目 tie-break、1 GB 清理阈值和静默到期判断。
 - 覆盖 Git tracking 的 behind/ahead 解析、缺失 upstream、格式异常和 SSH remote 转换。
 - 覆盖编辑器嵌套 Xcode 目标：嵌套 workspace、顶层优先、嵌套 Package 回退、生成目录跳过。
-- 覆盖会话排序分组、cwd 规范化、恢复命令和跨分块反向扫描；后续补充分组、删除、Git 错误路径、通知路由和项目发现测试，当前共 47 例。
+- 覆盖会话排序分组、cwd 规范化、恢复命令和跨分块反向扫描；已补充分组、删除、Git 错误路径、通知路由、项目发现、Grok/Gemini/IDE 会话、进程匹配、工具索引、token 费用、终端脚本、后台监听、50 项目扫描/会话缓存、取消响应、项目品牌徽章映射、7 天 KPI/会话聚合、字节拆分与日志尾部安全读取测试、设计 Token、浅/暗阴影收敛、日志来源决策与端口徽章语义、命令面板高度、小于 1 KB 字节格式、双主题 SVG 加载与浅色背景光晕，当前共 142 例。
 
 相关文件：
 
@@ -301,8 +467,8 @@ FizzDeck 是一个本地优先的 macOS 项目管理器。原生版是主入口�
 ### 4. AI 会话管理
 
 - 会话页展示当前项目匹配到的全部会话，按修改时间倒序、同一时间按稳定 ID 排序。
-- 新增“全部 / Codex / Claude”原生玻璃分段过滤；无匹配时显示对应空态，切换项目会重置过滤。
-- 每行显示工具、相对时间、最后一条用户需求和可复制的 `codex resume` / `claude --resume` 命令。
+- 会话过滤改为按当前项目实际出现的工具动态生成“全部 / Codex / Claude / Grok / Gemini / IDE”原生玻璃分段；无匹配时显示对应空态，切换项目会重置过滤。
+- 每行显示工具、相对时间、最后一条用户需求、token/费用（可用时）和可复制的 `codex resume` / `claude --resume` / `grok -r` / `gemini --resume` 命令；IDE 工作区摘要不显示恢复命令，只提供“在 IDE 中打开项目”。
 - Codex 解析兼容现代 `event_msg/item_completed` 下的 `UserMessage` 和旧式 `payload.role == "user"`；Claude 从文件尾部反向读取。
 - 会话文件反向分块扫描最多 8 MiB，单次读取 128 KiB，能处理跨分块的行；不再受原先 256 KiB tail 限制。
 - 新增“结束会话”：仅匹配命令行首段（或 `env` / `node` / `bun` / `deno` 启动器之后）明确包含 `codex resume <id>` / `claude --resume <id>` 的独立 CLI 进程，确认后发送 SIGTERM。
@@ -574,7 +740,9 @@ CUA 实测：
 ## 工作区现状（重要）
 
 - 当前发布分支是 `main`；PR #1 已合并，`v0.2.3` tag 已创建并已推送。
-- 本轮发布记录提交后工作区应为空；`~/.repodeck` 的 `roots.json`、`state.json` 未因打包改动。
+- 本轮 P0-A/P0-B/P1-A/UI-1..4 与 Round 2 · Batch C1-C4 已提交到本地分支 `feat/macos-ui2-and-sessions`；`main` 仍停在 `24ff3f4`，尚未 push 或提 PR。
+- `~/.repodeck` 的 `roots.json`、`state.json` 未因打包或 GUI 验收改动。
+- 当前运行中的 app 可能是 `/Applications/FizzDeck.app`，不是本轮源码构建；`macos/dist/FizzDeck.app` 也可能早于本轮改动。
 - 可分发安装包是 `macos/dist/FizzDeck-0.2.3-arm64.dmg`；`macos/dist/FizzDeck.app` 仍只是本机构建产物。
 - koroo 下载入口已在 `2a74a0b` 提交并部署到 `https://koroo.top/fizzdeck`。
 - 不要回滚 `server.mjs`、`vite.config.js`、`public/`、`landing.html`、`src/landing/`、`src/stageshow/` 的已发布内容；需要修改时单独开任务。
@@ -600,26 +768,26 @@ CUA 实测：
 - [x] 原生删除项目：对齐网页版的备份、移入废纸篓、浅路径保护、目录名确认和测试运行时拦截。相关文件：`RepositoryStore.swift`、`ProjectDetailView.swift`、`ProjectRemovalService.swift`。验收：不自动永久删除；失败不改变目录；备份可恢复；6 例单测和确认框已验收。
 - [x] 批量操作：批量重扫、批量复制清理命令、按组筛选。相关文件：`HomeDashboardView.swift`、`RepositoryStore.swift`、`RepositoryScanner.swift`。验收：选择态清晰、部分失败可回显、无误触破坏性操作；目录存在性预检和数量回显已实现。
 - [x] 编辑器覆盖：JetBrains 系列、Antigravity、嵌套 Xcode 工程。相关文件：`SystemActions.swift`、`CommandPaletteView.swift`、`Components.swift`。验收：安装/未安装、工程/普通目录分别显示正确；本机已验证 Xcode 与 Antigravity，JetBrains 映射待安装后直测。
-- [x] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行，49 例通过。
-- [x] AI 会话管理：会话列表、按工具过滤、恢复命令和精确 CLI 进程结束已完成；Desktop app-server 永不终止。相关文件：`SessionIndex.swift`、`SessionProcessService.swift`、`SessionsTabView.swift`。验收：Codex/Claude 两类会话、无会话空态、复制命令正确；结束只在明确匹配时出现。
+- [x] 测试基线：新增 Swift test target，覆盖 `ProjectAttentionQueue` 排序和 `GitService` ahead/behind 解析。相关文件：`macos/Package.swift`、`macos/Tests/`。验收：`swift test` 可独立运行，当前 142 例通过。
+- [x] AI 会话管理：会话列表、按工具过滤、恢复命令和精确 CLI 进程结束已完成；Desktop app-server 永不终止。相关文件：`SessionIndex.swift`、`SessionProcessService.swift`、`SessionsTabView.swift`。验收：Codex/Claude/Grok 会话、无会话空态、复制命令正确；结束只在明确匹配时出现。
 
 ### 质量与性能
 
-- [ ] 长列表 60fps：项目多、日志长、任务运行时用 Instruments 量；只动必要属性，避免重排、闪烁和溢出。
-- [ ] 可访问性：VoiceOver 顺序、减少动态效果、键盘全路径；补充 `accessibilityReduceMotion` 覆盖。
-- [ ] 大目录扫描：首次扫描的 `du` 开销、缓存命中、取消/重扫；给出耗时基线。
+- [ ] 长列表 60fps：150 项排序/筛选基线已记录，I/O 已排除；真实滚动帧率仍需 Instruments 实测。
+- [ ] 可访问性：标签、提示、选中状态、默认/取消快捷键和减少动态效果已补代码；VoiceOver 顺序和纯键盘全路径仍未直测。
+- [x] 大目录扫描：50 个项目扫描冷启动 `18.2–18.5ms`、缓存热读 `1.1–1.2ms`、单文件会话缓存失效 `2.7–2.9ms`、取消响应 `25–30ms`；数据来自 `PerformanceBaselineTests`，未用 Instruments。
 - [x] 真实项目回归：用 `repo-dashboard` 脏工作区、`video-tem` 无 upstream、`shipany-template-two` 268 项改动核对了改动列表、概览与测试底栏；只读，没有同步或删除。
 
 ### 建议接手顺序
 
-1. 先跑基线：`swift build --package-path macos`、`swift test --package-path macos`、`./macos/script/build_and_run.sh --verify`。
-2. P1 功能已完成；下一步补真实凭据失效/网络中断和菜单栏/通知直测。
+1. 先跑基线：`swift build --package-path macos`、`swift test --package-path macos`。`./macos/script/build_and_run.sh --verify` 会先杀掉同名 app；用户正在用 FizzDeck 时改用独立 bundle + `CFFIXED_USER_HOME` 验收。
+2. 首启/缓存/Grok/token/进程结束已验收；下一步补真实 Terminal 启动（会触发自动化权限）、真实凭据失效/网络中断和菜单栏/通知直测。
 3. P2 已完成；删除只可用临时目录验证，不要对真实项目点击确认。
 4. `v0.2.3` 已发布；下一版再做 Developer ID 签名、公证和自动更新，旧域名 301 仍需单独确认。
 
 ### 不做
 
-- 不做整套暗色主题。
+- 不做高饱和暗色主题；暗色只用低饱和炭黑层级，支持浅色与暗色双模式。
 - 不做吉祥物。
 - 不在原生版自动执行破坏性删除。
 - 不为了“完整”重写网页版已有能力；按日常使用频率补齐。

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct SessionsTabView: View {
@@ -5,12 +6,32 @@ struct SessionsTabView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var toolFilter = SessionToolFilter.all
-    @State private var liveProcesses: [String: [Int32]] = [:]
+    @State private var liveProcesses: [String: [LiveSessionProcess]] = [:]
     @State private var pendingEnd: SessionRecord?
     @State private var sessionFeedback: SessionFeedback?
+    @State private var resumingSessionID: String?
+    @State private var endFeedbackSessionID: String?
 
     private var sessions: [SessionRecord] {
         project.sessions.recentSessions.filter(toolFilter.matches)
+    }
+
+    private var availableFilters: [SessionToolFilter] {
+        var tools = Set(project.sessions.recentSessions.map(\.tool))
+        tools.formUnion(project.sessions.detected)
+        tools.formUnion(project.detectedTools.map(\.rawValue))
+        let ordered = tools
+            .map { tool in
+                (
+                    tool,
+                    DetectedTool(rawValue: tool)?.title ?? tool.capitalized
+                )
+            }
+            .sorted {
+                $0.1.localizedStandardCompare($1.1) == .orderedAscending
+            }
+            .map { SessionToolFilter.tool($0.0, title: $0.1) }
+        return [.all] + ordered
     }
 
     var body: some View {
@@ -19,48 +40,75 @@ struct SessionsTabView: View {
                 ContentUnavailableView(
                     "没有匹配的会话",
                     systemImage: "bubble.left.and.bubble.right",
-                    description: Text("读取 ~/.codex/sessions 与 ~/.claude/projects，按项目 cwd 精确匹配。")
+                    description: Text("读取 ~/.codex/sessions、~/.claude/projects、~/.grok/sessions 与 ~/.gemini/tmp，按项目 cwd 精确匹配。")
                 )
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        GlassEffectContainer(spacing: 12) {
-                            LazyVGrid(
-                                columns: [GridItem(.adaptive(minimum: 180, maximum: 280), spacing: 12)],
-                                spacing: 12
-                            ) {
+                    VStack(alignment: .leading, spacing: FizzSpacing.section) {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 180, maximum: 280), spacing: FizzSpacing.grid)],
+                            spacing: FizzSpacing.grid
+                        ) {
+                            GlassStatCard(
+                                title: "会话总数",
+                                value: "\(project.sessions.sessionCount)",
+                                detail: project.sessions.detected
+                                    .map { DetectedTool(rawValue: $0)?.title ?? $0.capitalized }
+                                    .joined(separator: " · "),
+                                symbol: "bubble.left.and.bubble.right",
+                                tint: .purple
+                            )
+                            GlassStatCard(
+                                title: "最近会话",
+                                value: Format.relative(project.sessions.lastSessionAt),
+                                detail: project.sessions.lastTool?.capitalized,
+                                symbol: "clock",
+                                tint: .blue
+                            )
+                            if project.sessions.totalTokens > 0 {
                                 GlassStatCard(
-                                    title: "会话总数",
-                                    value: "\(project.sessions.sessionCount)",
-                                    detail: project.sessions.detected
-                                        .map { $0 == "codex" ? "Codex" : "Claude Code" }
-                                        .joined(separator: " · "),
-                                    symbol: "bubble.left.and.bubble.right",
-                                    tint: .purple
-                                )
-                                GlassStatCard(
-                                    title: "最近会话",
-                                    value: Format.relative(project.sessions.lastSessionAt),
-                                    detail: project.sessions.lastTool?.capitalized,
-                                    symbol: "clock",
-                                    tint: .blue
+                                    title: "Token 用量",
+                                    value: Format.tokens(project.sessions.totalTokens),
+                                    detail: costDetail,
+                                    symbol: "chart.bar.doc.horizontal",
+                                    tint: .orange
                                 )
                             }
                         }
 
                         if let sessionFeedback {
-                            Label(sessionFeedback.message, systemImage: sessionFeedback.failed
-                                ? "exclamationmark.triangle"
-                                : "checkmark.circle")
-                                .font(.callout)
-                                .foregroundStyle(sessionFeedback.failed ? Color.orange : Color.green)
+                            HStack(spacing: 8) {
+                                Label(sessionFeedback.message, systemImage: sessionFeedback.failed
+                                    ? "exclamationmark.triangle"
+                                    : "checkmark.circle")
+                                    .font(.callout)
+                                    .foregroundStyle(sessionFeedback.failed ? Color.orange : Color.green)
+
+                                Spacer(minLength: 8)
+
+                                if let fallback = sessionFeedback.fallbackCommand {
+                                    Button("复制命令") {
+                                        SystemActions.copy(fallback)
+                                    }
+                                    .buttonStyle(.glass)
+                                    .controlSize(.small)
+                                }
+
+                                if sessionFeedback.needsAutomationPermission {
+                                    Button("自动化设置") {
+                                        SystemPermissionService.openAutomationSettings()
+                                    }
+                                    .buttonStyle(.glass)
+                                    .controlSize(.small)
+                                }
+                            }
                         }
 
                         Panel(title: "最近会话", symbol: "clock.arrow.circlepath") {
                             if sessions.isEmpty {
                                 HStack(spacing: 8) {
                                     FizzIcon(symbol: "line.3.horizontal.decrease.circle", size: 12)
-                                    Text("没有 \(toolFilter.title) 会话")
+                                Text("没有 \(toolFilter.title) 会话")
                                     Spacer(minLength: 0)
                                 }
                                 .font(.callout)
@@ -83,19 +131,23 @@ struct SessionsTabView: View {
                             toolPicker
                         }
                     }
-                    .padding(24)
+                    .padding(FizzSpacing.page)
                 }
                 .onChange(of: project.path) {
                     toolFilter = .all
                     sessionFeedback = nil
+                    endFeedbackSessionID = nil
+                }
+                .onChange(of: availableFilters) {
+                    if !availableFilters.contains(toolFilter) {
+                        toolFilter = .all
+                    }
                 }
             }
         }
         .task(id: "\(project.path):\(project.sessions.sessionCount)") {
             while !Task.isCancelled {
-                liveProcesses = await SessionProcessService.liveProcesses(
-                    for: project.sessions.recentSessions
-                )
+                await refreshLiveProcesses()
                 try? await Task.sleep(for: .seconds(10))
             }
         }
@@ -121,7 +173,7 @@ struct SessionsTabView: View {
     private var toolPicker: some View {
         GlassEffectContainer(spacing: 2) {
             HStack(spacing: 1) {
-                ForEach(SessionToolFilter.allCases) { option in
+                ForEach(availableFilters) { option in
                     Button {
                         withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
                             toolFilter = option
@@ -135,8 +187,8 @@ struct SessionsTabView: View {
                             .background {
                                 if toolFilter == option {
                                     Capsule()
-                                        .fill(Color.white.opacity(0.92))
-                                        .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+                                        .fill(FizzTheme.elevatedFill)
+                                        .fizzAdaptiveShadow(.subtle)
                                 }
                             }
                             .contentShape(Capsule())
@@ -144,17 +196,24 @@ struct SessionsTabView: View {
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(toolFilter == option ? .isSelected : [])
                     .accessibilityRemoveTraits(toolFilter == option ? [] : .isSelected)
+                    .accessibilityLabel(option.title)
+                    .accessibilityHint("只显示 \(option.title) 会话")
                 }
             }
             .padding(2)
             .glassEffect(.regular.interactive(), in: Capsule())
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("会话工具")
+        .accessibilityLabel("会话工具筛选")
     }
 
     private func sessionRow(_ session: SessionRecord) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        let processes = liveProcesses[session.stableID] ?? []
+        let exactProcesses = processes.filter(\.exactMatch)
+        let isLive = !processes.isEmpty
+        let isResuming = resumingSessionID == session.stableID
+
+        return HStack(alignment: .top, spacing: 10) {
             FizzIcon(symbol: toolSymbol(session.tool), size: 13)
                 .foregroundStyle(toolTint(session.tool))
                 .frame(width: 16, height: 20)
@@ -163,30 +222,66 @@ struct SessionsTabView: View {
                 HStack(spacing: 8) {
                     Text(toolName(session.tool))
                         .font(.system(size: 12, weight: .semibold))
+                    if session.isWorkspaceSummary {
+                        TagChip(text: "工作区", tint: .secondary, compact: true)
+                    }
+                    if isLive {
+                        TagChip(text: "运行中", tint: .green, compact: true)
+                    }
                     Text(Format.relative(session.modified))
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 8)
-                    if let processes = liveProcesses[session.stableID], !processes.isEmpty {
+                    if !exactProcesses.isEmpty {
                         Button {
                             pendingEnd = session
                         } label: {
                             Label("结束", systemImage: "stop.circle")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                         .controlSize(.small)
-                        .help("结束 PID \(processes.map(String.init).joined(separator: ", "))")
+                        .help("结束 PID \(exactProcesses.map { String($0.pid) }.joined(separator: ", "))")
+                        .accessibilityLabel("结束 \(toolName(session.tool)) 会话")
+                        .accessibilityHint("只结束命令行中明确包含这个会话 ID 的进程")
+                    }
+                    if DetectedTool(rawValue: session.tool)?.supportsResume == true {
+                        Button {
+                            Task { await resume(session) }
+                        } label: {
+                            if isResuming {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            } else {
+                                Label(isLive ? "回到会话" : "继续", systemImage: "play.fill")
+                            }
+                        }
+                        .buttonStyle(.glassProminent)
+                        .tint(FizzTheme.accent)
+                        .controlSize(.small)
+                        .disabled(resumingSessionID != nil)
+                        .accessibilityLabel(isLive ? "回到 \(toolName(session.tool)) 会话" : "继续 \(toolName(session.tool)) 会话")
                     }
                     if let command = session.resumeCommand {
-                        CopyButton(
-                            title: "复制恢复命令",
-                            value: command,
-                            symbol: "play.fill"
-                        )
+                        Button {
+                            SystemActions.copy(command)
+                            endFeedbackSessionID = nil
+                            sessionFeedback = SessionFeedback(
+                                message: "已复制恢复命令：\(command)",
+                                failed: false,
+                                fallbackCommand: nil,
+                                needsAutomationPermission: false
+                            )
+                        } label: {
+                            FizzIcon(symbol: "doc.on.doc", size: 11)
+                        }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                        .help("复制恢复命令")
+                        .accessibilityLabel("复制 \(toolName(session.tool)) 恢复命令")
                     }
                 }
 
-                Text(session.lastUser ?? "未读取到最后一条用户消息")
+                Text(session.lastUser ?? (session.isWorkspaceSummary ? "工作区活动摘要" : "未读取到最后一条用户消息"))
                     .font(.callout)
                     .foregroundStyle(session.lastUser == nil ? .secondary : .primary)
                     .lineLimit(3)
@@ -199,68 +294,117 @@ struct SessionsTabView: View {
                         .lineLimit(1)
                         .textSelection(.enabled)
                 }
+
+                if let usage = session.usage, usage.totalTokens > 0 {
+                    HStack(spacing: 6) {
+                        Text("\(Format.tokens(usage.totalTokens)) tokens")
+                        if let cost = Format.cost(session.costUSD, estimated: session.costIsEstimate == true) {
+                            Text("·")
+                            Text(cost)
+                        }
+                        if let model = session.model {
+                            Text("·")
+                            Text(model)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                }
             }
         }
         .padding(.vertical, 10)
     }
 
+    private var costDetail: String {
+        if let cost = Format.cost(
+            project.sessions.totalCostUSD,
+            estimated: project.sessions.costIsEstimate
+        ) {
+            return project.sessions.costIsEstimate ? "\(cost) · 按价目估算" : "\(cost) · 本地记录"
+        }
+        if project.sessions.modelNames.isEmpty {
+            return "已读取本地会话记录"
+        }
+        return "未记录价格"
+    }
+
+    private func resume(_ session: SessionRecord) async {
+        resumingSessionID = session.stableID
+        let result = await SessionResumeService.resume(
+            session: session,
+            projectPath: project.path
+        )
+        resumingSessionID = nil
+        endFeedbackSessionID = nil
+        sessionFeedback = SessionFeedback(
+            message: result.message,
+            failed: !result.success,
+            fallbackCommand: result.fallbackCommand,
+            needsAutomationPermission: result.needsAutomationPermission
+        )
+        await refreshLiveProcesses()
+    }
+
     private func end(_ session: SessionRecord) async {
         pendingEnd = nil
         let result = await SessionProcessService.end(session)
+        endFeedbackSessionID = session.stableID
         sessionFeedback = SessionFeedback(
             message: result.message,
-            failed: !result.success
+            failed: !result.success,
+            fallbackCommand: nil,
+            needsAutomationPermission: false
         )
-        liveProcesses = await SessionProcessService.liveProcesses(
-            for: project.sessions.recentSessions
+        await refreshLiveProcesses()
+    }
+
+    private func refreshLiveProcesses() async {
+        liveProcesses = await SessionProcessService.liveProcessesDetailed(
+            for: project.sessions.recentSessions,
+            projectPath: project.path
         )
+        if let endFeedbackSessionID,
+           sessionFeedback?.failed == true,
+           (liveProcesses[endFeedbackSessionID] ?? []).isEmpty {
+            sessionFeedback = nil
+            self.endFeedbackSessionID = nil
+        }
     }
 
     private func toolName(_ tool: String) -> String {
-        switch tool {
-        case "codex": "Codex"
-        case "claude": "Claude Code"
-        default: tool.capitalized
-        }
+        DetectedTool(rawValue: tool)?.title ?? tool.capitalized
     }
 
     private func toolSymbol(_ tool: String) -> String {
-        switch tool {
-        case "codex": "terminal"
-        default: "sparkles"
-        }
+        DetectedTool(rawValue: tool)?.symbol ?? "sparkles"
     }
 
     private func toolTint(_ tool: String) -> Color {
-        switch tool {
-        case "codex": .blue
-        case "claude": .purple
-        default: .secondary
-        }
+        DetectedTool(rawValue: tool)?.tint ?? .secondary
     }
 }
 
 private struct SessionFeedback {
     let message: String
     let failed: Bool
+    let fallbackCommand: String?
+    let needsAutomationPermission: Bool
 }
 
-private enum SessionToolFilter: String, CaseIterable, Identifiable {
-    case all
-    case codex
-    case claude
+private struct SessionToolFilter: Identifiable, Hashable {
+    let id: String
+    let tool: String?
+    let title: String
 
-    var id: String { rawValue }
+    static let all = SessionToolFilter(id: "all", tool: nil, title: "全部")
 
-    var title: String {
-        switch self {
-        case .all: "全部"
-        case .codex: "Codex"
-        case .claude: "Claude"
-        }
+    static func tool(_ tool: String, title: String) -> SessionToolFilter {
+        SessionToolFilter(id: tool, tool: tool, title: title)
     }
 
     func matches(_ session: SessionRecord) -> Bool {
-        self == .all || session.tool == rawValue
+        tool == nil || session.tool == tool
     }
 }

@@ -4,6 +4,7 @@ struct CommandPaletteView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var query = ""
     @State private var selection = 0
@@ -83,12 +84,12 @@ struct CommandPaletteView: View {
             PaletteEntry(
                 id: "action.terminal.\(project.path)",
                 group: "快捷操作",
-                title: "在 Terminal 中打开",
+                title: "在终端中打开",
                 subtitle: project.displayName,
                 symbol: "terminal",
                 tint: .green,
                 shortcut: nil,
-                keywords: "终端 shell 命令行"
+                keywords: "终端 terminal iterm ghostty warp shell 命令行"
             ) {
                 SystemActions.openTerminal(project.path)
             }
@@ -168,22 +169,43 @@ struct CommandPaletteView: View {
         }
 
         if let tool = project.sessions.lastTool,
-           let id = project.sessions.lastSessionID {
-            let command = tool == "codex" ? "codex resume \(id)" : "claude --resume \(id)"
-            result.append(
-                PaletteEntry(
-                    id: "action.resume.\(project.path)",
-                    group: "快捷操作",
-                    title: "复制 AI 恢复命令",
-                    subtitle: "\(project.displayName) · \(tool == "codex" ? "Codex" : "Claude Code")",
-                    symbol: "bubble.left.and.bubble.right",
-                    tint: .purple,
-                    shortcut: nil,
-                    keywords: "会话 resume codex claude"
-                ) {
-                    SystemActions.copy(command)
-                }
-            )
+           let id = project.sessions.lastSessionID,
+           let session = project.sessions.recentSessions.first(where: { $0.tool == tool && $0.id == id }) {
+            let toolLabel = DetectedTool(rawValue: tool)?.title ?? tool.capitalized
+            if DetectedTool(rawValue: tool)?.supportsResume == true {
+                result.append(
+                    PaletteEntry(
+                        id: "action.continue.\(project.path)",
+                        group: "快捷操作",
+                        title: "继续最近会话",
+                        subtitle: "\(project.displayName) · \(toolLabel)",
+                        symbol: "play.fill",
+                        tint: .purple,
+                        shortcut: nil,
+                        keywords: "继续 会话 resume codex claude"
+                    ) {
+                        Task {
+                            _ = await SessionResumeService.resume(session: session, projectPath: project.path)
+                        }
+                    }
+                )
+            }
+            if let command = session.resumeCommand {
+                result.append(
+                    PaletteEntry(
+                        id: "action.resume.\(project.path)",
+                        group: "快捷操作",
+                        title: "复制 AI 恢复命令",
+                        subtitle: "\(project.displayName) · \(toolLabel)",
+                        symbol: "doc.on.doc",
+                        tint: .purple,
+                        shortcut: nil,
+                        keywords: "复制 命令 会话 resume codex claude"
+                    ) {
+                        SystemActions.copy(command)
+                    }
+                )
+            }
         }
 
         if let remote = store.cachedRemote(for: project.path) {
@@ -324,7 +346,7 @@ struct CommandPaletteView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.black.opacity(0.20)
+            Color.black.opacity(colorScheme == .dark ? 0.55 : 0.30)
                 .ignoresSafeArea()
                 .onTapGesture(perform: dismiss)
 
@@ -346,17 +368,25 @@ struct CommandPaletteView: View {
                 keyboardHints
             }
             .frame(width: 620)
-            .background {
-                RoundedRectangle(cornerRadius: 17, style: .continuous)
-                    .fill(.thickMaterial)
-                RoundedRectangle(cornerRadius: 17, style: .continuous)
-                    .fill(Color.white.opacity(0.72))
-            }
+            .background(
+                FizzTheme.elevatedFill.opacity(colorScheme == .dark ? 0.97 : 0.92),
+                in: RoundedRectangle(cornerRadius: FizzRadius.frame, style: .continuous)
+            )
+            .glassEffect(
+                .regular.tint(FizzTheme.elevatedFill.opacity(colorScheme == .dark ? 0.18 : 0.14)),
+                in: RoundedRectangle(cornerRadius: FizzRadius.frame, style: .continuous)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: FizzRadius.frame, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 17, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.58), lineWidth: 1)
+                RoundedRectangle(cornerRadius: FizzRadius.frame, style: .continuous)
+                    .strokeBorder(
+                        colorScheme == .dark
+                            ? Color.white.opacity(0.12)
+                            : FizzTheme.stroke,
+                        lineWidth: 1
+                    )
             }
-            .shadow(color: .black.opacity(0.22), radius: 34, y: 16)
+            .fizzAdaptiveShadow(.floating)
             .padding(.top, 88)
         }
         .onAppear {
@@ -415,7 +445,7 @@ struct CommandPaletteView: View {
                 .foregroundStyle(.tertiary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
-                .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
@@ -462,7 +492,7 @@ struct CommandPaletteView: View {
     }
 
     private var resultsHeight: CGFloat {
-        min(420, CGFloat(entries.count) * 43 + CGFloat(groups.count) * 27 + 12)
+        CommandPaletteLayout.resultsHeight(groupSizes: groups.map(\.entries.count))
     }
 
     private var keyboardHints: some View {
@@ -482,7 +512,7 @@ struct CommandPaletteView: View {
                 .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
-                .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
             Text(title)
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
@@ -494,11 +524,12 @@ struct CommandPaletteView: View {
             Text(title)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.tertiary)
+                .frame(height: CommandPaletteLayout.sectionTextHeight, alignment: .leading)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
-        .padding(.top, 7)
-        .padding(.bottom, 3)
+        .padding(.top, CommandPaletteLayout.sectionTopPadding)
+        .padding(.bottom, CommandPaletteLayout.sectionBottomPadding)
     }
 
     private func paletteRow(_ entry: PaletteEntry, selected: Bool) -> some View {
@@ -533,18 +564,18 @@ struct CommandPaletteView: View {
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
-                        .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
                 }
             }
             .padding(.horizontal, 9)
-            .frame(height: 43)
+            .frame(height: CommandPaletteLayout.rowHeight)
             .background {
                 if selected {
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
                         .fill(FizzTheme.accent.opacity(0.09))
                 }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(!entry.isEnabled)

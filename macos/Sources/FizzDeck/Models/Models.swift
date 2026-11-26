@@ -1,10 +1,18 @@
 import Foundation
 
-struct RepoProject: Identifiable, Sendable {
+enum MetricLoadState: String, Codable, Sendable, Hashable {
+    case pending
+    case loading
+    case ready
+}
+
+struct RepoProject: Identifiable, Codable, Sendable {
     let path: String
     let name: String
     let displayName: String
     var group: String
+    var kind: ProjectKind = .other
+    var detectedTools: [DetectedTool] = []
     var recent: Date?
     var branch: String?
     var lastCommit: Commit?
@@ -25,11 +33,87 @@ struct RepoProject: Identifiable, Sendable {
     var color: TagColor?
     var note: String
     var port: PortState
+    var gitLoadState: MetricLoadState = .ready
+    var sizeLoadState: MetricLoadState = .ready
+    var sessionLoadState: MetricLoadState = .ready
 
     var id: String { path }
+
+    init(
+        path: String,
+        name: String,
+        displayName: String,
+        group: String,
+        kind: ProjectKind = .other,
+        detectedTools: [DetectedTool] = [],
+        recent: Date?,
+        branch: String?,
+        lastCommit: Commit?,
+        dirtyCount: Int,
+        changes: ChangeStats,
+        ahead: Int,
+        behind: Int,
+        weekly: [String: Int],
+        stacks: [StackGroup],
+        size: SizeInfo,
+        cleanup: CleanupInfo,
+        run: RunConfig?,
+        sessions: SessionSummary,
+        intro: ProjectIntro,
+        artwork: String?,
+        test: TestCommand?,
+        starred: Bool,
+        color: TagColor?,
+        note: String,
+        port: PortState,
+        gitLoadState: MetricLoadState = .ready,
+        sizeLoadState: MetricLoadState = .ready,
+        sessionLoadState: MetricLoadState = .ready
+    ) {
+        self.path = path
+        self.name = name
+        self.displayName = displayName
+        self.group = group
+        self.kind = kind
+        self.detectedTools = detectedTools
+        self.recent = recent
+        self.branch = branch
+        self.lastCommit = lastCommit
+        self.dirtyCount = dirtyCount
+        self.changes = changes
+        self.ahead = ahead
+        self.behind = behind
+        self.weekly = weekly
+        self.stacks = stacks
+        self.size = size
+        self.cleanup = cleanup
+        self.run = run
+        self.sessions = sessions
+        self.intro = intro
+        self.artwork = artwork
+        self.test = test
+        self.starred = starred
+        self.color = color
+        self.note = note
+        self.port = port
+        self.gitLoadState = gitLoadState
+        self.sizeLoadState = sizeLoadState
+        self.sessionLoadState = sessionLoadState
+    }
+
+    var allTools: [String] {
+        var result: [String] = []
+        for tool in sessions.detected where !result.contains(tool) {
+            result.append(tool)
+        }
+        for tool in detectedTools.map(\.rawValue) where !result.contains(tool) {
+            result.append(tool)
+        }
+        return result
+    }
 }
 
-struct Commit: Identifiable, Sendable, Hashable {
+struct Commit: Identifiable, Codable, Sendable, Hashable {
     let hash: String
     let date: Date?
     let subject: String
@@ -38,7 +122,7 @@ struct Commit: Identifiable, Sendable, Hashable {
     var id: String { hash }
 }
 
-struct ChangeStats: Sendable, Hashable {
+struct ChangeStats: Codable, Sendable, Hashable {
     var tracked: Int
     var untracked: Int
     var total: Int
@@ -46,7 +130,7 @@ struct ChangeStats: Sendable, Hashable {
     static let zero = ChangeStats(tracked: 0, untracked: 0, total: 0)
 }
 
-struct StackGroup: Identifiable, Sendable, Hashable {
+struct StackGroup: Identifiable, Codable, Sendable, Hashable {
     let key: String
     let label: String
     let items: [String]
@@ -54,7 +138,7 @@ struct StackGroup: Identifiable, Sendable, Hashable {
     var id: String { key }
 }
 
-struct SizeRow: Identifiable, Sendable, Hashable {
+struct SizeRow: Identifiable, Codable, Sendable, Hashable {
     let label: String
     let bytes: Int64
     let isDirectory: Bool
@@ -62,14 +146,14 @@ struct SizeRow: Identifiable, Sendable, Hashable {
     var id: String { label }
 }
 
-struct SizeInfo: Sendable, Hashable {
+struct SizeInfo: Codable, Sendable, Hashable {
     var totalBytes: Int64
     var breakdown: [SizeRow]
 
     static let empty = SizeInfo(totalBytes: 0, breakdown: [])
 }
 
-struct CleanupItem: Identifiable, Sendable, Hashable {
+struct CleanupItem: Identifiable, Codable, Sendable, Hashable {
     let label: String
     let path: String
     let bytes: Int64
@@ -80,7 +164,7 @@ struct CleanupItem: Identifiable, Sendable, Hashable {
     var id: String { path }
 }
 
-struct CleanupInfo: Sendable, Hashable {
+struct CleanupInfo: Codable, Sendable, Hashable {
     var reusableBytes: Int64
     var items: [CleanupItem]
 
@@ -99,25 +183,38 @@ struct CleanupInfo: Sendable, Hashable {
     }
 }
 
-struct RunConfig: Sendable, Hashable {
+struct RunConfig: Codable, Sendable, Hashable {
     let command: String
     let port: Int
     let previewURL: String?
 }
 
-struct TestCommand: Sendable, Hashable {
+struct TestCommand: Codable, Sendable, Hashable {
     let label: String
     let command: String
 }
 
-struct ProjectIntro: Sendable, Hashable {
+struct ProjectIntro: Codable, Sendable, Hashable {
     let text: String
     let source: String?
 
     static let empty = ProjectIntro(text: "", source: nil)
 }
 
-struct ToolSession: Identifiable, Sendable, Hashable {
+struct TokenUsage: Codable, Sendable, Hashable {
+    var inputTokens: Int = 0
+    var cachedInputTokens: Int = 0
+    var cacheWriteInputTokens: Int = 0
+    var outputTokens: Int = 0
+    var reasoningOutputTokens: Int = 0
+    var totalTokens: Int = 0
+
+    static let zero = TokenUsage()
+
+    var isEmpty: Bool { totalTokens <= 0 }
+}
+
+struct ToolSession: Identifiable, Codable, Sendable, Hashable {
     let tool: String
     let sessionCount: Int
     let lastSessionAt: Date?
@@ -127,7 +224,7 @@ struct ToolSession: Identifiable, Sendable, Hashable {
     var id: String { tool }
 }
 
-struct SessionSummary: Sendable, Hashable {
+struct SessionSummary: Codable, Sendable, Hashable {
     var detected: [String]
     var lastSessionAt: Date?
     var lastUserMessage: String?
@@ -136,6 +233,24 @@ struct SessionSummary: Sendable, Hashable {
     var sessionCount: Int
     var byTool: [ToolSession]
     var recentSessions: [SessionRecord]
+
+    var totalTokens: Int {
+        recentSessions.compactMap { $0.usage?.totalTokens }.reduce(0, +)
+    }
+
+    var totalCostUSD: Double? {
+        let costs = recentSessions.compactMap(\.costUSD)
+        return costs.isEmpty ? nil : costs.reduce(0, +)
+    }
+
+    var costIsEstimate: Bool {
+        recentSessions.contains { $0.costUSD != nil && $0.costIsEstimate == true }
+    }
+
+    var modelNames: [String] {
+        var seen = Set<String>()
+        return recentSessions.compactMap(\.model).filter { seen.insert($0).inserted }
+    }
 
     static let empty = SessionSummary(
         detected: [],
@@ -149,7 +264,7 @@ struct SessionSummary: Sendable, Hashable {
     )
 }
 
-enum PortState: String, Sendable {
+enum PortState: String, Codable, Sendable {
     case running
     case stopped
     case noPreview

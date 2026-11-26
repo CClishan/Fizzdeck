@@ -107,4 +107,18 @@ final class ProjectEditorTests: XCTestCase {
             "App.xcworkspace"
         )
     }
+
+    func testIDEEditorsHaveDetectionMetadata() {
+        for editor in [ProjectEditor.cursor, .trae, .windsurf] {
+            XCTAssertFalse(editor.bundleIdentifiers.isEmpty, editor.rawValue)
+        }
+        XCTAssertEqual(ProjectEditor.trae.fallbackApplicationPaths, ["/Applications/Trae.app"])
+        XCTAssertEqual(ProjectEditor.windsurf.fallbackApplicationPaths, ["/Applications/Windsurf.app"])
+    }
+
+    func testIDEEditorsTargetProjectDirectory() {
+        for editor in [ProjectEditor.cursor, .trae, .windsurf] {
+            XCTAssertEqual(editor.target(for: root.path)?.path, root.path)
+        }
+    }
 }

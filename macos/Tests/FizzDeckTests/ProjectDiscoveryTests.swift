@@ -98,6 +98,101 @@ final class ProjectDiscoveryTests: XCTestCase {
         XCTAssertEqual(selection, ["/work"])
     }
 
+    func testSuggestedScopesRespectsDefaultsAndFindsWorkspaceFolders() throws {
+        let home = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        _ = try makeDirectory("Projects", in: home)
+        _ = try makeDirectory("custom-workspace", in: home)
+        _ = try makeDirectory("Documents", in: home)
+        _ = try makeDirectory("Desktop", in: home)
+
+        let scopes = ProjectDiscovery.suggestedScopes(
+            homeDirectory: home,
+            volumesRoot: home.appendingPathComponent("missing-volumes")
+        )
+
+        let defaultPaths = Set(scopes.filter(\.selectedByDefault).map(\.path))
+        XCTAssertTrue(defaultPaths.contains(PathTools.normalize(home.appendingPathComponent("Projects").path)))
+        XCTAssertTrue(defaultPaths.contains(PathTools.normalize(home.appendingPathComponent("custom-workspace").path)))
+        XCTAssertFalse(defaultPaths.contains(PathTools.normalize(home.appendingPathComponent("Documents").path)))
+        XCTAssertFalse(defaultPaths.contains(PathTools.normalize(home.appendingPathComponent("Desktop").path)))
+    }
+
+    func testDefaultSelectionExcludesWeakDocOnlyProjects() {
+        let projects = [
+            DiscoveredProject(path: "/work/strong", markers: ["package.json"], highConfidence: true),
+            DiscoveredProject(path: "/work/weak", markers: ["AGENTS.md"], highConfidence: false),
+        ]
+
+        let selected = ProjectDiscovery.defaultSelection(
+            projects: projects,
+            excluding: [],
+            highConfidenceOnly: true
+        )
+        XCTAssertEqual(selected, ["/work/strong"])
+    }
+
+    func testStreamingDiscoveryCapsAt300WithinBudget() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        for i in 0..<320 {
+            let dir = try makeDirectory(String(format: "proj-%03d", i), in: root)
+            try createFile("package.json", in: dir)
+        }
+
+        let scope = DiscoveryScope(
+            id: "test",
+            title: "Test",
+            path: root.path,
+            maxDepth: 4,
+            category: .suggested,
+            selectedByDefault: true,
+            detail: nil
+        )
+        let started = Date()
+        let report = await ProjectDiscovery.discoverStreaming(
+            scopes: [scope],
+            limit: 300,
+            evidenceIndex: .empty
+        ) { _ in }
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertEqual(report.projects.count, 300)
+        XCTAssertTrue(report.reachedLimit)
+        XCTAssertFalse(report.cancelled)
+        XCTAssertLessThan(elapsed, 3.0)
+    }
+
+    func testStreamingDiscoveryReportsPermissionDeniedDirectories() async throws {
+        let root = try makeTemporaryDirectory()
+        let locked = try makeDirectory("locked", in: root)
+        try createFile("package.json", in: locked)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        let scope = DiscoveryScope(
+            id: "test-perm",
+            title: "Test",
+            path: root.path,
+            maxDepth: 2,
+            category: .suggested,
+            selectedByDefault: true,
+            detail: nil
+        )
+        let report = await ProjectDiscovery.discoverStreaming(
+            scopes: [scope],
+            limit: 50,
+            evidenceIndex: .empty
+        ) { _ in }
+
+        XCTAssertTrue(report.permissionDeniedPaths.contains(PathTools.normalize(locked.path)))
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("FizzDeckDiscoveryTests-\(UUID().uuidString)")

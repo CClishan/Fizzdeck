@@ -102,7 +102,7 @@ npm run build
 | 待处理队列 | 首页汇总测试失败、落后远端、未推送提交、未提交文件与可回收空间，按紧急程度排序；行内可直接推送、fast-forward 拉取、重跑测试或复制清理命令；右键行可稍后或忽略该项目的此类提醒，标题栏可恢复。 |
 | 菜单栏 | 常驻显示待处理数量，可快速打开总览或最近项目；开发服务就绪或测试失败时发送本地通知。 |
 | 快速打开 | `⌘K` 搜索项目、分支、远程地址与动作；最近项优先，支持模糊匹配与置顶命令，键盘即可执行项目命令和全局操作。 |
-| 项目快捷动作 | 在 Finder、Terminal 或已安装的编辑器中打开项目（Cursor、VS Code、Zed、Antigravity、JetBrains 系列；支持顶层和嵌套 Xcode 工程），也可复制路径。`⌘⇧T` 在当前项目中打开 Terminal。 |
+| 项目快捷动作 | 在 Finder、默认终端（Terminal、iTerm2、Ghostty 或 Warp）或已安装的编辑器中打开项目（Cursor、VS Code、Zed、Antigravity、JetBrains 系列；支持顶层和嵌套 Xcode 工程），也可复制路径。`⌘⇧T` 在当前项目中打开默认终端。 |
 | AI 会话 | 列出匹配项目的 Codex 与 Claude Code 会话，支持按工具过滤、查看最后一条需求、复制 `codex resume` / `claude --resume` 命令；确认后可结束精确匹配的 CLI 进程，不会终止 Codex Desktop 的共享 app-server。 |
 | Git | 展示当前分支、领先/落后远端状态、未提交文件、最近提交与 `origin` 地址；支持在浏览器打开或复制远程地址、切换分支，以及带确认的 fetch、fast-forward 拉取与推送，结果就地回显，脏工作区有保护。 |
 | 开发服务 | 识别常见 dev 脚本与端口；底部 Liquid Glass 悬浮操作区提供运行、测试、日志、预览和复制命令。 |
@@ -159,10 +159,10 @@ scan-clean.mjs          命令行版体积报告
 
 - 原生版要求 macOS 26+ 与 Apple Silicon；已提供 DMG，但使用 ad-hoc 签名，未公证。
 - 原生版专注浏览与日常项目操作；支持批量重扫、复制清理命令，以及带备份和确认的删除。
-- 原生界面固定浅色，不做暗色主题。
-- 暂不提供后台文件监听。
+- 原生界面支持浅色与低饱和炭黑暗色双模式，可跟随系统或手动切换。
+- 提供轻量后台监听，只增量刷新 Git 与 AI 会话状态，不触发全量重扫。
 - 本地通知需要系统授权。`--sign-local` 的 ad-hoc 签名足以在本地注册通知中心；正式分发仍需要 Developer ID 签名与公证。
-- AI 会话支持 Codex 与 Claude Code；只能结束命令行中明确包含当前会话 ID 的 CLI 进程，Codex Desktop 的共享 app-server 需要在客户端内处理。
+- AI 会话支持 Codex、Claude Code 与 Grok；只能结束命令行中明确包含当前会话 ID 的 CLI 进程，Codex Desktop 的共享 app-server 需要在客户端内处理。
 - 端口识别是启发式的；特殊开发环境可在 `server.mjs` 中补充映射。
 - 首次扫描需要统计目录体积，大目录通常耗时数秒；之后读取缓存，重新扫描时再更新。
 

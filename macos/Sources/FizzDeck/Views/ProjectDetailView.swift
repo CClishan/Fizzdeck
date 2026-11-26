@@ -44,7 +44,7 @@ struct ProjectDetailView: View {
             .overlay(alignment: .bottom) {
                 if showsActionDock {
                     ProjectActionDock(project: project, tab: tab)
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, FizzSpacing.page)
                         .padding(.bottom, 16)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -55,6 +55,7 @@ struct ProjectDetailView: View {
             )
         }
         .task(id: project.path) {
+            store.startWatchingGit(for: project.path)
             noteDraft = project.note
             let target = project.path
             loadingDetail = true
@@ -63,6 +64,9 @@ struct ProjectDetailView: View {
             guard !Task.isCancelled, target == project.path else { return }
             detail = value
             loadingDetail = false
+        }
+        .onDisappear {
+            store.stopWatchingGit()
         }
         .onChange(of: project.note) { _, value in
             if noteDraft != value { noteDraft = value }
@@ -75,10 +79,14 @@ struct ProjectDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 2) {
-                    ForEach(ProjectTab.allCases) { item in
-                        projectTabButton(item)
+                GlassEffectContainer(spacing: 2) {
+                    HStack(spacing: 2) {
+                        ForEach(ProjectTab.allCases) { item in
+                            projectTabButton(item)
+                        }
                     }
+                    .padding(2)
+                    .glassEffect(.regular.interactive(), in: Capsule())
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("项目页签")
@@ -93,7 +101,7 @@ struct ProjectDetailView: View {
     private var showsActionDock: Bool {
         switch tab {
         case .overview:
-            project.run != nil
+            false
         case .tests:
             project.test != nil
         default:
@@ -147,41 +155,43 @@ struct ProjectDetailView: View {
 
 private struct ProjectHero: View {
     let project: RepoProject
-    @State private var artwork: NSImage?
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            artworkBackground
+        HStack(alignment: .center, spacing: 14) {
+            ProjectBadgeIcon(project: project, size: 42, framed: true)
 
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0.32),
-                    .init(color: .black.opacity(0.34), location: 0.56),
-                    .init(color: .black.opacity(0.88), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 7) {
+                    Text(project.displayName)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text(project.displayName)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
+                    if project.port == .running {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 6, height: 6)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button {
                     SystemActions.copy(project.path)
                 } label: {
                     HStack(spacing: 5) {
                         Text(PathTools.displayPath(project.path))
-                            .font(.system(size: 10.5, design: .monospaced))
+                            .font(.system(size: 11, design: .monospaced))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                         FizzIcon(symbol: "doc.on.doc", size: 9)
                     }
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
                 .help("复制完整路径")
+                .accessibilityLabel("复制项目路径")
 
                 FlowLayout(spacing: 6) {
                     TagChip(text: project.group, tint: accent)
@@ -192,71 +202,28 @@ private struct ProjectHero: View {
                         TagChip(text: "\(project.dirtyCount) 个改动", tint: .orange)
                     }
                     if let tool = project.sessions.lastTool {
-                        TagChip(text: tool == "codex" ? "Codex" : "Claude", tint: .purple)
+                        TagChip(
+                            text: DetectedTool(rawValue: tool)?.title ?? tool.capitalized,
+                            tint: .purple
+                        )
                     }
                     if let test = project.test {
                         TagChip(text: test.label, tint: .green)
                     }
                 }
             }
-            .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            ProjectHeroActions(project: project)
-                .padding(18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 8)
-        .frame(height: 300)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.08), radius: 18, y: 7)
-        .task(id: project.artwork) {
-            artwork = nil
-            guard let path = project.artwork else {
-                return
+            VStack(alignment: .trailing, spacing: 8) {
+                ProjectHeroActions(project: project)
+                SessionContinueButton(project: project, style: .prominent)
             }
-            let data = await Task.detached(priority: .utility) {
-                try? Data(contentsOf: URL(fileURLWithPath: path))
-            }.value
-            guard !Task.isCancelled else { return }
-            artwork = data.flatMap(NSImage.init(data:))
+            .layoutPriority(1)
         }
-    }
-
-    private var artworkBackground: some View {
-        GeometryReader { proxy in
-            Group {
-                if let artwork {
-                    Image(nsImage: artwork)
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFill()
-                } else {
-                    fallbackArtwork
-                }
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-            .clipped()
-        }
-        .accessibilityHidden(true)
-    }
-
-    private var fallbackArtwork: some View {
-        ZStack {
-            LinearGradient(
-                colors: [accent.opacity(0.44), accent.opacity(0.18), .black.opacity(0.58)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            FizzIcon(symbol: "rectangle.on.rectangle", size: 48)
-                .foregroundStyle(.white.opacity(0.5))
-        }
+        .padding(17)
+        .fizzCard(radius: FizzRadius.panel)
+        .padding(.horizontal, FizzSpacing.page)
+        .padding(.top, FizzSpacing.row)
     }
 
     private var accent: Color {
@@ -390,7 +357,7 @@ private struct ProjectHeroActions: View {
             .padding(3)
             .glassEffect(.regular.interactive(), in: Capsule())
         }
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
+        .fizzAdaptiveShadow(.subtle)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("项目操作")
         .task(id: project.path) {
@@ -447,11 +414,11 @@ private struct ProjectHeroActions: View {
     }
 
     private var segmentShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
     }
 
     private func segmentBackground(_ action: Action) -> Color {
-        hovering == action ? Color.black.opacity(0.05) : .clear
+        hovering == action ? FizzTheme.selectedFill : .clear
     }
 
     private var segmentDivider: some View {
@@ -514,10 +481,12 @@ private struct ProjectRemovalSheet: View {
                 Button("取消", role: .cancel) {
                     onCancel()
                 }
+                .buttonStyle(.glass)
                 Button(mode.actionTitle, role: .destructive) {
                     onConfirm(confirmation)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
+                .tint(.red)
                 .disabled(confirmation != expectedName || blockedReason != nil)
             }
         }

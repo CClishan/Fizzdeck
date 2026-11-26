@@ -90,6 +90,13 @@ enum Shell {
         }
         return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    static func runInLoginShell(
+        _ script: String,
+        timeout: TimeInterval = 5
+    ) async -> ShellOutput? {
+        await run("/bin/zsh", ["-lc", script], timeout: timeout)
+    }
 }
 
 private final class TimeoutFlag: @unchecked Sendable {

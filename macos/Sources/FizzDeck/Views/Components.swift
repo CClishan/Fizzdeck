@@ -56,7 +56,7 @@ struct GlassStatCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .fizzCard(radius: 15)
+        .fizzCard(radius: FizzRadius.card)
     }
 }
 
@@ -86,7 +86,7 @@ struct Panel<Content: View, Accessory: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: FizzSpacing.grid) {
             HStack(spacing: 7) {
                 FizzIcon(symbol: symbol, size: 13)
                     .foregroundStyle(.secondary)
@@ -100,8 +100,8 @@ struct Panel<Content: View, Accessory: View>: View {
             content
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(16)
-        .fizzCard(radius: 16)
+        .padding(FizzSpacing.panel)
+        .fizzCard(radius: FizzRadius.panel)
     }
 }
 
@@ -137,7 +137,7 @@ struct CopyButton: View {
         } label: {
             Label(title, systemImage: symbol)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.glass)
         .controlSize(.small)
     }
 }
@@ -148,32 +148,48 @@ struct PortStatusBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(color)
+                .fill(tint)
                 .frame(width: 5, height: 5)
 
-            Text(label)
+            Text(state.badgeLabel)
                 .font(.system(size: 9.5, weight: .medium))
         }
-        .foregroundStyle(color)
+        .foregroundStyle(tint)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
-        .background(color.opacity(0.10), in: Capsule())
+        .background(tint.opacity(0.10), in: Capsule())
         .fixedSize()
-        .help(label)
+        .help(state.badgeLabel)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
+        .accessibilityLabel(state.badgeLabel)
     }
 
-    private var color: Color {
-        switch state {
+    private var tint: Color {
+        switch state.badgeTone {
         case .running: .green
-        case .stopped: .orange
-        case .noPreview: .secondary.opacity(0.5)
+        case .neutral: .secondary
+        case .muted: .secondary.opacity(0.5)
+        }
+    }
+}
+
+enum PortStatusTone: Equatable {
+    case running
+    case neutral
+    case muted
+}
+
+extension PortState {
+    var badgeTone: PortStatusTone {
+        switch self {
+        case .running: .running
+        case .stopped: .neutral
+        case .noPreview: .muted
         }
     }
 
-    private var label: String {
-        switch state {
+    var badgeLabel: String {
+        switch self {
         case .running: "端口运行中"
         case .stopped: "端口未启动"
         case .noPreview: "无预览端口"
@@ -198,7 +214,7 @@ struct ProjectQuickActions: View {
         Button {
             SystemActions.openTerminal(project.path)
         } label: {
-            Label("在 Terminal 中打开", systemImage: "terminal")
+            Label("在终端中打开", systemImage: "terminal")
         }
 
         if !editors.isEmpty {

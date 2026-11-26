@@ -32,7 +32,7 @@ struct HomeDashboardView: View {
             matchingProjects.filter { project in
                 if let groupFilter, project.group != groupFilter { return false }
                 if let colorFilter, project.color != colorFilter { return false }
-                if let toolFilter, !project.sessions.detected.contains(toolFilter) { return false }
+                if let toolFilter, !project.allTools.contains(toolFilter) { return false }
                 return true
             }
         )
@@ -51,8 +51,8 @@ struct HomeDashboardView: View {
     }
 
     private var availableTools: [String] {
-        let detected = Set(matchingProjects.flatMap(\.sessions.detected))
-        let preferred = ["codex", "claude"].filter(detected.contains)
+        let detected = Set(matchingProjects.flatMap(\.allTools))
+        let preferred = DetectedTool.allCases.map(\.rawValue).filter(detected.contains)
         return preferred + detected.subtracting(preferred).sorted()
     }
 
@@ -78,7 +78,7 @@ struct HomeDashboardView: View {
                 emptyState
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: FizzSpacing.section) {
                         header
                         overviewTop
 
@@ -88,7 +88,7 @@ struct HomeDashboardView: View {
                             projectBrowser
                         }
                     }
-                    .padding(24)
+                    .padding(FizzSpacing.page)
                 }
             }
         }
@@ -150,7 +150,7 @@ struct HomeDashboardView: View {
     private var overviewTop: some View {
         Group {
             if showsAttention {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: FizzSpacing.grid) {
                     AttentionQueueView()
                         .frame(maxWidth: .infinity, alignment: .top)
 
@@ -175,6 +175,8 @@ struct HomeDashboardView: View {
         }
         if store.phase == .scanning {
             parts.append("正在扫描")
+        } else if store.pendingSizeCount > 0 {
+            parts.append("正在统计体积 (\(store.pendingSizeCount))")
         } else if let scannedAt = store.scannedAt {
             parts.append("\(Format.relative(scannedAt))更新")
         }
@@ -199,8 +201,8 @@ struct HomeDashboardView: View {
                             .background {
                                 if selected {
                                     Capsule()
-                                        .fill(Color.white.opacity(0.9))
-                                        .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+                                        .fill(FizzTheme.elevatedFill)
+                                        .fizzAdaptiveShadow(.subtle)
                                 }
                             }
                             .contentShape(Capsule())
@@ -475,7 +477,7 @@ struct HomeDashboardView: View {
             )
         }
         .padding(.vertical, 10)
-        .fizzCard(radius: 16)
+        .fizzCard()
     }
 
     private var summaryDivider: some View {
@@ -485,7 +487,7 @@ struct HomeDashboardView: View {
     }
 
     private var projectBrowser: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: FizzSpacing.grid) {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 Text("项目")
                     .font(.system(size: 15, weight: .semibold))
@@ -525,6 +527,8 @@ struct HomeDashboardView: View {
                     copyCleanupCommands()
                 }
                 .disabled(selectedProjects.isEmpty)
+                .opacity(selectedProjects.isEmpty ? 0.42 : 1)
+                .buttonStyle(.glass)
 
                 Button {
                     Task { await rescanSelected() }
@@ -537,11 +541,15 @@ struct HomeDashboardView: View {
                     }
                 }
                 .disabled(selectedProjects.isEmpty || batchRunning || store.phase == .scanning)
+                .opacity(selectedProjects.isEmpty || batchRunning || store.phase == .scanning ? 0.42 : 1)
+                .buttonStyle(.glass)
 
                 Button(allVisibleSelected ? "取消全选" : "全选") {
                     toggleSelectAll()
                 }
                 .disabled(visibleProjects.isEmpty)
+                .opacity(visibleProjects.isEmpty ? 0.42 : 1)
+                .buttonStyle(.glass)
 
                 Button("清除") {
                     withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
@@ -550,14 +558,18 @@ struct HomeDashboardView: View {
                     }
                 }
                 .disabled(selectedPaths.isEmpty)
+                .opacity(selectedPaths.isEmpty ? 0.42 : 1)
+                .buttonStyle(.glass)
 
                 Button("完成") {
                     withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
                         endSelection()
                     }
                 }
+                .buttonStyle(.glassProminent)
+                .tint(FizzTheme.accent)
+                .controlSize(.regular)
             }
-            .buttonStyle(.bordered)
             .controlSize(.small)
 
             if let batchFeedback {
@@ -573,13 +585,13 @@ struct HomeDashboardView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .fizzCard(radius: 12)
+        .fizzCard(radius: FizzRadius.card)
     }
 
     private var cards: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12)],
-            spacing: 12
+            columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: FizzSpacing.grid)],
+            spacing: FizzSpacing.grid
         ) {
             ForEach(visibleProjects) { project in
                 ProjectFolderCard(
@@ -611,7 +623,7 @@ struct HomeDashboardView: View {
             }
         }
         .padding(.vertical, 4)
-        .fizzCard(radius: 16)
+        .fizzCard()
     }
 
     private var emptyResults: some View {
@@ -625,7 +637,7 @@ struct HomeDashboardView: View {
                     clearFacets()
                     store.query = ""
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 300)
@@ -662,12 +674,20 @@ struct HomeDashboardView: View {
             ContentUnavailableView {
                 Label("还没有项目", systemImage: "square.stack.3d.up")
             } description: {
-                Text("添加一个项目目录，FizzDeck 会扫描其中的 Git、体积和运行脚本。")
+                Text("扫描常用目录或手动添加文件夹，FizzDeck 会分析 Git、AI 会话和体积。")
             } actions: {
-                Button("添加项目目录") {
-                    Task { await store.addRoot() }
+                HStack(spacing: 10) {
+                    Button("智能扫描本机项目") {
+                        store.presentFirstRunScan()
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(FizzTheme.accent)
+
+                    Button("手动添加文件夹") {
+                        Task { await store.addRoot() }
+                    }
+                    .buttonStyle(.glass)
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
     }
@@ -678,7 +698,7 @@ struct HomeDashboardView: View {
             if let groupFilter, project.group != groupFilter {
                 return false
             }
-            if let toolFilter, !project.sessions.detected.contains(toolFilter) {
+            if let toolFilter, !project.allTools.contains(toolFilter) {
                 return false
             }
             return true
@@ -687,7 +707,7 @@ struct HomeDashboardView: View {
 
     private func toolCount(_ tool: String) -> Int {
         matchingProjects.filter { project in
-            guard project.sessions.detected.contains(tool) else { return false }
+            guard project.allTools.contains(tool) else { return false }
             if let groupFilter, project.group != groupFilter {
                 return false
             }
@@ -704,7 +724,7 @@ struct HomeDashboardView: View {
             if let colorFilter, project.color != colorFilter {
                 return false
             }
-            if let toolFilter, !project.sessions.detected.contains(toolFilter) {
+            if let toolFilter, !project.allTools.contains(toolFilter) {
                 return false
             }
             return true
@@ -863,7 +883,7 @@ private struct ActiveFilterChip: View {
             .padding(.horizontal, 7)
             .frame(height: 20)
             .background(
-                Color.black.opacity(hovering ? 0.07 : 0.035),
+                hovering ? FizzTheme.selectedFill : FizzTheme.mutedFill,
                 in: Capsule()
             )
             .contentShape(Capsule())
@@ -952,110 +972,108 @@ private struct ProjectFolderCard: View {
     @State private var hovering = false
 
     var body: some View {
-        Button {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
+                ProjectBadgeIcon(project: project, size: 32, framed: false)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(project.displayName)
+                            .font(.system(size: 13.5, weight: .semibold))
+                            .lineLimit(1)
+
+                        if project.starred {
+                            FizzIcon(symbol: "star.fill", size: 9)
+                                .foregroundStyle(.yellow)
+                        }
+
+                        if project.dirtyCount > 0 {
+                            TagChip(
+                                text: "\(project.dirtyCount) 处改动",
+                                tint: .orange,
+                                compact: true
+                            )
+                            .help("\(project.dirtyCount) 处未提交改动")
+                        }
+                    }
+
+                    Text(projectSubtitle)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+
+                if selecting {
+                    FizzIcon(
+                        symbol: selected ? "checkmark.circle.fill" : "circle",
+                        size: 16
+                    )
+                    .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
+                    .frame(width: 18, height: 18)
+                    .accessibilityHidden(true)
+                } else {
+                    PortStatusBadge(state: project.port)
+                }
+            }
+
+            Text(primaryDetail)
+                .font(.system(size: 11.5))
+                .foregroundStyle(project.note.isEmpty ? .secondary : .primary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, minHeight: 14, alignment: .topLeading)
+
+            HStack(spacing: 5) {
+                Text(project.sizeLoadState == .ready ? Format.bytes(project.size.totalBytes) : "统计中")
+                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.secondary)
+
+                Text("·")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+
+                Text(Format.relative(project.recent))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+
+                Spacer(minLength: 4)
+
+                if let tool = project.sessions.lastTool ?? project.detectedTools.first?.rawValue {
+                    HomeToolBadge(tool: tool, compact: true)
+                }
+
+                if let stack = firstStack {
+                    TagChip(text: stack.0, tint: stack.1, compact: true)
+                }
+
+                if !selecting {
+                    SessionContinueButton(project: project, style: .compact)
+                }
+            }
+            .lineLimit(1)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 128, maxHeight: 134, alignment: .topLeading)
+        .background(FizzTheme.cardFill, in: RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous)
+                .strokeBorder(
+                    selected
+                        ? accent.opacity(0.55)
+                        : hovering ? accent.opacity(0.24) : FizzTheme.stroke,
+                    lineWidth: selected ? 1.5 : 1
+                )
+        }
+        .fizzAdaptiveShadow(hovering ? .raised : .subtle)
+        .contentShape(RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous))
+        .onTapGesture {
             if selecting {
                 toggleSelection()
             } else {
                 store.selectedPath = project.path
             }
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 10) {
-                    FolderBadge(project: project, size: 32)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 4) {
-                            Text(project.displayName)
-                                .font(.system(size: 13.5, weight: .semibold))
-                                .lineLimit(1)
-
-                            if project.starred {
-                                FizzIcon(symbol: "star.fill", size: 9)
-                                    .foregroundStyle(.yellow)
-                            }
-
-                            if project.dirtyCount > 0 {
-                                TagChip(
-                                    text: "\(project.dirtyCount) 处改动",
-                                    tint: .orange,
-                                    compact: true
-                                )
-                                .help("\(project.dirtyCount) 处未提交改动")
-                            }
-                        }
-
-                        Text(projectSubtitle)
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-
-                    Spacer(minLength: 4)
-
-                    PortStatusBadge(state: project.port)
-                }
-
-                Text(primaryDetail)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(project.note.isEmpty ? .secondary : .primary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, minHeight: 14, alignment: .topLeading)
-
-                HStack(spacing: 5) {
-                    Text(Format.bytes(project.size.totalBytes))
-                        .font(.system(size: 10, weight: .medium).monospacedDigit())
-                        .foregroundStyle(.secondary)
-
-                    Text("·")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-
-                    Text(Format.relative(project.recent))
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-
-                    Spacer(minLength: 4)
-
-                    if let tool = project.sessions.lastTool {
-                        HomeToolBadge(tool: tool, compact: true)
-                    }
-
-                    if let stack = firstStack {
-                        TagChip(text: stack.0, tint: stack.1, compact: true)
-                    }
-                }
-                .lineLimit(1)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 118, maxHeight: 118, alignment: .topLeading)
-            .background(FizzTheme.cardFill, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .strokeBorder(
-                        selected
-                            ? accent.opacity(0.55)
-                            : hovering ? accent.opacity(0.24) : FizzTheme.stroke,
-                        lineWidth: selected ? 1.5 : 1
-                    )
-            }
-            .overlay(alignment: .topTrailing) {
-                if selecting {
-                    FizzIcon(
-                        symbol: selected ? "checkmark.circle.fill" : "circle",
-                        size: 15
-                    )
-                    .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
-                    .padding(8)
-                }
-            }
-            .shadow(
-                color: .black.opacity(hovering ? 0.07 : 0.025),
-                radius: hovering ? 9 : 3,
-                y: hovering ? 4 : 1
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         }
-        .buttonStyle(.plain)
         .onHover { value in
             withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
                 hovering = value
@@ -1117,87 +1135,89 @@ private struct ProjectListRow: View {
     @State private var hovering = false
 
     var body: some View {
-        Button {
+        HStack(spacing: 10) {
+            if selecting {
+                FizzIcon(symbol: selected ? "checkmark.circle.fill" : "circle", size: 15)
+                    .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
+                    .frame(width: 16)
+            }
+
+            ProjectBadgeIcon(project: project, size: 28, framed: false)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(project.displayName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                    if project.starred {
+                        FizzIcon(symbol: "star.fill", size: 9)
+                            .foregroundStyle(.yellow)
+                    }
+                    if project.dirtyCount > 0 {
+                        TagChip(
+                            text: "\(project.dirtyCount) 处改动",
+                            tint: .orange,
+                            compact: true
+                        )
+                        .help("\(project.dirtyCount) 处未提交改动")
+                    }
+                }
+                Text(secondaryText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            if let tool = project.sessions.lastTool ?? project.detectedTools.first?.rawValue {
+                HomeToolBadge(tool: tool)
+            }
+            if let stack = firstStack {
+                TagChip(text: stack.0, tint: stack.1, compact: true)
+            }
+
+            Text(Format.relative(project.recent))
+                .frame(width: 66, alignment: .trailing)
+                .foregroundStyle(.secondary)
+            Text(project.sizeLoadState == .ready ? Format.bytes(project.size.totalBytes) : "统计中")
+                .frame(width: 62, alignment: .trailing)
+                .foregroundStyle(.secondary)
+            PortStatusBadge(state: project.port)
+
+            if !selecting {
+                SessionContinueButton(project: project, style: .compact)
+            }
+        }
+        .font(.caption2.monospacedDigit())
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background {
+            if selected {
+                RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
+                    .fill(accent.opacity(0.10))
+            } else if hovering {
+                RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
+                    .fill(FizzTheme.mutedFill)
+            }
+        }
+        .overlay {
+            if selected {
+                RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
+                    .strokeBorder(
+                        accent.opacity(0.28),
+                        lineWidth: 1
+                    )
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
             if selecting {
                 toggleSelection()
             } else {
                 store.selectedPath = project.path
             }
-        } label: {
-            HStack(spacing: 10) {
-                if selecting {
-                    FizzIcon(symbol: selected ? "checkmark.circle.fill" : "circle", size: 15)
-                        .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
-                        .frame(width: 16)
-                }
-
-                FolderBadge(project: project, size: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text(project.displayName)
-                            .font(.system(size: 13, weight: .semibold))
-                            .lineLimit(1)
-                        if project.starred {
-                            FizzIcon(symbol: "star.fill", size: 9)
-                                .foregroundStyle(.yellow)
-                        }
-                        if project.dirtyCount > 0 {
-                            TagChip(
-                                text: "\(project.dirtyCount) 处改动",
-                                tint: .orange,
-                                compact: true
-                            )
-                            .help("\(project.dirtyCount) 处未提交改动")
-                        }
-                    }
-                    Text(secondaryText)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 8)
-
-                if let tool = project.sessions.lastTool {
-                    HomeToolBadge(tool: tool)
-                }
-                if let stack = firstStack {
-                    TagChip(text: stack.0, tint: stack.1, compact: true)
-                }
-
-                Text(Format.relative(project.recent))
-                    .frame(width: 66, alignment: .trailing)
-                    .foregroundStyle(.secondary)
-                Text(Format.bytes(project.size.totalBytes))
-                    .frame(width: 62, alignment: .trailing)
-                    .foregroundStyle(.secondary)
-                PortStatusBadge(state: project.port)
-            }
-            .font(.caption2.monospacedDigit())
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background {
-                if selected {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(accent.opacity(0.10))
-                } else if hovering {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(FizzTheme.mutedFill)
-                }
-            }
-            .overlay {
-                if selected {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(
-                            accent.opacity(0.28),
-                            lineWidth: 1
-                        )
-                }
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .onHover { value in
             hovering = value
         }
@@ -1230,21 +1250,6 @@ private struct ProjectListRow: View {
     }
 }
 
-private struct FolderBadge: View {
-    let project: RepoProject
-    var size: CGFloat = 36
-
-    var body: some View {
-        FizzIcon(symbol: "folder.fill", size: size * 0.62)
-            .foregroundStyle(color)
-            .frame(width: size, height: size)
-    }
-
-    private var color: Color {
-        project.color?.color ?? ProjectGrouping.color(for: project.group)
-    }
-}
-
 private struct HomeToolBadge: View {
     let tool: String
     var compact = false
@@ -1266,22 +1271,22 @@ private struct HomeToolBadge: View {
     }
 
     private var title: String {
-        tool == "codex" ? "Codex" : tool == "claude" ? "Claude" : tool.capitalized
+        toolTitle(tool)
     }
 
     private var symbol: String {
-        tool == "codex" ? "terminal" : "sparkles"
+        toolSymbol(tool)
     }
 
     private var tint: Color {
-        tool == "codex" ? .purple : .orange
+        DetectedTool(rawValue: tool)?.tint ?? .secondary
     }
 }
 
 private func toolTitle(_ tool: String) -> String {
-    tool == "codex" ? "Codex" : tool == "claude" ? "Claude Code" : tool.capitalized
+    DetectedTool(rawValue: tool)?.title ?? tool.capitalized
 }
 
 private func toolSymbol(_ tool: String) -> String {
-    tool == "codex" ? "terminal" : "sparkles"
+    DetectedTool(rawValue: tool)?.symbol ?? "sparkles"
 }

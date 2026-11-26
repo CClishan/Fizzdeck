@@ -99,7 +99,7 @@ struct DocsTabView: View {
                     } label: {
                         FizzIcon(symbol: "doc.on.doc", size: 12)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                     .help("复制文件路径")
                     .accessibilityLabel("复制文件路径")
                     Button {
@@ -107,7 +107,7 @@ struct DocsTabView: View {
                     } label: {
                         FizzIcon(symbol: "arrow.up.forward.app", size: 12)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                     .help("用默认应用打开")
                     .accessibilityLabel("用默认应用打开")
                 }

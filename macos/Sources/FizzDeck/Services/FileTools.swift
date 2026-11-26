@@ -1,7 +1,7 @@
 import Foundation
 
 enum FileTools {
-    static let manager = FileManager.default
+    nonisolated(unsafe) static let manager = FileManager.default
 
     static func exists(_ path: String) -> Bool {
         manager.fileExists(atPath: path)
@@ -149,11 +149,35 @@ enum FileTools {
         }
     }
 
+    enum DirectoryReadResult {
+        case entries([URL])
+        case permissionDenied
+        case unreadable
+    }
+
+    static func readChildEntries(of url: URL) -> DirectoryReadResult {
+        do {
+            let entries = try manager.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+                options: []
+            )
+            return .entries(entries)
+        } catch let error as NSError {
+            if error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoPermissionError {
+                return .permissionDenied
+            }
+            if error.domain == NSPOSIXErrorDomain && (error.code == Int(EPERM) || error.code == Int(EACCES)) {
+                return .permissionDenied
+            }
+            return .unreadable
+        }
+    }
+
     static func childEntries(of url: URL) -> [URL] {
-        (try? manager.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
-            options: []
-        )) ?? []
+        switch readChildEntries(of: url) {
+        case let .entries(entries): entries
+        case .permissionDenied, .unreadable: []
+        }
     }
 }
