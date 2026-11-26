@@ -3,8 +3,8 @@ import SwiftUI
 struct WorkbenchDashboardView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var contentWidth: CGFloat = 1040
     @State private var freeDiskBytes: Int64?
 
     private var attentionItems: [ProjectAttentionItem] {
@@ -54,17 +54,19 @@ struct WorkbenchDashboardView: View {
             if store.projects.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: FizzSpacing.section) {
-                        header
-                        mainColumns
+                GeometryReader { proxy in
+                    let outerWidth = max(320, proxy.size.width)
+                    let contentWidth = max(260, outerWidth - FizzSpacing.page * 2)
+
+                    ScrollView(.vertical) {
+                        VStack(alignment: .leading, spacing: FizzSpacing.section) {
+                            header(width: contentWidth)
+                            mainColumns(width: contentWidth)
+                        }
+                        .frame(width: contentWidth, alignment: .leading)
+                        .padding(FizzSpacing.page)
                     }
-                    .onGeometryChange(for: CGFloat.self) {
-                        $0.size.width
-                    } action: { newWidth in
-                        contentWidth = newWidth
-                    }
-                    .padding(FizzSpacing.page)
+                    .frame(width: outerWidth, height: proxy.size.height)
                 }
             }
         }
@@ -75,42 +77,60 @@ struct WorkbenchDashboardView: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: 20) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(formattedToday)
-                    .font(.system(size: 25, weight: .semibold))
-                    .accessibilityAddTraits(.isHeader)
-                Text(headerSubtitle)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+    @ViewBuilder
+    private func header(width: CGFloat) -> some View {
+        if width >= 660 {
+            HStack(alignment: .top, spacing: 20) {
+                headerDateBlock
+                Spacer(minLength: 16)
+                headerKPIs(alignment: .trailing)
             }
-            .layoutPriority(1)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                headerDateBlock
+                headerKPIs(alignment: .leading)
+            }
+        }
+    }
 
-            Spacer(minLength: 16)
+    private var headerDateBlock: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(formattedToday)
+                .font(.system(size: 25, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
+            Text(headerSubtitle)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+        .layoutPriority(1)
+    }
 
-            HStack(spacing: 24) {
+    private func headerKPIs(alignment: HorizontalAlignment) -> some View {
+        HStack(spacing: 24) {
+            kpiNumber(
+                value: "\(kpi.weeklyCommits)",
+                label: "本周提交",
+                alignment: alignment
+            )
+            kpiNumber(
+                value: "\(kpi.weeklySessions)",
+                label: "AI 会话",
+                alignment: alignment
+            )
+            if let cost = Format.cost(kpi.weeklyCostUSD, estimated: kpi.costIsEstimate) {
                 kpiNumber(
-                    value: "\(kpi.weeklyCommits)",
-                    label: "本周提交"
+                    value: cost,
+                    label: kpi.costIsEstimate ? "本周费用(估)" : "本周费用",
+                    alignment: alignment
                 )
+                .help(costTooltip)
+            } else if kpi.weeklyTokens > 0 {
                 kpiNumber(
-                    value: "\(kpi.weeklySessions)",
-                    label: "AI 会话"
+                    value: Format.tokens(kpi.weeklyTokens),
+                    label: "本周 tokens",
+                    alignment: alignment
                 )
-                if let cost = Format.cost(kpi.weeklyCostUSD, estimated: kpi.costIsEstimate) {
-                    kpiNumber(
-                        value: cost,
-                        label: kpi.costIsEstimate ? "本周费用(估)" : "本周费用"
-                    )
-                    .help(costTooltip)
-                } else if kpi.weeklyTokens > 0 {
-                    kpiNumber(
-                        value: Format.tokens(kpi.weeklyTokens),
-                        label: "本周 tokens"
-                    )
-                }
             }
         }
     }
@@ -144,11 +164,17 @@ struct WorkbenchDashboardView: View {
         return parts.isEmpty ? "AI 会话费用估算" : parts.joined(separator: " · ")
     }
 
-    private func kpiNumber(value: String, label: String) -> some View {
-        VStack(alignment: .trailing, spacing: 2) {
+    private func kpiNumber(
+        value: String,
+        label: String,
+        alignment: HorizontalAlignment = .trailing
+    ) -> some View {
+        VStack(alignment: alignment, spacing: 2) {
             Text(value)
                 .font(.system(size: 24, weight: .semibold))
                 .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: value)
                 .lineLimit(1)
             Text(label)
                 .font(.system(size: 11))
@@ -159,10 +185,10 @@ struct WorkbenchDashboardView: View {
     }
 
     @ViewBuilder
-    private var mainColumns: some View {
-        if contentWidth >= 960 {
+    private func mainColumns(width: CGFloat) -> some View {
+        if width >= 920 {
             let widths = OverviewLayoutPolicy.splitWidths(
-                totalWidth: contentWidth,
+                totalWidth: width,
                 spacing: FizzSpacing.grid,
                 leadingRatio: 0.58
             )

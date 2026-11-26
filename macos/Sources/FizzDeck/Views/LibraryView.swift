@@ -100,75 +100,82 @@ struct LibraryView: View {
             if store.projects.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: FizzSpacing.section) {
-                        HomeHeaderView(
-                            title: "项目库",
-                            detail: headerDetail,
-                            mode: mode,
-                            sort: sort,
-                            facets: facets,
-                            availableGroups: availableGroups,
-                            availableTools: availableTools,
-                            availableFrameworks: availableFrameworks,
-                            selectedFramework: localQuery.framework,
-                            selectionMode: selectionMode,
-                            groupCount: { HomeDashboardModel.groupCount($0, in: baseProjects, facets: facets) },
-                            colorCount: { HomeDashboardModel.colorCount($0, in: baseProjects, facets: facets) },
-                            toolCount: { HomeDashboardModel.toolCount($0, in: baseProjects, facets: facets) },
-                            frameworkCount: frameworkCount,
-                            onSelectMode: setMode,
-                            onSelectSort: setSort,
-                            onSetGroup: setGroupFilter,
-                            onSetColor: setColorFilter,
-                            onSetTool: setToolFilter,
-                            onSetFramework: setFrameworkFilter,
-                            extraActiveFilterCount: extraFilterCount,
-                            onClearFacets: clearFilters,
-                            onToggleSelection: toggleSelectionMode
-                        )
+                GeometryReader { proxy in
+                    let outerWidth = max(320, proxy.size.width)
+                    let contentWidth = max(260, outerWidth - FizzSpacing.page * 2)
 
-                        filterToolbar
-
-                        if visibleProjects.isEmpty {
-                            emptyResults
-                        } else {
-                            let split = partitioned
-                            HomeProjectBrowser(
-                                projects: split.active,
+                    ScrollView(.vertical) {
+                        VStack(alignment: .leading, spacing: FizzSpacing.section) {
+                            HomeHeaderView(
+                                title: "项目库",
+                                detail: headerDetail,
                                 mode: mode,
+                                sort: sort,
+                                facets: facets,
+                                availableGroups: availableGroups,
+                                availableTools: availableTools,
+                                availableFrameworks: availableFrameworks,
+                                selectedFramework: localQuery.framework,
                                 selectionMode: selectionMode,
-                                selectedPaths: $selectedPaths,
-                                selectedCount: selectedProjects.count,
-                                allVisibleSelected: allVisibleSelected,
-                                batchRunning: batchRunning,
-                                isScanning: store.phase == .scanning,
-                                batchFeedback: batchFeedback,
-                                knownGroups: store.knownGroups,
-                                allSelectedStarred: allSelectedStarred,
-                                focusedProjectPath: focusedProjectPath,
-                                onBatchStar: batchStar,
-                                onBatchGroup: batchGroup,
-                                onBatchFetch: { Task { await fetchSelected() } },
-                                onToggleSelection: toggleSelection,
-                                onCopyCleanup: copyCleanupCommands,
-                                onRescanSelected: { Task { await rescanSelected() } },
-                                onToggleSelectAll: toggleSelectAll,
-                                onClearSelection: clearSelection,
-                                onEndSelection: endSelectionAnimated
+                                groupCount: { HomeDashboardModel.groupCount($0, in: baseProjects, facets: facets) },
+                                colorCount: { HomeDashboardModel.colorCount($0, in: baseProjects, facets: facets) },
+                                toolCount: { HomeDashboardModel.toolCount($0, in: baseProjects, facets: facets) },
+                                frameworkCount: frameworkCount,
+                                onSelectMode: setMode,
+                                onSelectSort: setSort,
+                                onSetGroup: setGroupFilter,
+                                onSetColor: setColorFilter,
+                                onSetTool: setToolFilter,
+                                onSetFramework: setFrameworkFilter,
+                                extraActiveFilterCount: extraFilterCount,
+                                onClearFacets: clearFilters,
+                                onToggleSelection: toggleSelectionMode
                             )
 
-                            if !split.idle.isEmpty {
-                                idleSection(split.idle)
+                            filterToolbar
+
+                            if visibleProjects.isEmpty {
+                                emptyResults
+                            } else {
+                                let split = partitioned
+                                HomeProjectBrowser(
+                                    projects: split.active,
+                                    mode: mode,
+                                    selectionMode: selectionMode,
+                                    selectedPaths: $selectedPaths,
+                                    selectedCount: selectedProjects.count,
+                                    allVisibleSelected: allVisibleSelected,
+                                    batchRunning: batchRunning,
+                                    isScanning: store.phase == .scanning,
+                                    batchFeedback: batchFeedback,
+                                    knownGroups: store.knownGroups,
+                                    allSelectedStarred: allSelectedStarred,
+                                    focusedProjectPath: focusedProjectPath,
+                                    onBatchStar: batchStar,
+                                    onBatchGroup: batchGroup,
+                                    onBatchFetch: { Task { await fetchSelected() } },
+                                    onToggleSelection: toggleSelection,
+                                    onCopyCleanup: copyCleanupCommands,
+                                    onRescanSelected: { Task { await rescanSelected() } },
+                                    onToggleSelectAll: toggleSelectAll,
+                                    onClearSelection: clearSelection,
+                                    onEndSelection: endSelectionAnimated
+                                )
+
+                                if !split.idle.isEmpty {
+                                    idleSection(split.idle)
+                                }
                             }
                         }
+                        .frame(width: contentWidth, alignment: .leading)
+                        .padding(FizzSpacing.page)
                     }
-                    .onGeometryChange(for: CGFloat.self) {
-                        $0.size.width
-                    } action: { newWidth in
-                        browserWidth = max(260, newWidth - FizzSpacing.page * 2)
+                    .frame(width: outerWidth, height: proxy.size.height)
+                    .onChange(of: contentWidth, initial: true) { _, newValue in
+                        if abs(browserWidth - newValue) > 0.5 {
+                            browserWidth = newValue
+                        }
                     }
-                    .padding(FizzSpacing.page)
                 }
             }
         }
@@ -604,7 +611,8 @@ struct LibraryView: View {
     private func copyCleanupCommands() {
         let result = HomeDashboardModel.batchCleanupCommands(for: selectedProjects)
         if let script = result.script {
-            SystemActions.copy(script)
+            SystemActions.copy(script, feedback: nil)
+            ToastCenter.shared.show(result.feedback, symbol: "doc.on.doc.fill", tint: FizzTheme.accent)
         }
         batchFeedback = result.feedback
     }
@@ -613,17 +621,21 @@ struct LibraryView: View {
         let projects = selectedProjects
         guard !projects.isEmpty else { return }
         store.setStarred(starred, for: projects)
-        batchFeedback = starred
+        let message = starred
             ? "已为 \(projects.count) 个项目设为星标"
             : "已取消 \(projects.count) 个项目的星标"
+        batchFeedback = message
+        ToastCenter.shared.show(message, symbol: starred ? "star.fill" : "star", tint: .yellow)
     }
 
     private func batchGroup(_ group: String?) {
         let projects = selectedProjects
         guard !projects.isEmpty else { return }
         store.setGroup(group, for: projects)
-        batchFeedback = group.map { "已将 \(projects.count) 个项目移至「\($0)」" }
+        let message = group.map { "已将 \(projects.count) 个项目移至「\($0)」" }
             ?? "已将 \(projects.count) 个项目恢复自动分组"
+        batchFeedback = message
+        ToastCenter.shared.show(message, symbol: "folder.fill", tint: FizzTheme.accent)
     }
 
     private func fetchSelected() async {

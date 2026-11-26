@@ -58,6 +58,8 @@ struct ProjectFolderCard: View {
                     .accessibilityHidden(true)
                 } else if project.port == .running {
                     PortStatusBadge(state: project.port, port: project.run?.port)
+                } else if let artwork = project.artwork {
+                    LibraryCoverMiniThumbnail(path: artwork)
                 }
             }
 
@@ -152,6 +154,45 @@ struct ProjectFolderCard: View {
     private var firstStack: (String, Color)? {
         guard let group = project.stacks.first, let item = group.items.first else { return nil }
         return (item, group.color)
+    }
+}
+
+private struct LibraryCoverMiniThumbnail: View {
+    let path: String
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous)
+                .fill(FizzTheme.recessedFill)
+
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.medium)
+                    .scaledToFill()
+            } else {
+                FizzIcon(symbol: "photo", size: 10)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .frame(width: 46, height: 28)
+        .clipShape(RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous)
+                .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+        }
+        .task(id: path) {
+            image = nil
+            let data: Data? = await Task.detached(priority: .utility) { () -> Data? in
+                guard let value = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+                    return nil
+                }
+                return Task.isCancelled ? nil : value
+            }.value
+            guard !Task.isCancelled, let data else { return }
+            image = NSImage(data: data)
+        }
     }
 }
 

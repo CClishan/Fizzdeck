@@ -33,10 +33,15 @@ enum SystemActions {
         )
     }
 
-    static func copy(_ value: String) {
+    static func copy(_ value: String, feedback: String? = "已复制到剪贴板") {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(value, forType: .string)
+        if let feedback {
+            Task { @MainActor in
+                ToastCenter.shared.show(feedback, symbol: "doc.on.doc.fill", tint: FizzTheme.accent)
+            }
+        }
     }
 
     @MainActor

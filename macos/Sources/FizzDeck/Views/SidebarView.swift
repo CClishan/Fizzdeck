@@ -273,9 +273,7 @@ struct SidebarView: View {
     private var runningSection: some View {
         VStack(alignment: .leading, spacing: 1) {
             SidebarSectionHeader(title: "正在运行") {
-                Circle()
-                    .fill(.green)
-                    .frame(width: 5, height: 5)
+                RunningPulseDot(size: 5)
             }
 
             ForEach(runningProjects) { project in
@@ -620,11 +618,8 @@ private struct SidebarRailButton: View {
                     }
 
                 if showsDot {
-                    Circle()
-                        .fill(.green)
-                        .frame(width: 5, height: 5)
+                    RunningPulseDot(size: 5)
                         .padding(2)
-                        .accessibilityHidden(true)
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
@@ -658,11 +653,8 @@ private struct SidebarRailProjectButton: View {
                     }
 
                 if project.port == .running {
-                    Circle()
-                        .fill(.green)
-                        .frame(width: 5, height: 5)
+                    RunningPulseDot(size: 5)
                         .padding(2)
-                        .accessibilityHidden(true)
                 }
             }
             .frame(width: 38, height: 30)

@@ -35,9 +35,7 @@ struct WorkbenchStatusCard: View {
     private var runningSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Circle()
-                    .fill(.green)
-                    .frame(width: 7, height: 7)
+                RunningPulseDot(size: 7)
                 Text("正在运行")
                     .font(.system(size: 13, weight: .semibold))
                 Text("\(runningProjects.count)")

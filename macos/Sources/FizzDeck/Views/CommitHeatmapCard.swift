@@ -1,7 +1,36 @@
 import SwiftUI
 
+enum CommitHeatmapLayout {
+    static func metrics(
+        availableWidth: CGFloat,
+        columnCount: Int,
+        range: HeatmapRange
+    ) -> (dotSize: CGFloat, spacing: CGFloat) {
+        let cols = max(1, columnCount)
+        let preferredSize: CGFloat = range == .weeks26 ? 8.5 : 5.2
+        let preferredSpacing: CGFloat = range == .weeks26 ? 4.0 : 2.2
+        guard availableWidth > 20 else {
+            return (preferredSize, preferredSpacing)
+        }
+
+        let gaps = CGFloat(max(0, cols - 1))
+        var spacing = preferredSpacing
+        if availableWidth < cols.cgFloat * 3.0 + gaps * spacing {
+            spacing = max(1.0, (availableWidth - CGFloat(cols) * 3.0) / max(1, gaps))
+        }
+        let maxDot = floor(((availableWidth - spacing * gaps) / CGFloat(cols)) * 10) / 10
+        let dotSize = max(3.0, min(preferredSize, maxDot))
+        return (dotSize, spacing)
+    }
+}
+
+private extension Int {
+    var cgFloat: CGFloat { CGFloat(self) }
+}
+
 struct CommitHeatmapCard: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("fizzdeck.heatmap.range") private var rangeRaw = HeatmapRange.weeks26.rawValue
 
     let snapshot: CommitActivitySnapshot
@@ -9,6 +38,7 @@ struct CommitHeatmapCard: View {
     let onSelectDay: (String) -> Void
 
     @State private var hoveredCell: HeatmapDayCell?
+    @State private var matrixWidth: CGFloat = 0
 
     private var range: HeatmapRange {
         HeatmapRange(rawValue: rangeRaw) ?? .weeks26
@@ -36,13 +66,16 @@ struct CommitHeatmapCard: View {
                         Text("\(data.totalCommits)")
                             .font(.system(size: 22, weight: .semibold))
                             .monospacedDigit()
+                            .contentTransition(.numericText())
                             .foregroundStyle(.primary)
 
                         Text("次 · 连续 \(data.currentStreak) 天")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
+                            .contentTransition(.numericText())
                     }
+                    .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: rangeRaw)
                 }
 
                 Spacer(minLength: 8)
@@ -50,12 +83,41 @@ struct CommitHeatmapCard: View {
                 rangePicker
             }
 
+            Color.clear
+                .frame(height: 0)
+                .frame(maxWidth: .infinity)
+                .onGeometryChange(for: CGFloat.self) {
+                    $0.size.width
+                } action: { newWidth in
+                    if abs(matrixWidth - newWidth) > 0.5 {
+                        matrixWidth = newWidth
+                    }
+                }
+
             dotMatrix(columns: data.columns)
 
             footer(summary: data)
         }
         .padding(16)
         .fizzCard(radius: FizzRadius.panel)
+        .overlay(alignment: .topTrailing) {
+            if let hoveredCell {
+                Text(hoverLabel(for: hoveredCell))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .glassEffect(.regular, in: Capsule())
+                    .fizzAdaptiveShadow(.floating)
+                    .padding(.top, 46)
+                    .padding(.trailing, 16)
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+            }
+        }
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: hoveredCell?.id)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("提交热力图，\(range.title)共 \(data.totalCommits) 次本人提交，当前连续 \(data.currentStreak) 天，最长连续 \(data.longestStreak) 天")
     }
@@ -86,14 +148,17 @@ struct CommitHeatmapCard: View {
     }
 
     private func dotMatrix(columns: [[HeatmapDayCell]]) -> some View {
-        let dotSpacing: CGFloat = range == .weeks26 ? 4 : 2.2
-        let dotSize: CGFloat = range == .weeks26 ? 8.5 : 5.2
+        let layout = CommitHeatmapLayout.metrics(
+            availableWidth: matrixWidth,
+            columnCount: columns.count,
+            range: range
+        )
 
-        return HStack(alignment: .top, spacing: dotSpacing) {
+        return HStack(alignment: .top, spacing: layout.spacing) {
             ForEach(columns.indices, id: \.self) { colIndex in
-                VStack(spacing: dotSpacing) {
+                VStack(spacing: layout.spacing) {
                     ForEach(columns[colIndex]) { cell in
-                        dotView(cell: cell, size: dotSize)
+                        dotView(cell: cell, size: layout.dotSize)
                     }
                 }
             }
@@ -113,12 +178,15 @@ struct CommitHeatmapCard: View {
             Circle()
                 .fill(dotColor(level: cell.level))
                 .frame(width: size, height: size)
+                .scaleEffect(isHovered ? 1.38 : 1.0)
                 .overlay {
                     if isHovered {
                         Circle()
                             .strokeBorder(colorScheme == .dark ? Color.white : FizzTheme.accent, lineWidth: 1.2)
+                            .scaleEffect(1.38)
                     }
                 }
+                .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: isHovered)
                 .contentShape(Rectangle())
                 .onHover { inside in
                     if inside {
