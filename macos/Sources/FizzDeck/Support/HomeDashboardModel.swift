@@ -9,7 +9,7 @@ enum HomeViewMode: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .cards: "卡片墙"
-        case .list: "极简列表"
+        case .list: "表格"
         }
     }
 

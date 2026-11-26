@@ -275,4 +275,61 @@ final class HomeDashboardModelTests: XCTestCase {
         )
         XCTAssertEqual(dayMatches.map(\.path), ["/tmp/b"])
     }
+
+    func testLibraryTableRowProjectsFieldsAndSortsByComparators() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        var p1 = makeProject(
+            path: "/tmp/a",
+            displayName: "Alpha",
+            group: "网页",
+            recent: now,
+            dirtyCount: 3,
+            totalBytes: 5_000
+        )
+        p1.ahead = 2
+        p1.stacks = [StackGroup(key: "framework", label: "框架", items: ["Next.js"])]
+        p1.sessions = SessionSummary(
+            detected: ["codex"],
+            lastSessionAt: now,
+            lastUserMessage: nil,
+            lastSessionID: "1",
+            lastTool: "codex",
+            sessionCount: 1,
+            byTool: [],
+            recentSessions: [
+                SessionRecord(
+                    tool: "codex",
+                    id: "1",
+                    cwd: "/tmp/a",
+                    startedAt: nil,
+                    modified: now,
+                    usage: TokenUsage(totalTokens: 1_000),
+                    costUSD: 1.25,
+                    costIsEstimate: false
+                ),
+            ]
+        )
+
+        let p2 = makeProject(
+            path: "/tmp/b",
+            displayName: "Beta",
+            group: "工具",
+            recent: Date(timeIntervalSince1970: 1_000_000),
+            dirtyCount: 0,
+            totalBytes: 25_000
+        )
+
+        let rows = LibraryTableRow.makeRows(from: [p1, p2])
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows[0].framework, "Next.js")
+        XCTAssertEqual(rows[0].ahead, 2)
+        XCTAssertEqual(rows[0].aiCostDisplay, "$1.25")
+        XCTAssertEqual(rows[1].aiCostDisplay, "—")
+
+        let byCost = rows.sorted(using: [LibraryRowComparator(column: .aiCost, order: .reverse)])
+        XCTAssertEqual(byCost.map(\.name), ["Alpha", "Beta"])
+
+        let bySize = rows.sorted(using: [LibraryRowComparator(column: .sizeBytes, order: .reverse)])
+        XCTAssertEqual(bySize.map(\.name), ["Beta", "Alpha"])
+    }
 }

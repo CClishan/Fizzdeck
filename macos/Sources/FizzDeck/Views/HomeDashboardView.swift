@@ -107,7 +107,7 @@ struct HomeDashboardView: View {
                                 projects: visibleProjects,
                                 mode: mode,
                                 selectionMode: selectionMode,
-                                selectedPaths: selectedPaths,
+                                selectedPaths: $selectedPaths,
                                 selectedCount: selectedProjects.count,
                                 allVisibleSelected: allVisibleSelected,
                                 batchRunning: batchRunning,

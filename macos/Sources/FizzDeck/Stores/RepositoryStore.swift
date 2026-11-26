@@ -624,6 +624,22 @@ final class RepositoryStore {
         try? MetaStore.save(metadata)
     }
 
+    func setStarred(_ starred: Bool, for targets: [RepoProject]) {
+        guard !targets.isEmpty else { return }
+        let targetPaths = Set(targets.map(\.path))
+        var changed = false
+        for index in projects.indices where targetPaths.contains(projects[index].path) {
+            projects[index].starred = starred
+            var meta = metadata[projects[index].path] ?? ProjectMeta()
+            meta.starred = starred
+            metadata[projects[index].path] = meta
+            changed = true
+        }
+        if changed {
+            try? MetaStore.save(metadata)
+        }
+    }
+
     func setColor(_ color: TagColor?, for project: RepoProject) {
         guard let index = projects.firstIndex(where: { $0.path == project.path }) else { return }
         projects[index].color = color
@@ -654,6 +670,28 @@ final class RepositoryStore {
         metadata[project.path] = meta
         try? MetaStore.save(metadata)
         ScanCacheStore.save(projects)
+    }
+
+    func setGroup(_ group: String?, for targets: [RepoProject]) {
+        guard !targets.isEmpty else { return }
+        let trimmed = group?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = trimmed?.isEmpty == false ? trimmed : nil
+        let targetPaths = Set(targets.map(\.path))
+        var changed = false
+        for index in projects.indices where targetPaths.contains(projects[index].path) {
+            projects[index].group = value ?? ProjectGrouping.detected(
+                for: projects[index].path,
+                kind: projects[index].kind
+            )
+            var meta = metadata[projects[index].path] ?? ProjectMeta()
+            meta.group = value
+            metadata[projects[index].path] = meta
+            changed = true
+        }
+        if changed {
+            try? MetaStore.save(metadata)
+            ScanCacheStore.save(projects)
+        }
     }
 
     var knownGroups: [String] {

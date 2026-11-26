@@ -6,12 +6,17 @@ struct HomeProjectBrowser: View {
     let projects: [RepoProject]
     let mode: HomeViewMode
     let selectionMode: Bool
-    let selectedPaths: Set<String>
+    @Binding var selectedPaths: Set<String>
     let selectedCount: Int
     let allVisibleSelected: Bool
     let batchRunning: Bool
     let isScanning: Bool
     let batchFeedback: String?
+    var knownGroups: [String] = []
+    var allSelectedStarred: Bool = false
+    var onBatchStar: ((Bool) -> Void)? = nil
+    var onBatchGroup: ((String?) -> Void)? = nil
+    var onBatchFetch: (() -> Void)? = nil
     let onToggleSelection: (RepoProject) -> Void
     let onCopyCleanup: () -> Void
     let onRescanSelected: () -> Void
@@ -39,7 +44,7 @@ struct HomeProjectBrowser: View {
             case .cards:
                 cards
             case .list:
-                projectList
+                LibraryTableView(projects: projects, selectedPaths: $selectedPaths)
             }
         }
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: selectionMode)
@@ -55,6 +60,47 @@ struct HomeProjectBrowser: View {
                     .monospacedDigit()
 
                 Spacer(minLength: 8)
+
+                if let onBatchStar {
+                    Button(allSelectedStarred ? "取消星标" : "设星标") {
+                        onBatchStar(!allSelectedStarred)
+                    }
+                    .disabled(selectedCount == 0)
+                    .opacity(selectedCount == 0 ? 0.42 : 1)
+                    .buttonStyle(.glass)
+                }
+
+                if let onBatchGroup {
+                    Menu("改分组") {
+                        ForEach(knownGroups, id: \.self) { group in
+                            Button(group) {
+                                onBatchGroup(group)
+                            }
+                        }
+                        if !knownGroups.isEmpty {
+                            Divider()
+                        }
+                        Button("自动分组") {
+                            onBatchGroup(nil)
+                        }
+                        Button("自定义…") {
+                            if let custom = SystemActions.promptForGroupName() {
+                                onBatchGroup(custom)
+                            }
+                        }
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.glass)
+                    .disabled(selectedCount == 0)
+                    .opacity(selectedCount == 0 ? 0.42 : 1)
+                }
+
+                if let onBatchFetch {
+                    Button("Fetch", action: onBatchFetch)
+                        .disabled(selectedCount == 0 || batchRunning || isScanning)
+                        .opacity(selectedCount == 0 || batchRunning || isScanning ? 0.42 : 1)
+                        .buttonStyle(.glass)
+                }
 
                 Button("复制清理命令", action: onCopyCleanup)
                     .disabled(selectedCount == 0)
@@ -121,26 +167,5 @@ struct HomeProjectBrowser: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
-    }
-
-    private var projectList: some View {
-        VStack(spacing: 0) {
-            ForEach(projects) { project in
-                ProjectListRow(
-                    project: project,
-                    selecting: selectionMode,
-                    selected: selectedPaths.contains(project.path),
-                    toggleSelection: { onToggleSelection(project) }
-                )
-
-                if project.id != projects.last?.id {
-                    Divider()
-                        .padding(.leading, 50)
-                        .opacity(0.45)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .fizzCard()
     }
 }

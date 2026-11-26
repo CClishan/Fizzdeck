@@ -5,6 +5,7 @@ struct WorkbenchDashboardView: View {
     @Environment(ProjectActions.self) private var actions
 
     @State private var contentWidth: CGFloat = 1040
+    @State private var freeDiskBytes: Int64?
 
     private var attentionItems: [ProjectAttentionItem] {
         let now = Date()
@@ -25,6 +26,31 @@ struct WorkbenchDashboardView: View {
 
     private var continueItems: [ContinueWorkItem] {
         DashboardMetrics.continueWorkItems(projects: store.projects, limit: 4)
+    }
+
+    private var runningProjects: [RepoProject] {
+        store.projects
+            .filter { $0.port == .running }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    private var healthAlerts: [HealthAlert] {
+        DashboardMetrics.healthAlerts(projects: store.projects, freeDiskBytes: freeDiskBytes)
+    }
+
+    private var timelineColumns: [TimelineDayColumn] {
+        DashboardMetrics.weeklyTimeline(
+            projects: store.projects,
+            commitActivity: store.commitActivity
+        )
+    }
+
+    private var isAllClear: Bool {
+        continueItems.isEmpty
+            && attentionItems.isEmpty
+            && runningProjects.isEmpty
+            && healthAlerts.isEmpty
+            && !store.projects.isEmpty
     }
 
     var body: some View {
@@ -48,6 +74,11 @@ struct WorkbenchDashboardView: View {
                     .padding(FizzSpacing.page)
                 }
             }
+        }
+        .task {
+            let url = URL(fileURLWithPath: NSHomeDirectory())
+            let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            freeDiskBytes = values?.volumeAvailableCapacityForImportantUsage
         }
     }
 
@@ -202,8 +233,16 @@ struct WorkbenchDashboardView: View {
 
     private var leftColumn: some View {
         VStack(alignment: .leading, spacing: FizzSpacing.grid) {
+            if isAllClear {
+                allClearCard
+            }
             ContinueWorkSection(items: continueItems)
             AttentionQueueView(showsTabs: true)
+            WeeklyTimelineCard(columns: timelineColumns) { path in
+                if let project = store.projects.first(where: { $0.path == path }) {
+                    store.openProject(project)
+                }
+            }
         }
     }
 
@@ -220,7 +259,54 @@ struct WorkbenchDashboardView: View {
                 projects: store.projects,
                 kpi: kpi
             )
+
+            WorkbenchStatusCard(
+                runningProjects: runningProjects,
+                healthAlerts: healthAlerts
+            )
         }
+    }
+
+    private var allClearCard: some View {
+        let recentProjects = Array(HomeSort.recent.sort(store.projects).prefix(4))
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                FizzIcon(symbol: "checkmark.circle", size: 15)
+                    .foregroundStyle(.green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("一切就绪")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("没有待处理项、陈旧改动或运行中的服务")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if !recentProjects.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(recentProjects) { project in
+                        Button {
+                            store.openProject(project)
+                        } label: {
+                            HStack(spacing: 6) {
+                                ProjectBadgeIcon(project: project, size: 18, framed: false)
+                                Text(project.displayName)
+                                    .font(.system(size: 11.5, weight: .medium))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 10)
+                            .frame(height: 28)
+                            .background(FizzTheme.recessedFill, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .fizzCard(radius: FizzRadius.panel)
     }
 
     @ViewBuilder

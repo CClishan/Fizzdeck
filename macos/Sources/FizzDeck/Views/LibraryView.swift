@@ -68,6 +68,10 @@ struct LibraryView: View {
         !visibleProjects.isEmpty && visibleProjects.allSatisfy { selectedPaths.contains($0.path) }
     }
 
+    private var allSelectedStarred: Bool {
+        !selectedProjects.isEmpty && selectedProjects.allSatisfy(\.starred)
+    }
+
     private var runningCount: Int {
         visibleProjects.filter { $0.port == .running }.count
     }
@@ -128,12 +132,17 @@ struct LibraryView: View {
                                 projects: split.active,
                                 mode: mode,
                                 selectionMode: selectionMode,
-                                selectedPaths: selectedPaths,
+                                selectedPaths: $selectedPaths,
                                 selectedCount: selectedProjects.count,
                                 allVisibleSelected: allVisibleSelected,
                                 batchRunning: batchRunning,
                                 isScanning: store.phase == .scanning,
                                 batchFeedback: batchFeedback,
+                                knownGroups: store.knownGroups,
+                                allSelectedStarred: allSelectedStarred,
+                                onBatchStar: batchStar,
+                                onBatchGroup: batchGroup,
+                                onBatchFetch: { Task { await fetchSelected() } },
                                 onToggleSelection: toggleSelection,
                                 onCopyCleanup: copyCleanupCommands,
                                 onRescanSelected: { Task { await rescanSelected() } },
@@ -502,6 +511,52 @@ struct LibraryView: View {
             SystemActions.copy(script)
         }
         batchFeedback = result.feedback
+    }
+
+    private func batchStar(_ starred: Bool) {
+        let projects = selectedProjects
+        guard !projects.isEmpty else { return }
+        store.setStarred(starred, for: projects)
+        batchFeedback = starred
+            ? "已为 \(projects.count) 个项目设为星标"
+            : "已取消 \(projects.count) 个项目的星标"
+    }
+
+    private func batchGroup(_ group: String?) {
+        let projects = selectedProjects
+        guard !projects.isEmpty else { return }
+        store.setGroup(group, for: projects)
+        batchFeedback = group.map { "已将 \(projects.count) 个项目移至「\($0)」" }
+            ?? "已将 \(projects.count) 个项目恢复自动分组"
+    }
+
+    private func fetchSelected() async {
+        guard !batchRunning, store.phase != .scanning else { return }
+        let gitProjects = selectedProjects.filter {
+            GitService.hasGit(URL(fileURLWithPath: $0.path))
+        }
+        guard !gitProjects.isEmpty else {
+            batchFeedback = "所选项目均非 Git 仓库"
+            return
+        }
+
+        batchRunning = true
+        batchFeedback = nil
+        var succeeded = 0
+        var failed = 0
+        for project in gitProjects {
+            let result = await GitSyncService.run(.fetch, in: URL(fileURLWithPath: project.path))
+            if result.status == .succeeded {
+                succeeded += 1
+                await store.refreshGit(for: project.path)
+            } else {
+                failed += 1
+            }
+        }
+        batchRunning = false
+        batchFeedback = failed == 0
+            ? "已 Fetch \(succeeded) 个仓库"
+            : "Fetch 完成：\(succeeded) 个成功，\(failed) 个失败"
     }
 
     private func rescanSelected() async {
