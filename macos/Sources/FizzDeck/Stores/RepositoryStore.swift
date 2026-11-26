@@ -70,6 +70,7 @@ final class RepositoryStore {
     var scannedAt: Date?
     var scanDuration: TimeInterval = 0
     var requestedTab: ProjectTab?
+    var commitActivity: CommitActivitySnapshot = .empty
     var isCommandPalettePresented = false
     var isFolderManagerPresented = false
     private(set) var remotes: [String: GitRemote] = [:]
@@ -80,6 +81,7 @@ final class RepositoryStore {
     private var metadata: [String: ProjectMeta] = [:]
     private var remoteTasks: [String: Task<GitRemote?, Never>] = [:]
     private var sizeEnrichmentTask: Task<Void, Never>?
+    private var commitActivityTask: Task<Void, Never>?
     private var workspaceWatcher: WorkspaceWatcher?
     private var isRefreshingSessions = false
     private var refreshSessionsAfterScan = false
@@ -147,6 +149,7 @@ final class RepositoryStore {
             projects = cached
             phase = .ready
         }
+        commitActivity = CommitActivityService.loadCache()
         await scan()
         startWorkspaceWatcher()
     }
@@ -263,6 +266,7 @@ final class RepositoryStore {
 
         // Stage 3: per-project du + cleanup enrichment in background (no re-sort)
         startSizeEnrichment(for: projects.map(\.path))
+        startCommitActivityRefresh(for: projects)
         flushDeferredSessionRefresh()
     }
 
@@ -293,6 +297,7 @@ final class RepositoryStore {
         remoteTasks = remoteTasks.filter { !refreshed.contains($0.key) }
 
         startSizeEnrichment(for: paths)
+        startCommitActivityRefresh(for: self.projects)
     }
 
     func addRoot() async {
@@ -409,6 +414,28 @@ final class RepositoryStore {
             self.pendingSizeCount = 0
             self.isEnriching = false
             ScanCacheStore.save(self.projects)
+        }
+    }
+
+    private func startCommitActivityRefresh(for projects: [RepoProject]) {
+        commitActivityTask?.cancel()
+        let snapshotProjects = projects
+        guard !snapshotProjects.isEmpty else {
+            commitActivity = .empty
+            return
+        }
+        let existing = commitActivity
+        commitActivityTask = Task(priority: .utility) { @MainActor [weak self] in
+            let updated = await Task.detached(priority: .utility) {
+                let fresh = await CommitActivityService.refresh(
+                    projects: snapshotProjects,
+                    cached: existing
+                )
+                CommitActivityService.saveCache(fresh)
+                return fresh
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            self.commitActivity = updated
         }
     }
 
@@ -672,6 +699,7 @@ final class RepositoryStore {
             git.lastCommit?.date,
             projects[index].sessions.lastSessionAt,
         ].compactMap { $0 }.max()
+        startCommitActivityRefresh(for: projects)
     }
 
     func startWatchingGit(for path: String) {

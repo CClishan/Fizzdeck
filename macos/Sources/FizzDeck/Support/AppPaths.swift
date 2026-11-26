@@ -7,6 +7,7 @@ enum AppPaths {
     static let metaFile = stateDir.appendingPathComponent("state.json")
     static let scanCacheFile = stateDir.appendingPathComponent("scan-cache.json")
     static let sessionCacheFile = stateDir.appendingPathComponent("session-cache.json")
+    static let commitActivityCacheFile = stateDir.appendingPathComponent("commit-activity.json")
     static let onboardingFile = stateDir.appendingPathComponent("onboarding.json")
     static let logsDir = stateDir.appendingPathComponent("logs", isDirectory: true)
     static let launchersDir = stateDir.appendingPathComponent("launchers", isDirectory: true)
