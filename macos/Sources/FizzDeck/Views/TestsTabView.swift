@@ -58,6 +58,7 @@ struct TestsTabView: View {
             }
             .padding(24)
         }
+        .fizzTracksScrollPastTop()
     }
 
     @ViewBuilder

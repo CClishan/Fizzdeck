@@ -55,9 +55,18 @@ struct ProjectListRow: View {
             Text(Format.relative(project.recent))
                 .frame(width: 66, alignment: .trailing)
                 .foregroundStyle(.secondary)
-            Text(project.sizeLoadState == .ready ? Format.bytes(project.size.totalBytes) : "统计中")
-                .frame(width: 62, alignment: .trailing)
-                .foregroundStyle(.secondary)
+            Group {
+                if project.sizeLoadState == .ready {
+                    Text(Format.bytes(project.size.totalBytes))
+                        .foregroundStyle(.secondary)
+                } else if project.sizeLoadState == .loading {
+                    FizzShimmerPlaceholder(width: 38, height: 10)
+                } else {
+                    Text("—")
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .frame(width: 62, alignment: .trailing)
             if project.port == .running {
                 PortStatusBadge(state: project.port, port: project.run?.port)
             }

@@ -12,10 +12,13 @@ struct CleanupTabView: View {
                 ) {
                     GlassStatCard(
                         title: "可回收",
-                        value: project.sizeLoadState == .ready ? Format.bytes(project.cleanup.reusableBytes) : "统计中…",
+                        value: project.sizeLoadState == .ready
+                            ? Format.bytes(project.cleanup.reusableBytes)
+                            : "",
                         detail: "只复制命令，不执行删除",
                         symbol: "trash.slash",
-                        tint: .orange
+                        tint: .orange,
+                        valuePlaceholder: project.sizeLoadState != .ready
                     )
                     GlassStatCard(
                         title: "命中目录",
@@ -59,6 +62,7 @@ struct CleanupTabView: View {
             }
             .padding(FizzSpacing.page)
         }
+        .fizzTracksScrollPastTop()
     }
 
     private func cleanupRow(_ item: CleanupItem) -> some View {

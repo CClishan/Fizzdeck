@@ -22,6 +22,34 @@ enum CommitHeatmapLayout {
         let dotSize = max(3.0, min(preferredSize, maxDot))
         return (dotSize, spacing)
     }
+
+    static func hoverBubbleOriginX(
+        column: Int,
+        columnCount: Int,
+        matrixWidth: CGFloat,
+        dotSize: CGFloat,
+        spacing: CGFloat,
+        bubbleWidth: CGFloat,
+        containerWidth: CGFloat,
+        contentInset: CGFloat = 16,
+        edgeInset: CGFloat = 8
+    ) -> CGFloat {
+        let count = max(1, columnCount)
+        let index = min(count - 1, max(0, column))
+        let usableMatrixWidth = matrixWidth > 20
+            ? matrixWidth
+            : max(20, containerWidth - contentInset * 2)
+        let contentWidth = min(
+            usableMatrixWidth,
+            CGFloat(count) * dotSize + CGFloat(max(0, count - 1)) * spacing
+        )
+        let matrixLeading = contentInset + max(0, (usableMatrixWidth - contentWidth) / 2)
+        let columnCenter = matrixLeading
+            + CGFloat(index) * (dotSize + spacing)
+            + dotSize / 2
+        let maximumOrigin = max(edgeInset, containerWidth - edgeInset - bubbleWidth)
+        return min(max(columnCenter - bubbleWidth / 2, edgeInset), maximumOrigin)
+    }
 }
 
 private extension Int {
@@ -38,6 +66,7 @@ struct CommitHeatmapCard: View {
     let onSelectDay: (String) -> Void
 
     @State private var hoveredCell: HeatmapDayCell?
+    @State private var hoveredColumn: Int?
     @State private var matrixWidth: CGFloat = 0
 
     private var range: HeatmapRange {
@@ -100,24 +129,43 @@ struct CommitHeatmapCard: View {
         }
         .padding(16)
         .fizzCard(radius: FizzRadius.panel)
-        .overlay(alignment: .topTrailing) {
-            if let hoveredCell {
-                Text(hoverLabel(for: hoveredCell))
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .glassEffect(.regular, in: Capsule())
-                    .fizzAdaptiveShadow(.floating)
-                    .padding(.top, 46)
-                    .padding(.trailing, 16)
-                    .allowsHitTesting(false)
-                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+        .overlay(alignment: .topLeading) {
+            if let hoveredCell, let hoveredColumn {
+                GeometryReader { proxy in
+                    let layout = CommitHeatmapLayout.metrics(
+                        availableWidth: matrixWidth,
+                        columnCount: data.columns.count,
+                        range: range
+                    )
+                    let bubbleWidth = min(238, max(140, proxy.size.width - 32))
+                    let originX = CommitHeatmapLayout.hoverBubbleOriginX(
+                        column: hoveredColumn,
+                        columnCount: data.columns.count,
+                        matrixWidth: matrixWidth,
+                        dotSize: layout.dotSize,
+                        spacing: layout.spacing,
+                        bubbleWidth: bubbleWidth,
+                        containerWidth: proxy.size.width
+                    )
+
+                    Text(hoverLabel(for: hoveredCell))
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .frame(width: bubbleWidth, alignment: .leading)
+                        .glassEffect(.regular, in: Capsule())
+                        .fizzAdaptiveShadow(.floating)
+                        .offset(x: originX, y: 46)
+                        .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                }
+                .allowsHitTesting(false)
             }
         }
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: hoveredCell?.id)
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: hoveredColumn)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("提交热力图，\(range.title)共 \(data.totalCommits) 次本人提交，当前连续 \(data.currentStreak) 天，最长连续 \(data.longestStreak) 天")
     }
@@ -146,7 +194,11 @@ struct CommitHeatmapCard: View {
             ForEach(columns.indices, id: \.self) { colIndex in
                 VStack(spacing: layout.spacing) {
                     ForEach(columns[colIndex]) { cell in
-                        dotView(cell: cell, size: layout.dotSize)
+                        dotView(
+                            cell: cell,
+                            size: layout.dotSize,
+                            column: colIndex
+                        )
                     }
                 }
             }
@@ -156,7 +208,7 @@ struct CommitHeatmapCard: View {
     }
 
     @ViewBuilder
-    private func dotView(cell: HeatmapDayCell, size: CGFloat) -> some View {
+    private func dotView(cell: HeatmapDayCell, size: CGFloat, column: Int) -> some View {
         if cell.isFuture {
             Circle()
                 .fill(Color.clear)
@@ -179,8 +231,10 @@ struct CommitHeatmapCard: View {
                 .onHover { inside in
                     if inside {
                         hoveredCell = cell
+                        hoveredColumn = column
                     } else if hoveredCell?.id == cell.id {
                         hoveredCell = nil
+                        hoveredColumn = nil
                     }
                 }
                 .onTapGesture {

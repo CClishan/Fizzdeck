@@ -133,6 +133,7 @@ struct SessionsTabView: View {
                     }
                     .padding(FizzSpacing.page)
                 }
+                .fizzTracksScrollPastTop()
                 .onChange(of: project.path) {
                     toolFilter = .all
                     sessionFeedback = nil

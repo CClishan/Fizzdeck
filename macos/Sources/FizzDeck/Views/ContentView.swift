@@ -69,6 +69,11 @@ struct ContentView: View {
                         }
                     } label: {
                         FizzIcon(symbol: "arrow.clockwise", size: FizzIconScale.toolbar)
+                            .symbolEffect(
+                                .rotate,
+                                options: .repeating,
+                                isActive: store.phase == .scanning && !reduceMotion
+                            )
                     }
                     .help("重新扫描 \(project.displayName)")
                     .accessibilityLabel("重新扫描项目")
@@ -84,6 +89,11 @@ struct ContentView: View {
                             Text("重新扫描")
                         } icon: {
                             FizzIcon(symbol: "arrow.clockwise", size: FizzIconScale.toolbar)
+                                .symbolEffect(
+                                    .rotate,
+                                    options: .repeating,
+                                    isActive: store.phase == .scanning && !reduceMotion
+                                )
                         }
                     }
                     .help("重新扫描受管目录")

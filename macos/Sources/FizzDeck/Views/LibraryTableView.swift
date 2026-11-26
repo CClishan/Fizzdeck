@@ -42,7 +42,7 @@ struct LibraryTableRow: Identifiable, Sendable {
 
             let sizeDisplay = project.sizeLoadState == .ready
                 ? Format.bytes(project.size.totalBytes)
-                : "统计中"
+                : ""
 
             return LibraryTableRow(
                 id: project.path,
@@ -215,9 +215,19 @@ struct LibraryTableView: View {
             .width(min: 66, ideal: 78)
 
             TableColumn("体积", sortUsing: LibraryRowComparator(column: .sizeBytes)) { row in
-                Text(row.sizeDisplay)
-                    .font(.system(size: 11.5).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                Group {
+                    if row.project.sizeLoadState == .ready {
+                        Text(row.sizeDisplay)
+                            .font(.system(size: 11.5).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    } else if row.project.sizeLoadState == .loading {
+                        FizzShimmerPlaceholder(width: 42, height: 10)
+                    } else {
+                        Text("—")
+                            .font(.system(size: 11.5).monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
             .width(min: 64, ideal: 76)
 

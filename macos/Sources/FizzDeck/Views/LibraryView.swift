@@ -8,6 +8,7 @@ struct LibraryView: View {
 
     @AppStorage("fizzdeck.home.viewMode") private var modeRaw = HomeViewMode.cards.rawValue
     @AppStorage("fizzdeck.home.sort") private var sortRaw = HomeSort.recent.rawValue
+    @AppStorage(LibraryCoverPreference.key) private var showCoverPreview = LibraryCoverPreference.defaultValue
     @State private var localQuery = LibraryQuery()
     @State private var selectionMode = false
     @State private var selectedPaths: Set<String> = []
@@ -16,6 +17,7 @@ struct LibraryView: View {
     @State private var showIdleProjects = false
     @State private var focusedProjectPath: String?
     @State private var browserWidth: CGFloat = 960
+    @State private var scrolledPastTop = false
     @FocusState private var searchFocused: Bool
 
     private var mode: HomeViewMode {
@@ -110,6 +112,7 @@ struct LibraryView: View {
                                 title: "项目库",
                                 detail: headerDetail,
                                 mode: mode,
+                                showsCoverPreview: showCoverPreview,
                                 sort: sort,
                                 facets: facets,
                                 availableGroups: availableGroups,
@@ -129,8 +132,16 @@ struct LibraryView: View {
                                 onSetFramework: setFrameworkFilter,
                                 extraActiveFilterCount: extraFilterCount,
                                 onClearFacets: clearFilters,
-                                onToggleSelection: toggleSelectionMode
+                                onToggleSelection: toggleSelectionMode,
+                                onToggleCoverPreview: toggleCoverPreview
                             )
+
+                            if let dayKey = localQuery.commitDayKey {
+                                commitDayBanner(dayKey)
+                                    .transition(
+                                        .opacity.combined(with: .move(edge: .top))
+                                    )
+                            }
 
                             filterToolbar
 
@@ -148,6 +159,7 @@ struct LibraryView: View {
                                     batchRunning: batchRunning,
                                     isScanning: store.phase == .scanning,
                                     batchFeedback: batchFeedback,
+                                    showsCoverPreview: showCoverPreview,
                                     knownGroups: store.knownGroups,
                                     allSelectedStarred: allSelectedStarred,
                                     focusedProjectPath: focusedProjectPath,
@@ -175,6 +187,12 @@ struct LibraryView: View {
                         if abs(browserWidth - newValue) > 0.5 {
                             browserWidth = newValue
                         }
+                    }
+                    .fizzTracksScrollPastTop()
+                    .overlay(alignment: .top) {
+                        FizzScrollTopHairline(
+                            visible: scrolledPastTop
+                        )
                     }
                 }
             }
@@ -233,6 +251,13 @@ struct LibraryView: View {
                 self.focusedProjectPath = nil
             }
         }
+        .onPreferenceChange(FizzScrollPastTopKey.self) { value in
+            scrolledPastTop = value
+        }
+        .animation(
+            FizzMotion.resolved(reduceMotion, FizzMotion.spring),
+            value: localQuery.commitDayKey
+        )
     }
 
     private var filterToolbar: some View {
@@ -287,26 +312,75 @@ struct LibraryView: View {
                             localQuery.unpushedOnly.toggle()
                         }
 
-                        if let dayKey = localQuery.commitDayKey {
-                            Button {
-                                localQuery.commitDayKey = nil
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Text("提交日期 · \(dayKey)")
-                                    FizzIcon(symbol: "xmark", size: 8)
-                                }
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 9)
-                                .frame(height: 24)
-                                .background(FizzTheme.accent, in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
                     }
                 }
             }
         }
+    }
+
+    private func commitDayBanner(_ dayKey: String) -> some View {
+        HStack(spacing: 9) {
+            FizzIcon(symbol: "calendar.badge.clock", size: 13)
+                .foregroundStyle(FizzTheme.accent)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("提交日期筛选")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text(formattedCommitDay(dayKey))
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .monospacedDigit()
+            }
+
+            Text("\(visibleProjects.count) 个项目")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 7)
+                .frame(height: 20)
+                .background(FizzTheme.recessedFill, in: Capsule())
+
+            Spacer(minLength: 8)
+
+            Button {
+                withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
+                    localQuery.commitDayKey = nil
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("清除")
+                    FizzIcon(symbol: "xmark", size: 8)
+                }
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .frame(height: 22)
+                .background(FizzTheme.elevatedFill, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+            .help("清除提交日期筛选")
+            .accessibilityLabel("清除提交日期筛选")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .glassEffect(.regular, in: Capsule())
+        .fizzAdaptiveShadow(.subtle)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("提交日期筛选，\(formattedCommitDay(dayKey))，\(visibleProjects.count) 个项目")
+    }
+
+    private func formattedCommitDay(_ dayKey: String) -> String {
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let date = parser.date(from: dayKey) else { return dayKey }
+        let display = DateFormatter()
+        display.locale = Locale(identifier: "zh_Hans")
+        display.dateFormat = "yyyy 年 M 月 d 日 EEEE"
+        return display.string(from: date)
     }
 
     private func quickChip(_ title: String, active: Bool, action: @escaping () -> Void) -> some View {
@@ -366,6 +440,7 @@ struct LibraryView: View {
                                 project: project,
                                 selecting: selectionMode,
                                 selected: selectedPaths.contains(project.path),
+                                showsCoverPreview: showCoverPreview,
                                 toggleSelection: { toggleSelection(project) }
                             )
                         }
@@ -518,6 +593,12 @@ struct LibraryView: View {
         guard mode != value else { return }
         withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
             modeRaw = value.rawValue
+        }
+    }
+
+    private func toggleCoverPreview() {
+        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
+            showCoverPreview.toggle()
         }
     }
 

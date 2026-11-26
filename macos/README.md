@@ -2,7 +2,7 @@
 
 The native, SwiftUI-first client for FizzDeck.
 
-Download: [FizzDeck 0.5.2 for macOS](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+, ad-hoc signed (not notarized).
+Download: [FizzDeck 0.5.3 for macOS](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+, ad-hoc signed (not notarized).
 
 FizzDeck reads and writes the same local state as the web UI, but runs without Node.js and without a local HTTP server.
 

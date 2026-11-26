@@ -55,6 +55,7 @@ struct GitTabView: View {
                 }
                 .padding(24)
             }
+            .fizzTracksScrollPastTop()
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let feedback {
                     feedbackBanner(feedback)

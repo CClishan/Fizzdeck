@@ -128,6 +128,7 @@ struct DocsTabView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(20)
                     }
+                    .fizzTracksScrollPastTop()
                 }
             }
         } else {

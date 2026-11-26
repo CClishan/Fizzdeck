@@ -9,6 +9,7 @@ struct ProjectDetailView: View {
     @State private var tab: ProjectTab = .overview
     @State private var detail: ProjectDetail = .empty
     @State private var loadingDetail = false
+    @State private var scrolledPastTop = false
     @State private var noteDraft = ""
     @Namespace private var tabNamespace
     @Namespace private var dockNamespace
@@ -45,6 +46,11 @@ struct ProjectDetailView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.top, 8)
+            .overlay(alignment: .top) {
+                FizzScrollTopHairline(
+                    visible: scrolledPastTop
+                )
+            }
             .contentMargins(.bottom, 76, for: .scrollContent)
             .scrollEdgeEffectHidden(true, for: .bottom)
             .overlay(alignment: .bottom) {
@@ -89,6 +95,9 @@ struct ProjectDetailView: View {
         }
         .onChange(of: store.requestedTab) {
             applyRequestedTab()
+        }
+        .onPreferenceChange(FizzScrollPastTopKey.self) { value in
+            scrolledPastTop = value
         }
         .toolbar {
             ToolbarItem(placement: .principal) {

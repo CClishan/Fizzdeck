@@ -6,6 +6,7 @@ struct WorkbenchDashboardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var freeDiskBytes: Int64?
+    @State private var scrolledPastTop = false
 
     private var attentionItems: [ProjectAttentionItem] {
         let now = Date()
@@ -67,6 +68,12 @@ struct WorkbenchDashboardView: View {
                         .padding(FizzSpacing.page)
                     }
                     .frame(width: outerWidth, height: proxy.size.height)
+                    .fizzTracksScrollPastTop()
+                    .overlay(alignment: .top) {
+                        FizzScrollTopHairline(
+                            visible: scrolledPastTop
+                        )
+                    }
                 }
             }
         }
@@ -74,6 +81,9 @@ struct WorkbenchDashboardView: View {
             let url = URL(fileURLWithPath: NSHomeDirectory())
             let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
             freeDiskBytes = values?.volumeAvailableCapacityForImportantUsage
+        }
+        .onPreferenceChange(FizzScrollPastTopKey.self) { value in
+            scrolledPastTop = value
         }
     }
 

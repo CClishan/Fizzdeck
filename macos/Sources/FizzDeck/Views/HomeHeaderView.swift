@@ -6,6 +6,7 @@ struct HomeHeaderView: View {
     let title: String
     let detail: String
     let mode: HomeViewMode
+    var showsCoverPreview = true
     let sort: HomeSort
     let facets: HomeFacets
     let availableGroups: [String]
@@ -26,6 +27,7 @@ struct HomeHeaderView: View {
     var extraActiveFilterCount: Int = 0
     let onClearFacets: () -> Void
     let onToggleSelection: () -> Void
+    var onToggleCoverPreview: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -43,6 +45,7 @@ struct HomeHeaderView: View {
 
                 HStack(spacing: 8) {
                     modePicker
+                    coverPreviewToggle
                     filterMenu
                     selectionToggle
                 }
@@ -94,6 +97,24 @@ struct HomeHeaderView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("布局")
+    }
+
+    private var coverPreviewToggle: some View {
+        Toggle(
+            isOn: Binding(
+                get: { showsCoverPreview },
+                set: { _ in onToggleCoverPreview() }
+            )
+        ) {
+            FizzIcon(symbol: "photo.on.rectangle.angled", size: 12)
+                .foregroundStyle(showsCoverPreview ? FizzTheme.accent : Color.secondary)
+        }
+        .toggleStyle(.switch)
+        .labelsHidden()
+        .controlSize(.mini)
+        .help(showsCoverPreview ? "隐藏封面预览" : "显示封面预览")
+        .accessibilityLabel("显示封面预览")
+        .accessibilityValue(showsCoverPreview ? "开启" : "关闭")
     }
 
     private var filterMenu: some View {

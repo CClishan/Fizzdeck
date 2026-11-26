@@ -12,6 +12,7 @@ struct HomeProjectBrowser: View {
     let batchRunning: Bool
     let isScanning: Bool
     let batchFeedback: String?
+    var showsCoverPreview = true
     var knownGroups: [String] = []
     var allSelectedStarred: Bool = false
     var focusedProjectPath: String? = nil
@@ -170,6 +171,7 @@ struct HomeProjectBrowser: View {
                     selecting: selectionMode,
                     selected: selectedPaths.contains(project.path),
                     focused: focusedProjectPath == project.path,
+                    showsCoverPreview: showsCoverPreview,
                     toggleSelection: { onToggleSelection(project) }
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))

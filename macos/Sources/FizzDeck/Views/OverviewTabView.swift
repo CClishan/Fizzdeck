@@ -94,6 +94,7 @@ struct OverviewTabView: View {
                 .padding(FizzSpacing.page)
             }
             .frame(width: outerWidth, height: proxy.size.height)
+            .fizzTracksScrollPastTop()
         }
         .task(id: logAvailabilityKey) {
             await refreshLogAvailability()
@@ -113,11 +114,18 @@ struct OverviewTabView: View {
                 title: "本周提交",
                 symbol: "arrow.triangle.branch",
                 tint: .green,
-                value: "\(weekTotal)",
+                value: project.gitLoadState == .ready ? "\(weekTotal)" : "",
                 unit: "次",
-                bars: WorkbenchMetrics.normalized(weekValues),
-                emphasis: WorkbenchMetrics.emphasisIndex(weekValues),
-                detail: project.branch ?? "无 Git 分支"
+                bars: project.gitLoadState == .ready
+                    ? WorkbenchMetrics.normalized(weekValues)
+                    : [],
+                emphasis: project.gitLoadState == .ready
+                    ? WorkbenchMetrics.emphasisIndex(weekValues)
+                    : nil,
+                detail: project.gitLoadState == .ready
+                    ? (project.branch ?? "无 Git 分支")
+                    : "正在读取 Git",
+                valuePlaceholder: project.gitLoadState != .ready
             )
 
             diskCard
@@ -159,11 +167,12 @@ struct OverviewTabView: View {
             title: "磁盘占用",
             symbol: "internaldrive",
             tint: .indigo,
-            value: ready ? parts.value : "统计中…",
+            value: ready ? parts.value : "",
             unit: ready ? parts.unit : "",
             bars: ready ? WorkbenchMetrics.normalized(cleanupValues) : Array(repeating: 0, count: 7),
             emphasis: ready ? WorkbenchMetrics.emphasisIndex(cleanupValues) : nil,
-            detail: detail
+            detail: detail,
+            valuePlaceholder: !ready
         )
     }
 
@@ -471,6 +480,7 @@ private struct WorkbenchMetricCard: View {
     var bars: [Double] = []
     var emphasis: Int? = nil
     var detail: String? = nil
+    var valuePlaceholder = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -483,16 +493,21 @@ private struct WorkbenchMetricCard: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(value)
-                    .font(.system(size: 23, weight: .semibold))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.62)
+                if valuePlaceholder {
+                    FizzShimmerPlaceholder(width: 92, height: 24)
+                        .padding(.vertical, 3)
+                } else {
+                    Text(value)
+                        .font(.system(size: 23, weight: .semibold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.62)
 
-                if !unit.isEmpty {
-                    Text(unit)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                    if !unit.isEmpty {
+                        Text(unit)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 

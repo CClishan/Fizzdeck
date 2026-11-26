@@ -23,6 +23,7 @@ struct GlassStatCard: View {
     let symbol: String
     var tint: Color = .accentColor
     var statusColor: Color?
+    var valuePlaceholder = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -35,16 +36,20 @@ struct GlassStatCard: View {
             .font(.system(size: 11, weight: .medium))
 
             HStack(spacing: 6) {
-                if let statusColor {
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 7, height: 7)
+                if valuePlaceholder {
+                    FizzShimmerPlaceholder(width: 94, height: 20)
+                } else {
+                    if let statusColor {
+                        Circle()
+                            .fill(statusColor)
+                            .frame(width: 7, height: 7)
+                    }
+                    Text(value)
+                        .font(.system(size: 20, weight: .semibold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
-                Text(value)
-                    .font(.system(size: 20, weight: .semibold))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
             }
 
             if let detail {
@@ -135,6 +140,62 @@ struct RunningPulseDot: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+enum FizzScrollMetrics {
+    static let topThreshold: CGFloat = 8
+
+    static func isPastTop(_ offset: CGFloat, threshold: CGFloat = topThreshold) -> Bool {
+        offset > threshold
+    }
+}
+
+struct FizzScrollPastTopKey: PreferenceKey {
+    static let defaultValue = false
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
+private struct FizzScrollPastTopModifier: ViewModifier {
+    @State private var pastTop = false
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                FizzScrollMetrics.isPastTop(geometry.contentOffset.y)
+            } action: { _, newValue in
+                pastTop = newValue
+            }
+            .preference(key: FizzScrollPastTopKey.self, value: pastTop)
+    }
+}
+
+struct FizzScrollTopHairline: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let visible: Bool
+
+    var body: some View {
+        Rectangle()
+            .fill(FizzTheme.hairline)
+            .frame(maxWidth: .infinity)
+            .frame(height: 1)
+            .opacity(visible ? 1 : 0)
+            .animation(
+                FizzMotion.resolved(reduceMotion, FizzMotion.quick),
+                value: visible
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    func fizzTracksScrollPastTop() -> some View {
+        modifier(FizzScrollPastTopModifier())
     }
 }
 

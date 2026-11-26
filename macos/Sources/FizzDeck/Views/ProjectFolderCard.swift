@@ -7,6 +7,7 @@ struct ProjectFolderCard: View {
     var selecting = false
     var selected = false
     var focused = false
+    var showsCoverPreview = true
     var toggleSelection: () -> Void = {}
 
     @State private var hovering = false
@@ -14,6 +15,12 @@ struct ProjectFolderCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if showsCoverPreview, let artwork = project.artwork {
+                LibraryCoverPreview(path: artwork)
+                    .frame(height: 64)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
+
             HStack(alignment: .center, spacing: 10) {
                 ProjectBadgeIcon(project: project, size: 32, framed: false)
 
@@ -59,7 +66,7 @@ struct ProjectFolderCard: View {
                     .accessibilityHidden(true)
                 } else if project.port == .running {
                     PortStatusBadge(state: project.port, port: project.run?.port)
-                } else if let artwork = project.artwork {
+                } else if !showsCoverPreview, let artwork = project.artwork {
                     LibraryCoverMiniThumbnail(path: artwork)
                 }
             }
@@ -84,7 +91,11 @@ struct ProjectFolderCard: View {
             .lineLimit(1)
         }
         .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 122, maxHeight: 128, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: showsCoverPreview && project.artwork != nil ? 188 : 122,
+            alignment: .topLeading
+        )
         .background(FizzTheme.cardFill, in: RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous)
@@ -100,6 +111,7 @@ struct ProjectFolderCard: View {
         .fizzAdaptiveShadow(hovering ? .raised : .subtle)
         .scaleEffect(pressed ? 0.988 : 1)
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: pressed)
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: showsCoverPreview)
         .contentShape(RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous))
         .onTapGesture {
             if selecting {
@@ -169,13 +181,43 @@ struct ProjectFolderCard: View {
     }
 }
 
+private struct LibraryCoverPreview: View {
+    let path: String
+
+    var body: some View {
+        LibraryCoverImage(path: path)
+            .frame(maxWidth: .infinity)
+            .frame(height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
+                    .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+            }
+    }
+}
+
 private struct LibraryCoverMiniThumbnail: View {
     let path: String
+
+    var body: some View {
+        LibraryCoverImage(path: path)
+            .frame(width: 46, height: 28)
+            .clipShape(RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous)
+                    .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+            }
+    }
+}
+
+private struct LibraryCoverImage: View {
+    let path: String
+
     @State private var image: NSImage?
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous)
+            Rectangle()
                 .fill(FizzTheme.recessedFill)
 
             if let image {
@@ -184,15 +226,9 @@ private struct LibraryCoverMiniThumbnail: View {
                     .interpolation(.medium)
                     .scaledToFill()
             } else {
-                FizzIcon(symbol: "photo", size: 10)
+                FizzIcon(symbol: "photo", size: 12)
                     .foregroundStyle(.tertiary)
             }
-        }
-        .frame(width: 46, height: 28)
-        .clipShape(RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous)
-                .strokeBorder(FizzTheme.stroke, lineWidth: 1)
         }
         .task(id: path) {
             image = nil
