@@ -135,7 +135,7 @@ struct ContentView: View {
         Group {
             switch store.destination {
             case .dashboard:
-                HomeDashboardView(filter: .all)
+                WorkbenchDashboardView()
             case .library(let query):
                 LibraryView(query: query)
             case .cleanup:

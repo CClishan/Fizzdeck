@@ -11,7 +11,9 @@ struct AttentionQueueView: View {
     @State private var feedback: [String: AttentionFeedback] = [:]
     @State private var copiedItemID: String?
     @State private var now = Date()
+    @State private var selectedKind: ProjectAttentionKind?
 
+    var showsTabs = false
     private let collapsedLimit = 4
 
     private var allItems: [ProjectAttentionItem] {
@@ -33,8 +35,20 @@ struct AttentionQueueView: View {
         }
     }
 
+    private var filteredItems: [ProjectAttentionItem] {
+        guard showsTabs, let selectedKind else { return items }
+        return items.filter { $0.kind == selectedKind }
+    }
+
     private var visibleItems: [ProjectAttentionItem] {
-        expanded ? items : Array(items.prefix(collapsedLimit))
+        expanded ? filteredItems : Array(filteredItems.prefix(collapsedLimit))
+    }
+
+    private var availableKinds: [(kind: ProjectAttentionKind, count: Int)] {
+        ProjectAttentionKind.allCases.compactMap { kind in
+            let count = items.filter { $0.kind == kind }.count
+            return count > 0 ? (kind, count) : nil
+        }
     }
 
     private var projectCount: Int {
@@ -70,6 +84,13 @@ struct AttentionQueueView: View {
                 Divider()
                     .padding(.horizontal, 14)
                     .opacity(0.55)
+
+                if showsTabs && availableKinds.count > 1 {
+                    categoryTabs
+                    Divider()
+                        .padding(.horizontal, 14)
+                        .opacity(0.45)
+                }
 
                 ForEach(visibleItems) { item in
                     AttentionRow(
@@ -119,14 +140,14 @@ struct AttentionQueueView: View {
                     .padding(.vertical, 12)
                 }
 
-                if items.count > collapsedLimit {
+                if filteredItems.count > collapsedLimit {
                     Button {
                         withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
                             expanded.toggle()
                         }
                     } label: {
                         HStack(spacing: 5) {
-                            Text(expanded ? "收起" : "还有 \(items.count - collapsedLimit) 项")
+                            Text(expanded ? "收起" : "还有 \(filteredItems.count - collapsedLimit) 项")
                             FizzIcon(symbol: expanded ? "chevron.up" : "chevron.down", size: 8)
                         }
                         .font(.system(size: 11, weight: .medium))
@@ -161,7 +182,59 @@ struct AttentionQueueView: View {
                     now = Date()
                 }
             }
+            .onChange(of: items.count) {
+                if let selectedKind, !availableKinds.contains(where: { $0.kind == selectedKind }) {
+                    self.selectedKind = nil
+                }
+            }
         }
+    }
+
+    private var categoryTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                tabButton(title: "全部", count: items.count, selected: selectedKind == nil) {
+                    selectedKind = nil
+                }
+                ForEach(availableKinds, id: \.kind) { entry in
+                    tabButton(
+                        title: entry.kind.shortTitle,
+                        count: entry.count,
+                        selected: selectedKind == entry.kind
+                    ) {
+                        selectedKind = entry.kind
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func tabButton(
+        title: String,
+        count: Int,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(title)
+                Text("\(count)")
+                    .monospacedDigit()
+                    .foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
+            }
+            .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
+            .foregroundStyle(selected ? .white : .primary)
+            .padding(.horizontal, 9)
+            .frame(height: 22)
+            .background(
+                selected ? FizzTheme.accent : FizzTheme.recessedFill,
+                in: Capsule()
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var suppressedMenu: some View {
