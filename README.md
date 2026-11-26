@@ -4,7 +4,7 @@
 
 Live landing page: [koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
-Download: [FizzDeck 0.3.0 for macOS](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+, ad-hoc signed (not notarized).
+Download: [FizzDeck 0.4.0 for macOS](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+, ad-hoc signed (not notarized).
 
 No account, no telemetry, no hosted backend. FizzDeck reads only local project metadata and keeps its state on your Mac.
 

@@ -4,8 +4,8 @@ set -euo pipefail
 APP_NAME="FizzDeck"
 BUNDLE_ID="com.a003.fizzdeck"
 MIN_SYSTEM_VERSION="26.0"
-VERSION="0.3.0"
-BUILD_NUM="6"
+VERSION="0.4.0"
+BUILD_NUM="7"
 CONFIG="release"
 SKIP_FINDER_LAYOUT=0
 OUTPUT_DMG=""
