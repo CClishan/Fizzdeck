@@ -4,7 +4,7 @@
 
 线上 landing：[koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
-下载：[FizzDeck 0.2.3 macOS 版](https://github.com/CClishan/Fizzdeck/releases/latest)，Apple Silicon、macOS 26+，ad-hoc 签名，未公证。
+下载：[FizzDeck 0.3.0 macOS 版](https://github.com/CClishan/Fizzdeck/releases/latest)，Apple Silicon、macOS 26+，ad-hoc 签名，未公证。
 
 不需要账号，不上传遥测，也没有托管后端。FizzDeck 只读取本机项目元数据，状态保存在本机。
 
