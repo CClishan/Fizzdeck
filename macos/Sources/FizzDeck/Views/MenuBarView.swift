@@ -54,6 +54,43 @@ struct MenuBarMenu: View {
         Array(store.projects.prefix(6))
     }
 
+    private var attentionItems: [ProjectAttentionItem] {
+        let now = Date()
+        return ProjectAttentionQueue
+            .items(projects: store.projects, testRuns: actions.testRuns)
+            .filter {
+                !store.isAttentionSuppressed(
+                    for: $0.project,
+                    kind: $0.kind,
+                    at: now
+                )
+            }
+    }
+
+    private var runningProjects: [RepoProject] {
+        store.projects
+            .filter { $0.port == .running }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    private var recentSessions: [MenuBarSession] {
+        var seen = Set<String>()
+        return store.projects
+            .flatMap { project in
+                project.sessions.recentSessions.compactMap { session -> MenuBarSession? in
+                    guard session.kind == .conversation,
+                          session.resumeCommand != nil,
+                          DetectedTool(rawValue: session.tool)?.supportsResume == true,
+                          seen.insert(session.stableID).inserted
+                    else { return nil }
+                    return MenuBarSession(project: project, session: session)
+                }
+            }
+            .sorted { $0.session.modified > $1.session.modified }
+            .prefix(5)
+            .map { $0 }
+    }
+
     var body: some View {
         Button("打开总览") {
             show(nil)
@@ -62,6 +99,48 @@ struct MenuBarMenu: View {
             Task { await store.scan() }
         }
         .disabled(store.phase == .scanning)
+
+        if !attentionItems.isEmpty {
+            Divider()
+            Section("待处理") {
+                Button("查看 \(attentionItems.count) 项待处理") {
+                    show(nil)
+                }
+            }
+        }
+
+        if !runningProjects.isEmpty {
+            Divider()
+            Section("正在运行的服务") {
+                ForEach(runningProjects) { project in
+                    if let port = project.run?.port, port > 0 {
+                        Button("打开 \(project.displayName) 预览 · :\(port)") {
+                            SystemActions.openURL("http://127.0.0.1:\(port)")
+                        }
+                    }
+                    Button("停止 \(project.displayName)") {
+                        Task { await actions.stop(project, store: store) }
+                    }
+                }
+            }
+        }
+
+        if !recentSessions.isEmpty {
+            Divider()
+            Section("最近可继续的会话") {
+                ForEach(recentSessions) { item in
+                    Button {
+                        resume(item)
+                    } label: {
+                        Text(
+                            "\(item.project.displayName) · "
+                                + "\(DetectedTool(rawValue: item.session.tool)?.title ?? item.session.tool)"
+                                + " · \(Format.relative(item.session.modified))"
+                        )
+                    }
+                }
+            }
+        }
 
         if !recentProjects.isEmpty {
             Divider()
@@ -77,6 +156,23 @@ struct MenuBarMenu: View {
         Divider()
         Button("退出 FizzDeck") {
             NSApp.terminate(nil)
+        }
+    }
+
+    private func resume(_ item: MenuBarSession) {
+        Task {
+            let result = await SessionResumeService.resume(
+                session: item.session,
+                projectPath: item.project.path
+            )
+            if !result.success {
+                await LocalNotifications.send(
+                    title: "会话恢复失败",
+                    body: "\(item.project.displayName) · \(result.message)",
+                    projectPath: item.project.path,
+                    tab: .sessions
+                )
+            }
         }
     }
 
@@ -98,4 +194,11 @@ struct MenuBarMenu: View {
         }
         NSApp.activate(ignoringOtherApps: true)
     }
+}
+
+private struct MenuBarSession: Identifiable {
+    let project: RepoProject
+    let session: SessionRecord
+
+    var id: String { "\(project.path):\(session.stableID)" }
 }

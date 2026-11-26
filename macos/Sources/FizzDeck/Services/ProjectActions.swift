@@ -13,6 +13,27 @@ enum TestStatus: String, Sendable {
     case failed
 }
 
+enum ScriptRunStatus: String, Sendable {
+    case running
+    case succeeded
+    case failed
+    case stopped
+}
+
+struct ScriptRunState: Identifiable, Sendable {
+    let key: String
+    let projectPath: String
+    let script: ProjectScript
+    var status: ScriptRunStatus
+    var output: String
+    let startedAt: Date
+    var duration: TimeInterval?
+    var exitCode: Int32?
+    let logPath: String
+
+    var id: String { key }
+}
+
 struct TestRunState: Identifiable, Sendable {
     let path: String
     var status: TestStatus
@@ -31,6 +52,8 @@ struct TestRunState: Identifiable, Sendable {
 final class ProjectActions {
     var busy: [String: ProjectAction] = [:]
     var testRuns: [String: TestRunState] = [:]
+    var scriptRuns: [String: ScriptRunState] = [:]
+    var portConflicts: [String: PortConflict] = [:]
     var messages: [String: String] = [:]
     var testMessages: [String: String] = [:]
 
@@ -39,6 +62,9 @@ final class ProjectActions {
     @ObservationIgnored private var testProcesses: [String: Process] = [:]
     @ObservationIgnored private var testLogs: [String: FileHandle] = [:]
     @ObservationIgnored private var cancelledTestPaths: Set<String> = []
+    @ObservationIgnored private var scriptProcesses: [String: Process] = [:]
+    @ObservationIgnored private var scriptLogs: [String: FileHandle] = [:]
+    @ObservationIgnored private var cancelledScriptKeys: Set<String> = []
 
     func isBusy(_ path: String) -> Bool {
         busy[path] != nil
@@ -54,6 +80,18 @@ final class ProjectActions {
 
     func testRun(for path: String) -> TestRunState? {
         testRuns[path]
+    }
+
+    func portConflict(for path: String) -> PortConflict? {
+        portConflicts[path]
+    }
+
+    func scriptKey(for project: RepoProject, script: ProjectScript) -> String {
+        "\(project.path)|\(script.id)"
+    }
+
+    func scriptRun(for project: RepoProject, script: ProjectScript) -> ScriptRunState? {
+        scriptRuns[scriptKey(for: project, script: script)]
     }
 
     func logPath(for project: RepoProject, prefix: String = "") -> String {
@@ -78,11 +116,18 @@ final class ProjectActions {
         }
 
         if PortProbe.isOpen(run.port) {
-            store.setPort(.running, for: project.path)
-            messages[project.path] = "端口 \(run.port) 已在运行"
+            let conflict = await PortConflictService.inspect(port: run.port)
+            portConflicts[project.path] = conflict ?? PortConflict(
+                port: run.port,
+                occupants: [],
+                note: "端口已有监听进程"
+            )
+            store.setPort(.stopped, for: project.path)
+            messages[project.path] = "端口 \(run.port) 被占用：\(conflict?.occupantSummary ?? "占用进程未知")"
             return
         }
 
+        portConflicts[project.path] = nil
         messages[project.path] = nil
         busy[project.path] = .launching
         defer { busy[project.path] = nil }
@@ -189,9 +234,35 @@ final class ProjectActions {
             store.setPort(.running, for: project.path)
             messages[project.path] = "已发送停止信号（PID \(pids.map(String.init).joined(separator: ", "))），端口 \(port) 仍在监听"
         } else {
+            portConflicts[project.path] = nil
             store.setPort(.stopped, for: project.path)
             messages[project.path] = "已停止端口 \(port)"
         }
+    }
+
+    func resolvePortConflictAndLaunch(
+        _ project: RepoProject,
+        conflict: PortConflict,
+        store: RepositoryStore
+    ) async {
+        guard !isBusy(project.path) else { return }
+        guard isManaged(project, in: store) else {
+            messages[project.path] = "不在受管项目内，拒绝结束占用进程"
+            return
+        }
+
+        busy[project.path] = .launching
+        let result = await PortConflictService.terminateConfirmed(conflict)
+        if result.succeeded {
+            portConflicts[project.path] = nil
+        } else if let refreshed = await PortConflictService.inspect(port: conflict.port) {
+            portConflicts[project.path] = refreshed
+        }
+        messages[project.path] = result.message
+        busy[project.path] = nil
+
+        guard result.succeeded else { return }
+        await launch(project, store: store)
     }
 
     func runTests(_ project: RepoProject, store: RepositoryStore) {
@@ -273,6 +344,102 @@ final class ProjectActions {
         testProcesses[project.path]?.interrupt()
     }
 
+    func runScript(_ script: ProjectScript, project: RepoProject, store: RepositoryStore) {
+        guard isManaged(project, in: store) else {
+            messages[project.path] = "不在受管项目内，拒绝执行脚本"
+            return
+        }
+
+        let key = scriptKey(for: project, script: script)
+        guard scriptRuns[key]?.status != .running else { return }
+        cancelledScriptKeys.remove(key)
+
+        let logURL = scriptLogURL(for: project, script: script)
+        let header = "\n--- \(Date().ISO8601Format()) \(script.command)\n"
+        guard let log = openLog(logURL, header: header) else {
+            messages[project.path] = "无法写入脚本日志"
+            return
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-lc", script.command]
+        process.currentDirectoryURL = URL(fileURLWithPath: project.path)
+        var environment = shellEnvironment
+        environment["NO_COLOR"] = "1"
+        environment["TERM"] = "dumb"
+        process.environment = environment
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+
+        scriptRuns[key] = ScriptRunState(
+            key: key,
+            projectPath: project.path,
+            script: script,
+            status: .running,
+            output: "",
+            startedAt: Date(),
+            duration: nil,
+            exitCode: nil,
+            logPath: logURL.path
+        )
+        scriptProcesses[key] = process
+        scriptLogs[key] = log
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            let text = String(decoding: data, as: UTF8.self)
+            Task { @MainActor [weak self] in
+                self?.appendScriptOutput(key, text: text)
+            }
+        }
+        process.terminationHandler = { [weak self] finished in
+            Task { @MainActor [weak self] in
+                self?.finishScript(key, exitCode: finished.terminationStatus)
+            }
+        }
+
+        do {
+            try process.run()
+        } catch {
+            scriptProcesses[key] = nil
+            scriptLogs[key] = nil
+            pipe.fileHandleForReading.readabilityHandler = nil
+            process.terminationHandler = nil
+            try? log.close()
+            if var state = scriptRuns[key] {
+                state.status = .failed
+                state.output = error.localizedDescription
+                state.duration = Date().timeIntervalSince(state.startedAt)
+                scriptRuns[key] = state
+            }
+            messages[project.path] = "脚本启动失败：\(error.localizedDescription)"
+            return
+        }
+    }
+
+    func stopScript(_ script: ProjectScript, project: RepoProject) {
+        let key = scriptKey(for: project, script: script)
+        guard scriptProcesses[key]?.isRunning == true else { return }
+        cancelledScriptKeys.insert(key)
+        scriptProcesses[key]?.terminate()
+    }
+
+    func openScriptLog(_ script: ProjectScript, project: RepoProject) {
+        let path = scriptLogPath(for: project, script: script)
+        guard FileTools.exists(path) else {
+            messages[project.path] = "还没有脚本日志"
+            return
+        }
+        SystemActions.open(path)
+    }
+
+    func scriptLogPath(for project: RepoProject, script: ProjectScript) -> String {
+        scriptLogURL(for: project, script: script).path
+    }
+
     func openLog(for project: RepoProject, test: Bool = false) {
         let path = logPath(for: project, prefix: test ? "test-" : "")
         if test {
@@ -336,6 +503,15 @@ final class ProjectActions {
         }
     }
 
+    private func scriptLogURL(for project: RepoProject, script: ProjectScript) -> URL {
+        let projectSlug = URL(fileURLWithPath: project.path).lastPathComponent
+        let scriptSlug = script.id.map { character -> Character in
+            character.isLetter || character.isNumber ? character : "-"
+        }
+        return AppPaths.logsDir
+            .appendingPathComponent("script-\(projectSlug)-\(String(scriptSlug)).log")
+    }
+
     private func listeningPIDs(_ port: Int) async -> [Int32] {
         let result = await Shell.run(
             "lsof",
@@ -373,6 +549,29 @@ final class ProjectActions {
         testRuns[path] = state
         if let log = testLogs[path] {
             try? log.write(contentsOf: Data(text.utf8))
+        }
+    }
+
+    private func appendScriptOutput(_ key: String, text: String) {
+        guard var state = scriptRuns[key] else { return }
+        state.output = String((state.output + text).suffix(16_000))
+        scriptRuns[key] = state
+        if let log = scriptLogs[key] {
+            try? log.write(contentsOf: Data(text.utf8))
+        }
+    }
+
+    private func finishScript(_ key: String, exitCode: Int32) {
+        guard var state = scriptRuns[key] else { return }
+        let wasStopped = cancelledScriptKeys.remove(key) != nil
+        state.status = wasStopped ? .stopped : (exitCode == 0 ? .succeeded : .failed)
+        state.exitCode = exitCode
+        state.duration = Date().timeIntervalSince(state.startedAt)
+        scriptRuns[key] = state
+        scriptProcesses[key] = nil
+        if let log = scriptLogs[key] {
+            try? log.close()
+            scriptLogs[key] = nil
         }
     }
 
