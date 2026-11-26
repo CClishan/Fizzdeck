@@ -3,43 +3,58 @@ import SwiftUI
 struct ContentView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @AppStorage(SidebarLayout.collapsedKey) private var sidebarCollapsed = false
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView()
-                .navigationSplitViewColumnWidth(228)
-                .navigationTitle("FizzDeck")
-        } detail: {
-            ZStack {
-                FizzBackground()
+        Group {
+            if store.isFirstRunPresented {
+                FirstRunScanView()
+            } else {
+                ZStack {
+                    FizzBackground()
 
-                Group {
-                    if let filter = store.selectedHomeFilter {
-                        HomeDashboardView(filter: filter)
-                    } else if let project = store.selectedProject {
-                        ProjectDetailView(project: project)
-                    } else {
-                        WelcomeView()
+                    HStack(spacing: 0) {
+                        SidebarView(collapsed: sidebarCollapsed)
+                            .frame(
+                                width: sidebarCollapsed
+                                    ? SidebarLayout.collapsedWidth
+                                    : SidebarLayout.expandedWidth
+                            )
+                            .padding(.leading, SidebarLayout.outerInset)
+                            .padding(.vertical, SidebarLayout.outerInset)
+
+                        detail
                     }
+                    .animation(
+                        FizzMotion.resolved(reduceMotion, FizzMotion.standard),
+                        value: sidebarCollapsed
+                    )
                 }
-                .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationSplitViewStyle(.balanced)
         .toolbar(removing: .title)
         .toolbar(removing: .sidebarToggle)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
+                if !store.isFirstRunPresented {
+                    Button {
+                        sidebarCollapsed.toggle()
+                    } label: {
+                        FizzIcon(symbol: "sidebar.left", size: 13)
+                    }
+                    .help(sidebarCollapsed ? "展开侧栏" : "折叠侧栏")
+                    .accessibilityLabel(sidebarCollapsed ? "展开侧栏" : "折叠侧栏")
+                }
+
                 if let project = store.selectedProject {
                     Button {
                         store.selectedPath = RepositoryStore.homeSelection
                     } label: {
-                        FizzIcon(symbol: "xmark", size: 13)
+                        FizzIcon(symbol: "chevron.left", size: 13)
                     }
-                    .help("退出项目")
-                    .accessibilityLabel("退出项目")
+                    .help("返回总览")
+                    .accessibilityLabel("返回总览")
 
                     Button {
                         Task { await store.rescanProjects([project]) }
@@ -116,6 +131,19 @@ struct ContentView: View {
         )
     }
 
+    private var detail: some View {
+        Group {
+            if let filter = store.selectedHomeFilter {
+                HomeDashboardView(filter: filter)
+            } else if let project = store.selectedProject {
+                ProjectDetailView(project: project)
+            } else {
+                WelcomeView()
+            }
+        }
+        .frame(minWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private func openPendingProject() {
         guard let request = AppRouting.consumePendingProject() else { return }
         store.selectedPath = request.path
@@ -136,7 +164,8 @@ private struct WelcomeView: View {
             Button("添加项目目录") {
                 Task { await store.addRoot() }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
+            .tint(FizzTheme.accent)
         }
     }
 }

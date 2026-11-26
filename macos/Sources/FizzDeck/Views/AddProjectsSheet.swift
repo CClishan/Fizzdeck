@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AddProjectsSheet: View {
     @Environment(RepositoryStore.self) private var store
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("fizzdeck.scanDepth") private var depth = 3
 
     @State private var folder: URL?
@@ -31,28 +32,47 @@ struct AddProjectsSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.14)
+            Color.black.opacity(colorScheme == .dark ? 0.55 : 0.32)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture(perform: close)
 
             GlassEffectContainer(spacing: 16) {
-                HStack(spacing: 0) {
-                    folderPane
-                        .frame(width: 302)
+                VStack(spacing: 0) {
+                    sheetHeader
 
                     Divider()
 
-                    scanPane
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    HStack(spacing: 0) {
+                        folderPane
+                            .frame(width: 302)
+
+                        Divider()
+
+                        scanPane
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
                 .frame(width: 856, height: 576)
-                .glassEffect(
-                    .regular.tint(.white.opacity(0.22)),
-                    in: .rect(cornerRadius: 28, style: .continuous)
+                .background(
+                    FizzTheme.elevatedFill.opacity(colorScheme == .dark ? 0.97 : 0.94),
+                    in: .rect(cornerRadius: FizzRadius.frame, style: .continuous)
                 )
-                .clipShape(.rect(cornerRadius: 28, style: .continuous))
-                .shadow(color: .black.opacity(0.2), radius: 36, y: 18)
+                .glassEffect(
+                    .regular.tint(FizzTheme.elevatedFill.opacity(colorScheme == .dark ? 0.18 : 0.14)),
+                    in: .rect(cornerRadius: FizzRadius.frame, style: .continuous)
+                )
+                .clipShape(.rect(cornerRadius: FizzRadius.frame, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: FizzRadius.frame, style: .continuous)
+                        .strokeBorder(
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.12)
+                                : FizzTheme.stroke,
+                            lineWidth: 1
+                        )
+                }
+                .fizzAdaptiveShadow(.floating)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -70,20 +90,35 @@ struct AddProjectsSheet: View {
         }
     }
 
+    private var sheetHeader: some View {
+        HStack(spacing: 9) {
+            FizzLogo(size: 18)
+
+            Text("添加项目")
+                .font(.system(size: 13, weight: .semibold))
+
+            Spacer(minLength: 0)
+
+            Button(action: close) {
+                FizzIcon(symbol: "xmark", size: 11)
+                    .frame(width: 24, height: 24)
+                    .background(FizzTheme.mutedFill, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .help("关闭")
+            .accessibilityLabel("关闭")
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 44)
+    }
+
     private var folderPane: some View {
         VStack(spacing: 0) {
             HStack {
                 Text("文件夹")
                     .font(.system(size: 17, weight: .semibold))
 
-                Spacer()
-
-                Button(action: close) {
-                    FizzIcon(symbol: "xmark", size: 11)
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("关闭")
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 16)
             .frame(height: 56)
@@ -215,11 +250,11 @@ struct AddProjectsSheet: View {
             .padding(.vertical, 7)
             .background {
                 if selectedRoot {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
                         .fill(FizzTheme.selectedFill)
                 }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("打开 \(displayName(for: path))")
@@ -243,6 +278,8 @@ struct AddProjectsSheet: View {
             } actions: {
                 Button("添加文件夹…", action: chooseFolder)
                     .buttonStyle(.glassProminent)
+                    .tint(FizzTheme.accent)
+                    .buttonBorderShape(.capsule)
                     .disabled(isAdding)
             }
         }
@@ -308,6 +345,7 @@ struct AddProjectsSheet: View {
                 Button("只添加当前文件夹") {
                     Task { await add(paths: [folder.path]) }
                 }
+                .buttonStyle(.glass)
                 .disabled(isAdding)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -338,8 +376,14 @@ struct AddProjectsSheet: View {
                     Text(candidate.name)
                         .font(.system(size: 12.5, weight: .semibold))
 
+                    TagChip(text: candidate.kind.title, tint: candidate.kind.color, compact: true)
+
                     if candidate.hasGit {
                         TagChip(text: "git", tint: .green, compact: true)
+                    }
+
+                    ForEach(candidate.tools.prefix(3)) { tool in
+                        TagChip(text: tool.shortTitle, tint: tool.tint, compact: true)
                     }
                 }
 
@@ -429,6 +473,7 @@ struct AddProjectsSheet: View {
                 }
             }
             .buttonStyle(.glassProminent)
+            .tint(FizzTheme.accent)
             .keyboardShortcut(.defaultAction)
             .disabled(selected.isEmpty || isLoading || isAdding)
         }
@@ -487,7 +532,12 @@ struct AddProjectsSheet: View {
         isLoading = true
         let requestedDepth = depth
         let found = await Task.detached(priority: .userInitiated) {
-            ProjectDiscovery.discover(in: currentFolder, maxDepth: requestedDepth)
+            let evidence = ToolEvidenceIndex.build()
+            return ProjectDiscovery.discover(
+                in: currentFolder,
+                maxDepth: requestedDepth,
+                evidenceIndex: evidence
+            )
         }.value
         guard !Task.isCancelled,
               folder?.path == currentFolder.path,

@@ -150,7 +150,7 @@ struct GitTabView: View {
             .padding(3)
             .glassEffect(.regular.interactive(), in: Capsule())
         }
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
+        .fizzAdaptiveShadow(.subtle)
     }
 
     private func perform(_ action: GitSyncAction) async {
@@ -203,7 +203,7 @@ struct GitTabView: View {
                                 .foregroundStyle(codeColor(file.code))
                                 .frame(width: 24)
                                 .padding(.vertical, 2)
-                                .background(codeColor(file.code).opacity(0.11), in: RoundedRectangle(cornerRadius: 4))
+                                .background(codeColor(file.code).opacity(0.11), in: RoundedRectangle(cornerRadius: FizzRadius.micro))
                             Text(file.path)
                                 .font(.system(size: 11, design: .monospaced))
                                 .lineLimit(1)

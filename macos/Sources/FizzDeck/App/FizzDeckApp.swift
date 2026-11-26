@@ -5,6 +5,8 @@ import UserNotifications
 @main
 struct FizzDeckApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @AppStorage(AppearancePreferences.key) private var appearance: AppAppearance = .system
+    @AppStorage(SidebarLayout.collapsedKey) private var sidebarCollapsed = false
     @State private var store = RepositoryStore()
     @State private var actions = ProjectActions()
 
@@ -13,7 +15,7 @@ struct FizzDeckApp: App {
             ContentView()
                 .environment(store)
                 .environment(actions)
-                .preferredColorScheme(.light)
+                .preferredColorScheme(appearance.colorScheme)
                 .frame(minWidth: 1000, minHeight: 660)
                 .background(WindowFrameGuard())
                 .task {
@@ -22,7 +24,13 @@ struct FizzDeckApp: App {
         }
         .defaultSize(width: 1320, height: 860)
         .commands {
-            SidebarCommands()
+            CommandGroup(replacing: .sidebar) {
+                Button(sidebarCollapsed ? "显示侧栏" : "隐藏侧栏") {
+                    sidebarCollapsed.toggle()
+                }
+                .keyboardShortcut("s", modifiers: [.command, .control])
+            }
+
             CommandGroup(after: .newItem) {
                 Button(store.isCommandPalettePresented ? "关闭快速打开" : "快速打开…") {
                     store.toggleCommandPalette()
@@ -39,7 +47,7 @@ struct FizzDeckApp: App {
                     Task { await store.scan() }
                 }
                 .keyboardShortcut("r", modifiers: [.command])
-                Button("在 Terminal 中打开") {
+                Button("在终端中打开") {
                     if let project = store.selectedProject {
                         SystemActions.openTerminal(project.path)
                     }
@@ -65,11 +73,10 @@ struct FizzDeckApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.appearance = NSAppearance(named: .aqua)
+        AppearancePreferences.applyStoredAppearance()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         UNUserNotificationCenter.current().delegate = self
-        Task { await LocalNotifications.requestAuthorization() }
     }
 
     func userNotificationCenter(
@@ -86,8 +93,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
+        let request = AppRouting.projectRequest(from: userInfo)
         Task { @MainActor in
-            if let request = AppRouting.projectRequest(from: userInfo) {
+            if let request {
                 AppRouting.openProject(path: request.path, tab: request.tab)
             } else {
                 AppRouting.presentMainWindow()

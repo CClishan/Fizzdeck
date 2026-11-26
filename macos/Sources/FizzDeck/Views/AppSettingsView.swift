@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct AppSettingsView: View {
+    @AppStorage(AppearancePreferences.key) private var appearance: AppAppearance = .system
     @State private var page: SettingsPage = .general
 
     var body: some View {
@@ -36,7 +37,7 @@ struct AppSettingsView: View {
             .background(FizzTheme.page)
         }
         .frame(width: 720, height: 500)
-        .preferredColorScheme(.light)
+        .preferredColorScheme(appearance.colorScheme)
     }
 }
 
@@ -84,11 +85,11 @@ private struct SettingsNavigationRow: View {
             .frame(height: 32)
             .background {
                 if selected || hovering {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
                         .fill(FizzTheme.selectedFill.opacity(hovering && !selected ? 0.55 : 1))
                 }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -97,14 +98,37 @@ private struct SettingsNavigationRow: View {
 }
 
 private struct GeneralSettingsPage: View {
+    @AppStorage(AppearancePreferences.key) private var appearance: AppAppearance = .system
     @State private var loginState = LoginItemService.state
     @State private var loginError: String?
     @State private var notificationPermission: NotificationPermission = .unknown
     @State private var fullDiskAccess = SystemPermissionService.hasFullDiskAccess
+    @State private var preferredTerminal: PreferredTerminal = .terminal
+    @State private var availableTerminals: [PreferredTerminal] = [.terminal]
+    @State private var codexTarget: ResumeTarget = .auto
+    @State private var automationPermission: AutomationPermissionState = .unknown
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                SettingsCard {
+                    SettingsPickerRow(
+                        symbol: "circle.lefthalf.filled",
+                        title: "外观",
+                        detail: "跟随系统，或固定浅色 / 低饱和炭黑暗色。"
+                    ) {
+                        Picker("", selection: appearanceBinding) {
+                            ForEach(AppAppearance.allCases) { item in
+                                Text(item.title).tag(item)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .fixedSize()
+                    }
+                }
+
                 SettingsCard {
                     HStack(spacing: 12) {
                         SettingsIcon(symbol: "power")
@@ -166,6 +190,57 @@ private struct GeneralSettingsPage: View {
                     }
                 }
 
+                SettingsCard {
+                    SettingsPickerRow(
+                        symbol: "terminal",
+                        title: "默认终端",
+                        detail: "打开项目目录和继续会话时使用，只显示已安装项。"
+                    ) {
+                        Picker("", selection: terminalBinding) {
+                            ForEach(availableTerminals) { terminal in
+                                Text(terminal.title).tag(terminal)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .fixedSize()
+                    }
+
+                    Divider()
+                        .padding(.leading, 34)
+
+                    SettingsPickerRow(
+                        symbol: "arrow.uturn.backward",
+                        title: "Codex 默认继续方式",
+                        detail: "自动会优先 CLI；也可固定使用 CLI 或 Codex Desktop。"
+                    ) {
+                        Picker("", selection: codexTargetBinding) {
+                            ForEach(ResumeTarget.allCases) { target in
+                                Text(target.title).tag(target)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .fixedSize()
+                    }
+
+                    Divider()
+                        .padding(.leading, 34)
+
+                    SettingsPermissionRow(
+                        symbol: "hand.raised",
+                        title: "自动化权限",
+                        detail: automationDetail,
+                        status: automationStatusText,
+                        statusColor: automationStatusColor,
+                        actionTitle: preferredTerminal == .warp ? nil : "打开设置"
+                    ) {
+                        SystemPermissionService.openAutomationSettings()
+                    }
+                }
+
                 Spacer(minLength: 0)
             }
             .padding(28)
@@ -194,6 +269,37 @@ private struct GeneralSettingsPage: View {
                     loginState = LoginItemService.state
                     loginError = error.localizedDescription
                 }
+            }
+        )
+    }
+
+    private var appearanceBinding: Binding<AppAppearance> {
+        Binding(
+            get: { appearance },
+            set: { value in
+                appearance = value
+                AppearancePreferences.apply(value)
+            }
+        )
+    }
+
+    private var terminalBinding: Binding<PreferredTerminal> {
+        Binding(
+            get: { preferredTerminal },
+            set: { terminal in
+                preferredTerminal = terminal
+                TerminalPreferences.setPreferredTerminal(terminal)
+                automationPermission = AutomationPermissionStore.state(for: terminal)
+            }
+        )
+    }
+
+    private var codexTargetBinding: Binding<ResumeTarget> {
+        Binding(
+            get: { codexTarget },
+            set: { target in
+                codexTarget = target
+                SessionResumePreferences.setCodexTarget(target)
             }
         )
     }
@@ -252,6 +358,30 @@ private struct GeneralSettingsPage: View {
         }
     }
 
+    private var automationDetail: String {
+        preferredTerminal == .warp
+            ? "Warp 通过 URL 打开目录，不需要自动化权限。"
+            : "用于定位终端标签页和自动恢复会话；仅在需要时由 macOS 询问。"
+    }
+
+    private var automationStatusText: String {
+        if preferredTerminal == .warp { return "无需授权" }
+        switch automationPermission {
+        case .granted: return "已允许"
+        case .denied: return "上次被拒"
+        case .unknown: return "按需授权"
+        }
+    }
+
+    private var automationStatusColor: Color {
+        if preferredTerminal == .warp { return .secondary }
+        switch automationPermission {
+        case .granted: return .green
+        case .denied: return .orange
+        case .unknown: return .secondary
+        }
+    }
+
     private func handleNotificationAction() {
         if notificationPermission == .notDetermined {
             Task {
@@ -267,6 +397,13 @@ private struct GeneralSettingsPage: View {
         loginState = LoginItemService.state
         notificationPermission = await SystemPermissionService.notificationPermission()
         fullDiskAccess = SystemPermissionService.hasFullDiskAccess
+        availableTerminals = TerminalLauncher.installedTerminals()
+        if availableTerminals.isEmpty {
+            availableTerminals = [.terminal]
+        }
+        preferredTerminal = TerminalLauncher.effectiveTerminal()
+        codexTarget = SessionResumePreferences.codexTarget()
+        automationPermission = AutomationPermissionStore.state(for: preferredTerminal)
     }
 }
 
@@ -307,6 +444,7 @@ private struct AboutSettingsPage: View {
                             Button("前往下载") {
                                 openURL(release.pageURL)
                             }
+                            .buttonStyle(.glass)
                         }
 
                         Button {
@@ -320,7 +458,7 @@ private struct AboutSettingsPage: View {
                                 Text(isChecking ? "检查中…" : "立即检查")
                             }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.glassProminent)
                         .tint(FizzTheme.accent)
                         .disabled(isChecking)
                     }
@@ -420,7 +558,7 @@ private struct SettingsCard<Content: View>: View {
             content
         }
         .padding(16)
-        .fizzCard(radius: 14)
+        .fizzCard(radius: FizzRadius.card)
     }
 }
 
@@ -465,6 +603,43 @@ private struct SettingsPermissionRow: View {
                 Button(actionTitle, action: action)
                     .controlSize(.small)
             }
+        }
+    }
+}
+
+private struct SettingsPickerRow<Content: View>: View {
+    let symbol: String
+    let title: String
+    let detail: String
+    @ViewBuilder let picker: Content
+
+    init(
+        symbol: String,
+        title: String,
+        detail: String,
+        @ViewBuilder picker: () -> Content
+    ) {
+        self.symbol = symbol
+        self.title = title
+        self.detail = detail
+        self.picker = picker()
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SettingsIcon(symbol: symbol)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                Text(detail)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 12)
+
+            picker
         }
     }
 }

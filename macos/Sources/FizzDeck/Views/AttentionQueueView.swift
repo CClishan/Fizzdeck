@@ -143,7 +143,7 @@ struct AttentionQueueView: View {
                     }
                 }
             }
-            .fizzCard(radius: 16)
+        .fizzCard(radius: FizzRadius.panel)
             .alert(item: $pendingGitAction) { pending in
                 Alert(
                     title: Text("\(pending.action.title) \(pending.item.project.displayName)？"),
@@ -189,7 +189,9 @@ struct AttentionQueueView: View {
                 .font(.system(size: 10.5, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
         .fixedSize()
         .help("\(suppressedItems.count) 项已静默")
     }
@@ -355,7 +357,7 @@ private struct AttentionRow: View {
         .padding(.vertical, 7)
         .background {
             if hovering {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
                     .fill(FizzTheme.mutedFill.opacity(0.8))
                     .padding(.horizontal, 5)
             }

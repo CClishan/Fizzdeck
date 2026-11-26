@@ -5,27 +5,25 @@ struct CleanupTabView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                GlassEffectContainer(spacing: 12) {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 180, maximum: 280), spacing: 12)],
-                        spacing: 12
-                    ) {
-                        GlassStatCard(
-                            title: "可回收",
-                            value: Format.bytes(project.cleanup.reusableBytes),
-                            detail: "只复制命令，不执行删除",
-                            symbol: "trash.slash",
-                            tint: .orange
-                        )
-                        GlassStatCard(
-                            title: "命中目录",
-                            value: "\(project.cleanup.items.count)",
-                            detail: "依赖、缓存、构建产物、归档",
-                            symbol: "folder.badge.minus",
-                            tint: .red
-                        )
-                    }
+            VStack(alignment: .leading, spacing: FizzSpacing.section) {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 180, maximum: 280), spacing: FizzSpacing.grid)],
+                    spacing: FizzSpacing.grid
+                ) {
+                    GlassStatCard(
+                        title: "可回收",
+                        value: project.sizeLoadState == .ready ? Format.bytes(project.cleanup.reusableBytes) : "统计中…",
+                        detail: "只复制命令，不执行删除",
+                        symbol: "trash.slash",
+                        tint: .orange
+                    )
+                    GlassStatCard(
+                        title: "命中目录",
+                        value: "\(project.cleanup.items.count)",
+                        detail: "依赖、缓存、构建产物、归档",
+                        symbol: "folder.badge.minus",
+                        tint: .red
+                    )
                 }
 
                 if project.cleanup.items.isEmpty {
@@ -59,7 +57,7 @@ struct CleanupTabView: View {
                     }
                 }
             }
-            .padding(24)
+            .padding(FizzSpacing.page)
         }
     }
 
@@ -95,7 +93,7 @@ struct CleanupTabView: View {
             } label: {
                 FizzIcon(symbol: "doc.on.doc", size: 12)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.glass)
             .controlSize(.small)
             .help("复制删除命令")
             .accessibilityLabel("复制删除命令")

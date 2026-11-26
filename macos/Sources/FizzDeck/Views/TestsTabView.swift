@@ -36,9 +36,9 @@ struct TestsTabView: View {
                                         .padding(12)
                                 }
                                 .frame(minHeight: 220, maxHeight: 460)
-                                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous))
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
                                         .strokeBorder(.separator.opacity(0.4), lineWidth: 1)
                                 }
                             } else {
