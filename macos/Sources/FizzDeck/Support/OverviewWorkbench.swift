@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 struct WorkbenchDay: Equatable, Sendable {
@@ -151,5 +152,45 @@ enum LogTailReader {
             return text
         }
         return String(decoding: bytes, as: UTF8.self)
+    }
+}
+
+enum OverviewSummaryLayout: Equatable, Sendable {
+    case threeColumns
+    case twoPlusBottom
+    case twoColumns
+    case stacked
+}
+
+enum OverviewLayoutPolicy {
+    static let threeColumnMinWidth: CGFloat = 760
+    static let twoColumnMinWidth: CGFloat = 520
+    static let sideBySideMinWidth: CGFloat = 780
+
+    static func summaryLayout(width: CGFloat, hasArtwork: Bool) -> OverviewSummaryLayout {
+        if hasArtwork {
+            if width >= threeColumnMinWidth { return .threeColumns }
+            if width >= twoColumnMinWidth { return .twoPlusBottom }
+            return .stacked
+        }
+        return width >= twoColumnMinWidth ? .twoColumns : .stacked
+    }
+
+    static func showsLogsAndActivitySideBySide(
+        width: CGFloat,
+        hasLogs: Bool,
+        hasActivity: Bool
+    ) -> Bool {
+        hasLogs && hasActivity && width >= sideBySideMinWidth
+    }
+
+    static func splitWidths(
+        totalWidth: CGFloat,
+        spacing: CGFloat,
+        leadingRatio: CGFloat = 0.58
+    ) -> (leading: CGFloat, trailing: CGFloat) {
+        let available = max(0, totalWidth - spacing)
+        let leading = (available * leadingRatio).rounded(.down)
+        return (leading, max(0, available - leading))
     }
 }

@@ -27,12 +27,17 @@ struct ServicesPanel: View {
 
     var body: some View {
         Panel(title: "服务", symbol: "bolt.horizontal") {
-            VStack(spacing: 8) {
-                if let run = project.run {
-                    devRow(run)
-                }
-                if let test = project.test {
-                    testRow(test)
+            VStack(alignment: .leading, spacing: 8) {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 220, maximum: 340), spacing: FizzSpacing.grid)],
+                    spacing: FizzSpacing.grid
+                ) {
+                    if let run = project.run {
+                        devCard(run)
+                    }
+                    if let test = project.test {
+                        testCard(test)
+                    }
                 }
                 feedback
             }
@@ -43,49 +48,55 @@ struct ServicesPanel: View {
         }
     }
 
-    private func devRow(_ run: RunConfig) -> some View {
-        HStack(spacing: 10) {
-            statusDot(active: devRunning, busy: busy)
+    private func devCard(_ run: RunConfig) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                statusDot(active: devRunning, busy: busy)
 
-            VStack(alignment: .leading, spacing: 2) {
                 Text("dev")
                     .font(.system(size: 13, weight: .semibold))
-                Text(run.command)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 4)
 
-            if run.port > 0 {
-                Text(verbatim: ":\(run.port)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-
-            if devRunning {
                 if run.port > 0 {
-                    serviceButton("预览", help: "在浏览器打开 localhost:\(run.port)") {
-                        SystemActions.openURL("http://127.0.0.1:\(run.port)")
-                    }
+                    Text(verbatim: ":\(run.port)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
+            }
 
-                serviceButton("停止", help: "停止开发服务") {
-                    Task { await actions.stop(project, store: store) }
+            Text(run.command)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(run.command)
+
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+
+                if devRunning {
+                    if run.port > 0 {
+                        serviceButton("预览", help: "在浏览器打开 localhost:\(run.port)") {
+                            SystemActions.openURL("http://127.0.0.1:\(run.port)")
+                        }
+                    }
+
+                    serviceButton("停止", help: "停止开发服务") {
+                        Task { await actions.stop(project, store: store) }
+                    }
+                    .disabled(busy)
+                } else {
+                    serviceButton("启动", help: "启动开发服务") {
+                        Task { await actions.launch(project, store: store) }
+                    }
+                    .disabled(busy)
                 }
-                .disabled(busy)
-            } else {
-                serviceButton("启动", help: "启动开发服务") {
-                    Task { await actions.launch(project, store: store) }
-                }
-                .disabled(busy)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             devRunning ? FizzTheme.selectedFill : FizzTheme.recessedFill,
             in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
@@ -96,40 +107,46 @@ struct ServicesPanel: View {
         }
     }
 
-    private func testRow(_ test: TestCommand) -> some View {
-        HStack(spacing: 10) {
-            statusDot(active: testRunning, busy: false)
+    private func testCard(_ test: TestCommand) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                statusDot(active: testRunning, busy: false)
 
-            VStack(alignment: .leading, spacing: 2) {
                 Text(test.label)
                     .font(.system(size: 13, weight: .semibold))
-                Text(test.command)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 4)
 
-            if let testRun, let text = testStatusText(testRun) {
-                Text(text)
-                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(testStatusColor(testRun.status))
-            }
-
-            if testRunning {
-                serviceButton("停止", help: "停止测试运行") {
-                    actions.stopTests(project)
+                if let testRun, let text = testStatusText(testRun) {
+                    Text(text)
+                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(testStatusColor(testRun.status))
                 }
-            } else {
-                serviceButton("运行", help: "运行测试命令") {
-                    actions.runTests(project, store: store)
+            }
+
+            Text(test.command)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(test.command)
+
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+
+                if testRunning {
+                    serviceButton("停止", help: "停止测试运行") {
+                        actions.stopTests(project)
+                    }
+                } else {
+                    serviceButton("运行", help: "运行测试命令") {
+                        actions.runTests(project, store: store)
+                    }
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             testRunning ? FizzTheme.selectedFill : FizzTheme.recessedFill,
             in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)

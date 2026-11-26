@@ -40,14 +40,18 @@ struct ProjectDetailView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.top, 8)
+            .contentMargins(.bottom, 76, for: .scrollContent)
             .scrollEdgeEffectHidden(true, for: .bottom)
             .overlay(alignment: .bottom) {
-                if showsActionDock {
-                    ProjectActionDock(project: project, tab: tab)
-                        .padding(.horizontal, FizzSpacing.page)
-                        .padding(.bottom, 16)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                HStack(spacing: 10) {
+                    if showsActionDock {
+                        ProjectActionDock(project: project, tab: tab)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    SessionContinueButton(project: project, style: .dock)
                 }
+                .padding(.horizontal, FizzSpacing.page)
+                .padding(.bottom, 16)
             }
             .animation(
                 FizzMotion.resolved(reduceMotion, FizzMotion.panel),
@@ -79,15 +83,12 @@ struct ProjectDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                GlassEffectContainer(spacing: 2) {
-                    HStack(spacing: 2) {
-                        ForEach(ProjectTab.allCases) { item in
-                            projectTabButton(item)
-                        }
+                HStack(spacing: 2) {
+                    ForEach(ProjectTab.allCases) { item in
+                        projectTabButton(item)
                     }
-                    .padding(2)
-                    .glassEffect(.regular.interactive(), in: Capsule())
                 }
+                .padding(2)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("项目页签")
             }
@@ -214,11 +215,8 @@ private struct ProjectHero: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            VStack(alignment: .trailing, spacing: 8) {
-                ProjectHeroActions(project: project)
-                SessionContinueButton(project: project, style: .prominent)
-            }
-            .layoutPriority(1)
+            ProjectHeroActions(project: project)
+                .layoutPriority(1)
         }
         .padding(17)
         .fizzCard(radius: FizzRadius.panel)

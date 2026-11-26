@@ -4,6 +4,7 @@ struct SessionContinueButton: View {
     enum Style {
         case compact
         case prominent
+        case dock
     }
 
     let project: RepoProject
@@ -13,6 +14,8 @@ struct SessionContinueButton: View {
     @State private var feedback: SessionResumeResult?
     @State private var showFeedbackPopover = false
     @State private var ideEditors: [ProjectEditor] = []
+    @State private var hoveringPrimary = false
+    @State private var hoveringMenu = false
 
     private var resumableSessions: [SessionRecord] {
         var result: [SessionRecord] = []
@@ -50,13 +53,16 @@ struct SessionContinueButton: View {
     var body: some View {
         Group {
             if let primary = primarySession {
-                if style == .compact {
+                switch style {
+                case .compact:
                     compactControls(primary: primary)
                         .popover(isPresented: $showFeedbackPopover, arrowEdge: .bottom) {
                             feedbackPopoverContent
                         }
-                } else {
+                case .prominent:
                     prominentControls(primary: primary)
+                case .dock:
+                    dockControls(primary: primary)
                 }
             } else if !ideEditors.isEmpty {
                 ideOnlyControls
@@ -76,14 +82,17 @@ struct SessionContinueButton: View {
     @ViewBuilder
     private var ideOnlyControls: some View {
         if let editor = ideEditors.first {
-            if style == .compact {
+            switch style {
+            case .compact:
                 ideButton(editor: editor, height: 22, fontSize: 10.5)
                     .popover(isPresented: $showFeedbackPopover, arrowEdge: .bottom) {
                         feedbackPopoverContent
                     }
-            } else {
+            case .prominent:
                 ideButton(editor: editor, height: 32, fontSize: 12)
                     .fizzAdaptiveShadow(.raised)
+            case .dock:
+                dockIDEControls(editor: editor)
             }
         }
     }
@@ -192,41 +201,7 @@ struct SessionContinueButton: View {
     private func prominentControls(primary: SessionRecord) -> some View {
         VStack(alignment: .trailing, spacing: 6) {
             if let feedback, !feedback.success || feedback.needsAutomationPermission {
-                HStack(spacing: 8) {
-                    FizzIcon(symbol: "exclamationmark.triangle", size: 10)
-                        .foregroundStyle(.orange)
-
-                    Text(feedback.message)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-
-                    if let fallback = feedback.fallbackCommand {
-                        Button("复制命令") {
-                            SystemActions.copy(fallback)
-                        }
-                        .buttonStyle(.glass)
-                        .controlSize(.mini)
-                    }
-
-                    if feedback.needsAutomationPermission {
-                        Button("自动化设置") {
-                            SystemPermissionService.openAutomationSettings()
-                        }
-                        .buttonStyle(.glass)
-                        .controlSize(.mini)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    FizzTheme.elevatedFill,
-                    in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                        .strokeBorder(FizzTheme.stroke, lineWidth: 1)
-                }
+                feedbackBanner(feedback)
             }
 
             HStack(spacing: 0) {
@@ -279,6 +254,153 @@ struct SessionContinueButton: View {
             }
             .clipShape(Capsule())
             .fizzAdaptiveShadow(.raised)
+        }
+    }
+
+    private func dockControls(primary: SessionRecord) -> some View {
+        VStack(alignment: .center, spacing: 8) {
+            if let feedback, !feedback.success || feedback.needsAutomationPermission {
+                feedbackBanner(feedback)
+            }
+
+            GlassEffectContainer(spacing: 0) {
+                HStack(spacing: 0) {
+                    Button {
+                        Task { await trigger(session: primary, target: .auto) }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if running {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                FizzIcon(symbol: "play.fill", size: 10)
+                                    .foregroundStyle(FizzTheme.accent)
+                            }
+                            Text("继续 · \(toolTitle(primary.tool))")
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(.primary)
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 34)
+                        .background(hoveringPrimary ? FizzTheme.selectedFill : .clear, in: Capsule())
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(running)
+                    .onHover { hoveringPrimary = $0 }
+                    .help("继续最近 \(toolTitle(primary.tool)) 会话")
+                    .accessibilityLabel("继续 \(toolTitle(primary.tool)) 会话")
+                    .accessibilityHint("在终端恢复最近一次会话")
+
+                    if showsChevronMenu {
+                        dockDivider
+                        dockChevronMenu(help: "选择工具或打开方式", label: "选择要继续的工具或打开方式")
+                            .disabled(running)
+                    }
+                }
+                .padding(3)
+                .glassEffect(.regular.interactive(), in: Capsule())
+            }
+            .fizzAdaptiveShadow(.floating)
+        }
+    }
+
+    private func dockIDEControls(editor: ProjectEditor) -> some View {
+        GlassEffectContainer(spacing: 0) {
+            HStack(spacing: 0) {
+                Button {
+                    SystemActions.open(project.path, in: editor)
+                } label: {
+                    HStack(spacing: 6) {
+                        FizzIcon(symbol: "arrow.up.forward.app", size: 11)
+                            .foregroundStyle(FizzTheme.accent)
+                        Text("打开 \(editor.title)")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 34)
+                    .background(hoveringPrimary ? FizzTheme.selectedFill : .clear, in: Capsule())
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .onHover { hoveringPrimary = $0 }
+                .help("在 \(editor.title) 中打开项目")
+                .accessibilityLabel("在 \(editor.title) 中打开项目")
+                .accessibilityHint("用 \(editor.title) 打开当前项目目录")
+
+                if showsChevronMenu {
+                    dockDivider
+                    dockChevronMenu(help: "选择打开方式", label: "选择打开方式")
+                }
+            }
+            .padding(3)
+            .glassEffect(.regular.interactive(), in: Capsule())
+        }
+        .fizzAdaptiveShadow(.floating)
+    }
+
+    private var dockDivider: some View {
+        Rectangle()
+            .fill(FizzTheme.hairline)
+            .frame(width: 1, height: 16)
+            .padding(.horizontal, 2)
+    }
+
+    private func dockChevronMenu(help: String, label: String) -> some View {
+        Menu {
+            toolMenuItems
+        } label: {
+            FizzIcon(symbol: "chevron.down", size: 9)
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 34)
+                .background(hoveringMenu ? FizzTheme.selectedFill : .clear, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hoveringMenu = $0 }
+        .help(help)
+        .accessibilityLabel(label)
+    }
+
+    private func feedbackBanner(_ feedback: SessionResumeResult) -> some View {
+        HStack(spacing: 8) {
+            FizzIcon(symbol: "exclamationmark.triangle", size: 10)
+                .foregroundStyle(.orange)
+
+            Text(feedback.message)
+                .font(.system(size: 11))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+
+            if let fallback = feedback.fallbackCommand {
+                Button("复制命令") {
+                    SystemActions.copy(fallback)
+                }
+                .buttonStyle(.glass)
+                .controlSize(.mini)
+            }
+
+            if feedback.needsAutomationPermission {
+                Button("自动化设置") {
+                    SystemPermissionService.openAutomationSettings()
+                }
+                .buttonStyle(.glass)
+                .controlSize(.mini)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            FizzTheme.elevatedFill,
+            in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
+                .strokeBorder(FizzTheme.stroke, lineWidth: 1)
         }
     }
 

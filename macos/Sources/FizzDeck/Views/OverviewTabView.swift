@@ -9,6 +9,7 @@ struct OverviewTabView: View {
 
     @State private var devLogExists = false
     @State private var testLogExists = false
+    @State private var contentWidth: CGFloat = 960
 
     private var weekDays: [WorkbenchDay] {
         WorkbenchMetrics.lastSevenDays(counts: project.weekly)
@@ -67,19 +68,14 @@ struct OverviewTabView: View {
                     ServicesPanel(project: project)
                 }
 
-                if logsVisible {
-                    ProjectLogsPanel(
-                        project: project,
-                        devAvailable: devLogExists,
-                        testAvailable: testLogExists
-                    )
-                }
+                logsAndActivitySection
 
                 notePanel
-
-                if !activityEntries.isEmpty {
-                    activityPanel
-                }
+            }
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.width
+            } action: { newWidth in
+                contentWidth = newWidth
             }
             .padding(FizzSpacing.page)
         }
@@ -232,26 +228,109 @@ struct OverviewTabView: View {
         }
     }
 
+    @ViewBuilder
+    private var logsAndActivitySection: some View {
+        let hasActivity = !activityEntries.isEmpty
+        if OverviewLayoutPolicy.showsLogsAndActivitySideBySide(
+            width: contentWidth,
+            hasLogs: logsVisible,
+            hasActivity: hasActivity
+        ) {
+            let widths = OverviewLayoutPolicy.splitWidths(
+                totalWidth: contentWidth,
+                spacing: FizzSpacing.grid
+            )
+            HStack(alignment: .top, spacing: FizzSpacing.grid) {
+                ProjectLogsPanel(
+                    project: project,
+                    devAvailable: devLogExists,
+                    testAvailable: testLogExists
+                )
+                .frame(width: widths.leading)
+
+                activityPanel
+                    .frame(width: widths.trailing)
+            }
+        } else {
+            if logsVisible {
+                ProjectLogsPanel(
+                    project: project,
+                    devAvailable: devLogExists,
+                    testAvailable: testLogExists
+                )
+            }
+            if hasActivity {
+                activityPanel
+            }
+        }
+    }
+
     private var projectSummaryPanel: some View {
         Panel(title: "项目", symbol: "text.quote") {
-            HStack(alignment: .top, spacing: 24) {
-                VStack(alignment: .leading, spacing: 12) {
+            switch OverviewLayoutPolicy.summaryLayout(
+                width: contentWidth,
+                hasArtwork: project.artwork != nil
+            ) {
+            case .threeColumns:
+                HStack(alignment: .top, spacing: 18) {
                     if let artwork = project.artwork {
                         ArtworkThumbnail(path: artwork)
                     }
-
+                    verticalHairline
                     projectIntro
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    verticalHairline
+                    projectStack
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Rectangle()
-                    .fill(FizzTheme.hairline)
-                    .frame(width: 1)
-
-                projectStack
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            case .twoPlusBottom:
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 18) {
+                        if let artwork = project.artwork {
+                            ArtworkThumbnail(path: artwork)
+                        }
+                        verticalHairline
+                        projectIntro
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    horizontalHairline
+                    projectStack
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            case .twoColumns:
+                HStack(alignment: .top, spacing: 20) {
+                    projectIntro
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    verticalHairline
+                    projectStack
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            case .stacked:
+                VStack(alignment: .leading, spacing: 14) {
+                    if let artwork = project.artwork {
+                        ArtworkThumbnail(path: artwork)
+                        horizontalHairline
+                    }
+                    projectIntro
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    horizontalHairline
+                    projectStack
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
+    }
+
+    private var verticalHairline: some View {
+        Rectangle()
+            .fill(FizzTheme.hairline)
+            .frame(width: 1)
+    }
+
+    private var horizontalHairline: some View {
+        Rectangle()
+            .fill(FizzTheme.hairline)
+            .frame(height: 1)
     }
 
     private var projectIntro: some View {
@@ -301,27 +380,34 @@ struct OverviewTabView: View {
     }
 
     private var notePanel: some View {
-        Panel(title: "备注", symbol: "note.text") {
-            VStack(alignment: .leading, spacing: 10) {
-                TextField("给这个项目留一句话", text: $noteDraft, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(2...4)
-                    .onSubmit(saveNote)
-                HStack {
-                    Text("\(noteDraft.count)/200")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    Spacer()
-                    Button {
-                        saveNote()
-                    } label: {
-                        Label("保存备注", systemImage: "checkmark")
-                    }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
-                }
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                FizzIcon(symbol: "note.text", size: 12)
+                    .foregroundStyle(.secondary)
+                Text("备注")
+                    .font(.system(size: 12, weight: .semibold))
             }
+
+            TextField("给这个项目留一句话", text: $noteDraft)
+                .textFieldStyle(.plain)
+                .font(.callout)
+                .onSubmit(saveNote)
+
+            Text("\(noteDraft.count)/200")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.tertiary)
+
+            Button {
+                saveNote()
+            } label: {
+                Label("保存", systemImage: "checkmark")
+            }
+            .buttonStyle(.glass)
+            .controlSize(.small)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .fizzCard(radius: FizzRadius.panel)
     }
 
     private func refreshLogAvailability() async {

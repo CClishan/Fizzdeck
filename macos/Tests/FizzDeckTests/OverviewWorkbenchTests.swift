@@ -141,4 +141,43 @@ final class OverviewWorkbenchTests: XCTestCase {
         XCTAssertEqual(LogTailReader.read(path: path, maxBytes: 3), "b")
         XCTAssertEqual(LogTailReader.read(path: path, maxBytes: 5), "a中b")
     }
+
+    func testOverviewLayoutPolicyAdaptsSummaryColumns() {
+        XCTAssertEqual(OverviewLayoutPolicy.summaryLayout(width: 800, hasArtwork: true), .threeColumns)
+        XCTAssertEqual(OverviewLayoutPolicy.summaryLayout(width: 600, hasArtwork: true), .twoPlusBottom)
+        XCTAssertEqual(OverviewLayoutPolicy.summaryLayout(width: 480, hasArtwork: true), .stacked)
+        XCTAssertEqual(OverviewLayoutPolicy.summaryLayout(width: 600, hasArtwork: false), .twoColumns)
+        XCTAssertEqual(OverviewLayoutPolicy.summaryLayout(width: 480, hasArtwork: false), .stacked)
+    }
+
+    func testOverviewLayoutPolicySideBySideLogsAndActivity() {
+        XCTAssertTrue(OverviewLayoutPolicy.showsLogsAndActivitySideBySide(
+            width: 800,
+            hasLogs: true,
+            hasActivity: true
+        ))
+        XCTAssertFalse(OverviewLayoutPolicy.showsLogsAndActivitySideBySide(
+            width: 760,
+            hasLogs: true,
+            hasActivity: true
+        ))
+        XCTAssertFalse(OverviewLayoutPolicy.showsLogsAndActivitySideBySide(
+            width: 960,
+            hasLogs: false,
+            hasActivity: true
+        ))
+        XCTAssertFalse(OverviewLayoutPolicy.showsLogsAndActivitySideBySide(
+            width: 960,
+            hasLogs: true,
+            hasActivity: false
+        ))
+
+        let split = OverviewLayoutPolicy.splitWidths(totalWidth: 912, spacing: 12)
+        XCTAssertEqual(split.leading + split.trailing, 900)
+        XCTAssertGreaterThan(split.leading, split.trailing)
+
+        let clamped = OverviewLayoutPolicy.splitWidths(totalWidth: 8, spacing: 12)
+        XCTAssertEqual(clamped.leading, 0)
+        XCTAssertEqual(clamped.trailing, 0)
+    }
 }
