@@ -87,6 +87,7 @@ struct WorkbenchDashboardView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(formattedToday)
                     .font(.system(size: 25, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Text(headerSubtitle)
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
@@ -161,6 +162,7 @@ struct WorkbenchDashboardView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var aiShareBar: some View {
@@ -207,6 +209,8 @@ struct WorkbenchDashboardView: View {
                 Spacer(minLength: 0)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("本周 AI 用量占比：" + toolShares.map { "\($0.title) \(Int(($0.fraction * 100).rounded()))%" }.joined(separator: "，"))
     }
 
     @ViewBuilder

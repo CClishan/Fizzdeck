@@ -14,6 +14,7 @@ struct HomeProjectBrowser: View {
     let batchFeedback: String?
     var knownGroups: [String] = []
     var allSelectedStarred: Bool = false
+    var focusedProjectPath: String? = nil
     var onBatchStar: ((Bool) -> Void)? = nil
     var onBatchGroup: ((String?) -> Void)? = nil
     var onBatchFetch: (() -> Void)? = nil
@@ -29,6 +30,7 @@ struct HomeProjectBrowser: View {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 Text("项目")
                     .font(.system(size: 15, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Text("\(projects.count)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -162,6 +164,7 @@ struct HomeProjectBrowser: View {
                     project: project,
                     selecting: selectionMode,
                     selected: selectedPaths.contains(project.path),
+                    focused: focusedProjectPath == project.path,
                     toggleSelection: { onToggleSelection(project) }
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))

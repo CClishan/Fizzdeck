@@ -48,6 +48,7 @@ struct CleanupWorkspaceView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("可清理")
                         .font(.system(size: 27, weight: .semibold))
+                        .accessibilityAddTraits(.isHeader)
                     Text(headerSubtitle)
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)

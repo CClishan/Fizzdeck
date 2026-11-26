@@ -235,6 +235,8 @@ struct AttentionQueueView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityRemoveTraits(selected ? [] : .isSelected)
     }
 
     private var suppressedMenu: some View {

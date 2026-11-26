@@ -12,6 +12,7 @@ struct ContinueWorkSection: View {
                         .foregroundStyle(FizzTheme.accent)
                     Text("继续工作")
                         .font(.system(size: 13.5, weight: .semibold))
+                        .accessibilityAddTraits(.isHeader)
                     Text("\(items.count)")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)

@@ -148,6 +148,104 @@ final class PerformanceBaselineTests: XCTestCase {
         print("[perf] discovery cancellation response=\(ms(response))ms")
     }
 
+    func testDashboardAndLibraryPerformanceOnTwoHundredProjects() {
+        let now = Date(timeIntervalSince1970: 1_795_680_000)
+        var projects: [RepoProject] = []
+        var commitMap: [String: RepoCommitActivity] = [:]
+
+        for index in 0..<200 {
+            let path = "/tmp/perf-200/project-\(index)"
+            let recent = now.addingTimeInterval(-Double((index % 45) * 86_400))
+            let sessions = (0..<3).map { sessionIdx in
+                SessionRecord(
+                    tool: sessionIdx == 0 ? "codex" : (sessionIdx == 1 ? "claude" : "grok"),
+                    id: "s-\(index)-\(sessionIdx)",
+                    cwd: path,
+                    startedAt: recent.addingTimeInterval(-1_800),
+                    modified: recent,
+                    lastUser: "Task \(index)-\(sessionIdx)",
+                    usage: TokenUsage(totalTokens: 2_500 + index * 10),
+                    costUSD: 0.12 + Double(index % 5) * 0.05,
+                    costIsEstimate: true
+                )
+            }
+
+            var project = makeProject(
+                path: path,
+                name: "project-\(index)",
+                recent: recent,
+                size: Int64((index + 1) * 2_000_000),
+                tool: "codex"
+            )
+            project.dirtyCount = index % 4
+            project.ahead = index % 3
+            project.starred = index % 10 == 0
+            project.stacks = [StackGroup(key: "framework", label: "框架", items: [index % 2 == 0 ? "Next.js" : "SwiftUI"])]
+            project.sessions = SessionSummary(
+                detected: ["codex", "claude", "grok"],
+                lastSessionAt: recent,
+                lastUserMessage: "Task \(index)-0",
+                lastSessionID: "s-\(index)-0",
+                lastTool: "codex",
+                sessionCount: 3,
+                byTool: [
+                    ToolSession(tool: "codex", sessionCount: 1, lastSessionAt: recent, lastSessionID: "s-\(index)-0", lastUserMessage: "Task \(index)-0"),
+                ],
+                recentSessions: sessions
+            )
+            projects.append(project)
+
+            let baseTS = Int(now.timeIntervalSince1970)
+            let timestamps = (0..<50).map { offset in
+                baseTS - ((offset * 7 + index) % 360) * 86_400
+            }
+            commitMap[path] = RepoCommitActivity(
+                path: path,
+                head: "head-\(index)",
+                authorEmails: ["dev@example.com"],
+                windowDays: 371,
+                timestamps: timestamps,
+                updatedAt: now
+            )
+        }
+        let snapshot = CommitActivitySnapshot(byProject: commitMap)
+
+        let heatmapTime = elapsed {
+            let summary = DashboardMetrics.buildHeatmap(snapshot: snapshot, projects: projects, range: .months12, now: now)
+            XCTAssertEqual(summary.columns.count, 52)
+        }
+
+        let workbenchTime = elapsed {
+            _ = DashboardMetrics.kpiSummary(projects: projects, commitActivity: snapshot, now: now)
+            _ = DashboardMetrics.weeklyToolShares(projects: projects, now: now)
+            _ = DashboardMetrics.costBreakdown(projects: projects, mode: .byTool, now: now)
+            _ = DashboardMetrics.weeklyTimeline(projects: projects, commitActivity: snapshot, now: now)
+            _ = DashboardMetrics.continueWorkItems(projects: projects, limit: 4)
+            _ = DashboardMetrics.healthAlerts(projects: projects, freeDiskBytes: 15_000_000_000, now: now)
+        }
+
+        let libraryTime = elapsed {
+            for _ in 0..<10 {
+                let filtered = HomeDashboardModel.libraryProjects(
+                    from: projects,
+                    query: LibraryQuery(searchText: "project"),
+                    sort: .recent,
+                    commitActivity: snapshot
+                )
+                let split = DashboardMetrics.partitionByActivity(filtered, now: now)
+                let rows = LibraryTableRow.makeRows(from: split.active)
+                _ = rows.sorted(using: [LibraryRowComparator(column: .aiCost, order: .reverse)])
+            }
+        }
+
+        XCTAssertLessThan(heatmapTime, 1.0)
+        XCTAssertLessThan(workbenchTime, 1.0)
+        XCTAssertLessThan(libraryTime, 1.0)
+        print("[perf] heatmap 200 repos 10k commits (12m)=\(ms(heatmapTime))ms")
+        print("[perf] workbench metrics 200 projects=\(ms(workbenchTime))ms")
+        print("[perf] library 200 projects x 10 table+filter=\(ms(libraryTime))ms")
+    }
+
     private func elapsed(_ block: () -> Void) -> TimeInterval {
         let start = Date()
         block()

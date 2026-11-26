@@ -287,3 +287,38 @@ enum HomeDashboardModel {
         DetectedTool(rawValue: raw)?.symbol ?? "sparkles"
     }
 }
+
+enum LibraryGridDirection: Sendable {
+    case up
+    case down
+    case left
+    case right
+}
+
+enum LibraryKeyboardNavigation {
+    static func nextIndex(
+        current: Int?,
+        direction: LibraryGridDirection,
+        count: Int,
+        columns: Int
+    ) -> Int? {
+        guard count > 0 else { return nil }
+        let step = max(1, columns)
+        guard let current, current >= 0, current < count else {
+            switch direction {
+            case .right, .down: return 0
+            case .left, .up: return count - 1
+            }
+        }
+        switch direction {
+        case .left:
+            return max(0, current - 1)
+        case .right:
+            return min(count - 1, current + 1)
+        case .up:
+            return current >= step ? current - step : current
+        case .down:
+            return min(count - 1, current + step)
+        }
+    }
+}

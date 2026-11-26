@@ -14,6 +14,8 @@ struct LibraryView: View {
     @State private var batchFeedback: String?
     @State private var batchRunning = false
     @State private var showIdleProjects = false
+    @State private var focusedProjectPath: String?
+    @State private var browserWidth: CGFloat = 960
     @FocusState private var searchFocused: Bool
 
     private var mode: HomeViewMode {
@@ -89,6 +91,10 @@ struct LibraryView: View {
         )
     }
 
+    private var estimatedColumns: Int {
+        max(1, Int((browserWidth + FizzSpacing.grid) / (260 + FizzSpacing.grid)))
+    }
+
     var body: some View {
         Group {
             if store.projects.isEmpty {
@@ -140,6 +146,7 @@ struct LibraryView: View {
                                 batchFeedback: batchFeedback,
                                 knownGroups: store.knownGroups,
                                 allSelectedStarred: allSelectedStarred,
+                                focusedProjectPath: focusedProjectPath,
                                 onBatchStar: batchStar,
                                 onBatchGroup: batchGroup,
                                 onBatchFetch: { Task { await fetchSelected() } },
@@ -156,9 +163,46 @@ struct LibraryView: View {
                             }
                         }
                     }
+                    .onGeometryChange(for: CGFloat.self) {
+                        $0.size.width
+                    } action: { newWidth in
+                        browserWidth = max(260, newWidth - FizzSpacing.page * 2)
+                    }
                     .padding(FizzSpacing.page)
                 }
             }
+        }
+        .focusable(mode == .cards && !searchFocused)
+        .focusEffectDisabled()
+        .onKeyPress(.upArrow) {
+            moveFocus(.up)
+        }
+        .onKeyPress(.downArrow) {
+            moveFocus(.down)
+        }
+        .onKeyPress(.leftArrow) {
+            moveFocus(.left)
+        }
+        .onKeyPress(.rightArrow) {
+            moveFocus(.right)
+        }
+        .onKeyPress(keys: [.return]) { press in
+            guard mode == .cards, !searchFocused, let project = focusedProject else { return .ignored }
+            if press.modifiers.contains(.command) {
+                Task { await resumeFocusedProject(project) }
+            } else {
+                store.openProject(project)
+            }
+            return .handled
+        }
+        .onKeyPress(.space) {
+            guard mode == .cards, !searchFocused, let project = focusedProject else { return .ignored }
+            if selectionMode {
+                toggleSelection(project)
+            } else {
+                store.openProject(project)
+            }
+            return .handled
         }
         .background {
             Button("") {
@@ -178,6 +222,9 @@ struct LibraryView: View {
         }
         .onChange(of: visibleProjects.map(\.path)) { _, paths in
             selectedPaths.formIntersection(Set(paths))
+            if let focusedProjectPath, !paths.contains(focusedProjectPath) {
+                self.focusedProjectPath = nil
+            }
         }
     }
 
@@ -191,6 +238,7 @@ struct LibraryView: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 12.5))
                         .focused($searchFocused)
+                        .accessibilityLabel("搜索项目库")
                     if !localQuery.searchText.isEmpty {
                         Button {
                             localQuery.searchText = ""
@@ -268,6 +316,8 @@ struct LibraryView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? .isSelected : [])
+        .accessibilityRemoveTraits(active ? [] : .isSelected)
     }
 
     private func idleSection(_ idleProjects: [RepoProject]) -> some View {
@@ -294,6 +344,8 @@ struct LibraryView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("闲置 30 天以上的项目，共 \(idleProjects.count) 个")
+            .accessibilityValue(showIdleProjects ? "已展开" : "已折叠")
 
             if showIdleProjects {
                 switch mode {
@@ -400,6 +452,50 @@ struct LibraryView: View {
         baseProjects.filter { project in
             project.stacks.contains { $0.items.contains(framework) }
         }.count
+    }
+
+    private var keyboardNavigableProjects: [RepoProject] {
+        let split = partitioned
+        return showIdleProjects ? split.active + split.idle : split.active
+    }
+
+    private var focusedProject: RepoProject? {
+        guard let focusedProjectPath else { return nil }
+        return keyboardNavigableProjects.first { $0.path == focusedProjectPath }
+    }
+
+    private func moveFocus(_ direction: LibraryGridDirection) -> KeyPress.Result {
+        guard mode == .cards, !searchFocused else { return .ignored }
+        let list = keyboardNavigableProjects
+        let currentIndex = focusedProjectPath.flatMap { path in
+            list.firstIndex { $0.path == path }
+        }
+        guard let next = LibraryKeyboardNavigation.nextIndex(
+            current: currentIndex,
+            direction: direction,
+            count: list.count,
+            columns: estimatedColumns
+        ) else { return .ignored }
+        focusedProjectPath = list[next].path
+        return .handled
+    }
+
+    private func resumeFocusedProject(_ project: RepoProject) async {
+        for toolSession in project.sessions.byTool {
+            guard DetectedTool(rawValue: toolSession.tool)?.supportsResume == true,
+                  let sessionID = toolSession.lastSessionID,
+                  let record = project.sessions.recentSessions.first(where: {
+                      $0.tool == toolSession.tool && $0.id == sessionID
+                  })
+            else { continue }
+            _ = await SessionResumeService.resume(
+                session: record,
+                projectPath: project.path,
+                preferredTarget: .auto
+            )
+            return
+        }
+        store.openProject(project)
     }
 
     private func syncFromQuery() {

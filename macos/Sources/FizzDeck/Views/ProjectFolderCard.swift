@@ -6,6 +6,7 @@ struct ProjectFolderCard: View {
     let project: RepoProject
     var selecting = false
     var selected = false
+    var focused = false
     var toggleSelection: () -> Void = {}
 
     @State private var hovering = false
@@ -85,10 +86,12 @@ struct ProjectFolderCard: View {
         .overlay {
             RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous)
                 .strokeBorder(
-                    selected
-                        ? accent.opacity(0.55)
-                        : hovering ? accent.opacity(0.24) : FizzTheme.stroke,
-                    lineWidth: selected ? 1.5 : 1
+                    focused
+                        ? FizzTheme.accent
+                        : selected
+                            ? accent.opacity(0.55)
+                            : hovering ? accent.opacity(0.24) : FizzTheme.stroke,
+                    lineWidth: (focused || selected) ? 1.5 : 1
                 )
         }
         .fizzAdaptiveShadow(hovering ? .raised : .subtle)
@@ -111,6 +114,7 @@ struct ProjectFolderCard: View {
         .accessibilityLabel(selecting
             ? (selected ? "取消选择 \(project.displayName)" : "选择 \(project.displayName)")
             : "打开 \(project.displayName)")
+        .accessibilityHint(selecting ? "点击或按空格切换选择" : "点击或按回车打开项目详情，Command 加回车继续最近 AI 会话")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .contextMenu {
             Button(project.starred ? "取消星标" : "设为星标") {

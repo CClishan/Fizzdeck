@@ -36,6 +36,7 @@ struct AICostBreakdownCard: View {
                         .foregroundStyle(FizzTheme.accent)
                     Text(kpi.weeklyCostUSD != nil ? "费用构成" : "用量构成")
                         .font(.system(size: 13, weight: .semibold))
+                        .accessibilityAddTraits(.isHeader)
 
                     Spacer(minLength: 8)
 

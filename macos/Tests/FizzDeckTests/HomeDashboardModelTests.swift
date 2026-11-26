@@ -332,4 +332,20 @@ final class HomeDashboardModelTests: XCTestCase {
         let bySize = rows.sorted(using: [LibraryRowComparator(column: .sizeBytes, order: .reverse)])
         XCTAssertEqual(bySize.map(\.name), ["Beta", "Alpha"])
     }
+
+    func testLibraryKeyboardNavigationMovesAndClampsAcrossGrid() {
+        XCTAssertNil(LibraryKeyboardNavigation.nextIndex(current: nil, direction: .down, count: 0, columns: 3))
+        XCTAssertEqual(LibraryKeyboardNavigation.nextIndex(current: nil, direction: .right, count: 5, columns: 3), 0)
+        XCTAssertEqual(LibraryKeyboardNavigation.nextIndex(current: nil, direction: .up, count: 5, columns: 3), 4)
+
+        XCTAssertEqual(LibraryKeyboardNavigation.nextIndex(current: 1, direction: .right, count: 5, columns: 3), 2)
+        XCTAssertEqual(LibraryKeyboardNavigation.nextIndex(current: 1, direction: .left, count: 5, columns: 3), 0)
+        XCTAssertEqual(LibraryKeyboardNavigation.nextIndex(current: 0, direction: .left, count: 5, columns: 3), 0)
+        XCTAssertEqual(LibraryKeyboardNavigation.nextIndex(current: 4, direction: .right, count: 5, columns: 3), 4)
+
+        XCTAssertEqual(LibraryKeyboardNavigation.nextIndex(current: 1, direction: .down, count: 5, columns: 3), 4)
+        XCTAssertEqual(LibraryKeyboardNavigation.nextIndex(current: 3, direction: .down, count: 5, columns: 3), 4)
+        XCTAssertEqual(LibraryKeyboardNavigation.nextIndex(current: 4, direction: .up, count: 5, columns: 3), 1)
+        XCTAssertEqual(LibraryKeyboardNavigation.nextIndex(current: 1, direction: .up, count: 5, columns: 3), 1)
+    }
 }
