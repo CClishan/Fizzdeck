@@ -407,6 +407,144 @@ final class SessionIndexTests: XCTestCase {
         XCTAssertNil(windsurf.resumeCommand)
     }
 
+    func testBuildsAndParsesDeepSeekHarnessSession() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fizzdeck-dsh-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let sessionsDir = home.appendingPathComponent(".dsh/storages/session_projcache/sessions", isDirectory: true)
+        try FileManager.default.createDirectory(at: sessionsDir, withIntermediateDirectories: true)
+
+        let payload: [String: Any] = [
+            "version": 7,
+            "record": [
+                "identity": [
+                    "createdAt": 1_795_592_198_000,
+                    "cwd": "/tmp/fizzdeck-dsh-demo",
+                ],
+                "rows": [
+                    "title": ["val": "整合 DeepSeek Harness 用量"],
+                    "modelSelection": [
+                        "val": [
+                            "lastUsed": [
+                                "provider": "magpie",
+                                "model": "tokeplus-ds/deepseek/deepseek-v4.1-flash-1017",
+                            ]
+                        ]
+                    ],
+                    "tokenUsage": [
+                        "val": [
+                            "totals": [
+                                "uncachedInputTokens": 20_000,
+                                "cacheReadTokens": 100_000,
+                                "cacheWriteTokens": 0,
+                                "outputTokens": 5_000,
+                            ]
+                        ]
+                    ],
+                    "timeContext": [
+                        "val": [
+                            "lastMessageTime": 1_795_593_000_000
+                        ]
+                    ],
+                ],
+            ],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        try data.write(to: sessionsDir.appendingPathComponent("session-dsh-1.json"))
+
+        let cacheFile = home.appendingPathComponent("session-cache.json")
+        let records = SessionIndex.build(homeDirectory: home, cacheFile: cacheFile)
+        let dsh = try XCTUnwrap(records.first { $0.tool == "deepseek" })
+
+        XCTAssertEqual(dsh.id, "session-dsh-1")
+        XCTAssertEqual(dsh.cwd, "/tmp/fizzdeck-dsh-demo")
+        XCTAssertEqual(dsh.lastUser, "整合 DeepSeek Harness 用量")
+        XCTAssertEqual(dsh.model, "tokeplus-ds/deepseek/deepseek-v4.1-flash-1017")
+        XCTAssertEqual(dsh.usage?.inputTokens, 120_000)
+        XCTAssertEqual(dsh.usage?.cachedInputTokens, 100_000)
+        XCTAssertEqual(dsh.usage?.outputTokens, 5_000)
+        XCTAssertEqual(dsh.usage?.totalTokens, 125_000)
+        XCTAssertEqual(dsh.costIsEstimate, true)
+        XCTAssertGreaterThan(dsh.costUSD ?? 0, 0)
+
+        let cwdMap = SessionIndex.buildLightweightCwdMap(homeDirectory: home, cacheFile: cacheFile)
+        XCTAssertTrue(cwdMap["deepseek"]?.contains(PathTools.canonical("/tmp/fizzdeck-dsh-demo")) == true)
+    }
+
+    func testBuildsAndParsesAgyConversationWithChildTokenRollup() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fizzdeck-agy-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let agyRoot = home.appendingPathComponent(".gemini/antigravity", isDirectory: true)
+        let parentLogDir = agyRoot.appendingPathComponent("brain/agy-parent-1/.system_generated/logs", isDirectory: true)
+        let childLogDir = agyRoot.appendingPathComponent("brain/agy-child-1/.system_generated/logs", isDirectory: true)
+        try FileManager.default.createDirectory(at: parentLogDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: childLogDir, withIntermediateDirectories: true)
+
+        let dbURL = agyRoot.appendingPathComponent("conversation_summaries.db")
+        try runSQLite([
+            """
+            CREATE TABLE conversation_summaries (
+                conversation_id text PRIMARY KEY,
+                title text NOT NULL DEFAULT "",
+                last_modified_time datetime NOT NULL,
+                workspace_uris text NOT NULL,
+                parent_conversation_id text NOT NULL DEFAULT ""
+            );
+            """,
+            """
+            INSERT INTO conversation_summaries VALUES (
+                'agy-parent-1',
+                'Optimize FizzDeck UI',
+                '2026-11-26 09:00:00+00:00',
+                '["file:///tmp/fizzdeck-agy-demo"]',
+                ''
+            );
+            """,
+            """
+            INSERT INTO conversation_summaries VALUES (
+                'agy-child-1',
+                '',
+                '2026-11-26 08:55:00+00:00',
+                '["file:///tmp/fizzdeck-agy-demo"]',
+                'agy-parent-1'
+            );
+            """,
+        ], database: dbURL)
+
+        let parentTranscript = """
+        {"type":"USER_INPUT","created_at":"2026-11-26T08:40:00Z","content":"check UI"}
+        {"type":"PLANNER_RESPONSE","created_at":"2026-11-26T08:41:00Z","model":"claude-opus-5-5-medium","input_tokens":10000,"cache_read_tokens":20000,"output_tokens":500}
+        """
+        let childTranscript = """
+        {"type":"PLANNER_RESPONSE","created_at":"2026-11-26T08:50:00Z","model":"gemini-4-hydrogen-tiered-high","input_tokens":5000,"cache_read_tokens":10000,"output_tokens":250}
+        """
+        try parentTranscript.write(to: parentLogDir.appendingPathComponent("transcript.jsonl"), atomically: true, encoding: .utf8)
+        try childTranscript.write(to: childLogDir.appendingPathComponent("transcript.jsonl"), atomically: true, encoding: .utf8)
+
+        let cacheFile = home.appendingPathComponent("session-cache.json")
+        let records = SessionIndex.build(homeDirectory: home, cacheFile: cacheFile)
+        let agyRecords = records.filter { $0.tool == "agy" }
+
+        XCTAssertEqual(agyRecords.count, 1)
+        let agy = try XCTUnwrap(agyRecords.first)
+        XCTAssertEqual(agy.id, "agy-parent-1")
+        XCTAssertEqual(agy.cwd, "/tmp/fizzdeck-agy-demo")
+        XCTAssertEqual(agy.lastUser, "Optimize FizzDeck UI")
+        XCTAssertEqual(agy.usage?.inputTokens, 45_000)
+        XCTAssertEqual(agy.usage?.cachedInputTokens, 30_000)
+        XCTAssertEqual(agy.usage?.outputTokens, 750)
+        XCTAssertEqual(agy.usage?.totalTokens, 45_750)
+        XCTAssertEqual(agy.costIsEstimate, true)
+        XCTAssertGreaterThan(agy.costUSD ?? 0, 0)
+        XCTAssertNil(agy.resumeCommand)
+
+        let cwdMap = SessionIndex.buildLightweightCwdMap(homeDirectory: home, cacheFile: cacheFile)
+        XCTAssertTrue(cwdMap["agy"]?.contains(PathTools.canonical("/tmp/fizzdeck-agy-demo")) == true)
+    }
+
     private func runSQLite(_ statements: [String], database: URL) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")

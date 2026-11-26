@@ -303,6 +303,24 @@ private struct ProjectHeroActions: View {
                     ProjectGroupingMenu(project: project)
                     Divider()
                     Button {
+                        if let url = ArtworkFilePicker.pickImageURL() {
+                            _ = store.setCustomArtwork(from: url, for: project)
+                        }
+                    } label: {
+                        Label(
+                            project.artwork == nil ? "上传项目截图…" : "替换项目截图…",
+                            systemImage: "photo.badge.plus"
+                        )
+                    }
+                    if project.customArtwork != nil {
+                        Button {
+                            store.clearCustomArtwork(for: project)
+                        } label: {
+                            Label("恢复自动识别截图", systemImage: "arrow.uturn.backward")
+                        }
+                    }
+                    Divider()
+                    Button {
                         SystemActions.copy(project.path)
                     } label: {
                         Label("复制路径", systemImage: "doc.on.doc")

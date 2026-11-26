@@ -1,7 +1,17 @@
+import CryptoKit
 import Foundation
 import ImageIO
 
 enum ProjectArtwork {
+    enum ArtworkError: LocalizedError {
+        case invalidImage
+
+        var errorDescription: String? {
+            "所选文件不是有效的图片格式。"
+        }
+    }
+
+    static let supportedExtensions: Set<String> = ["png", "jpg", "jpeg", "webp", "heic", "gif", "tiff", "bmp"]
     private static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "webp", "heic"]
     private static let excludedWords = ["logo", "icon", "favicon", "avatar", "badge", "sprite", "placeholder", "wordmark"]
     private static let skippedDirectories: Set<String> = [
@@ -41,6 +51,61 @@ enum ProjectArtwork {
             return candidate.url.path
         }
         return nil
+    }
+
+    static func resolvedPath(in directory: URL, customArtwork: String?) -> String? {
+        if let customArtwork,
+           !customArtwork.isEmpty,
+           FileTools.exists(URL(fileURLWithPath: customArtwork)) {
+            return customArtwork
+        }
+        return find(in: directory)
+    }
+
+    @discardableResult
+    static func saveCustomArtwork(
+        from sourceURL: URL,
+        for projectPath: String,
+        existingCustomPath: String? = nil,
+        coversDir: URL = AppPaths.coversDir
+    ) throws -> String {
+        let scoped = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if scoped {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+              CGImageSourceGetCount(source) > 0
+        else {
+            throw ArtworkError.invalidImage
+        }
+
+        let data = try Data(contentsOf: sourceURL)
+        try FileTools.manager.createDirectory(at: coversDir, withIntermediateDirectories: true)
+
+        let digest = SHA256.hash(data: Data(PathTools.normalize(projectPath).utf8))
+        let prefix = digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+        let stamp = Int64(Date().timeIntervalSince1970 * 1000)
+        let ext = sourceURL.pathExtension.lowercased()
+        let fileExt = supportedExtensions.contains(ext) ? ext : "png"
+        let destURL = coversDir.appendingPathComponent("\(prefix)-\(stamp).\(fileExt)")
+
+        try data.write(to: destURL, options: .atomic)
+
+        if let existingCustomPath, existingCustomPath != destURL.path {
+            removeCustomArtwork(at: existingCustomPath, coversDir: coversDir)
+        }
+        return destURL.path
+    }
+
+    static func removeCustomArtwork(at path: String?, coversDir: URL = AppPaths.coversDir) {
+        guard let path, !path.isEmpty else { return }
+        let canonicalFile = PathTools.canonical(path)
+        let canonicalCovers = PathTools.canonical(coversDir.path) + "/"
+        guard canonicalFile.hasPrefix(canonicalCovers) else { return }
+        try? FileTools.manager.removeItem(atPath: path)
     }
 
     private static func collect(

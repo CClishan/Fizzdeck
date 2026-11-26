@@ -55,9 +55,10 @@ private struct SessionCachePayload: Codable {
 
 enum SessionIndex {
     private static let scanBytes = 8 * 1024 * 1024
-    private static let cacheVersion = 3
+    private static let cacheVersion = 4
     private static let maxIDEWorkspaces = 300
     private static let ideCachePrefix = "ide:"
+    private static let agyCachePrefix = "agy:"
 
     static func build(
         homeDirectory: URL = AppPaths.home,
@@ -171,6 +172,31 @@ enum SessionIndex {
             }
         }
 
+        let deepseekRoot = homeDirectory.appendingPathComponent(".dsh/storages/session_projcache/sessions")
+        for file in walk(deepseekRoot, maxDepth: 2, filter: { $0.hasSuffix(".json") }) {
+            let key = PathTools.normalize(file.path)
+            let stamp = fileStamp(file)
+            if let stamp,
+               let cached = cache[key],
+               abs(cached.mtime - stamp.mtime) < 0.001,
+               cached.fileSize == stamp.fileSize {
+                nextCache[key] = cached
+                if let record = cached.record { records.append(record) }
+                continue
+            }
+            let record = parseDeepSeek(file)
+            if let record { records.append(record) }
+            if let stamp {
+                nextCache[key] = SessionCacheEntry(mtime: stamp.mtime, fileSize: stamp.fileSize, record: record)
+                changed = true
+            }
+        }
+
+        let agyResult = agyRecords(homeDirectory: homeDirectory, cache: cache)
+        records.append(contentsOf: agyResult.records)
+        changed = changed || agyResult.changed
+        nextCache.merge(agyResult.cacheEntries) { _, new in new }
+
         let ideResult = ideWorkspaceRecords(
             homeDirectory: homeDirectory,
             cache: cache,
@@ -274,6 +300,28 @@ enum SessionIndex {
         }
         if !geminiCwds.isEmpty {
             map["gemini"] = geminiCwds
+        }
+
+        let deepseekRoot = homeDirectory.appendingPathComponent(".dsh/storages/session_projcache/sessions")
+        for file in walk(deepseekRoot, maxDepth: 2, filter: { $0.hasSuffix(".json") }) {
+            let key = PathTools.normalize(file.path)
+            if let stamp = fileStamp(file),
+               let cached = cache[key],
+               abs(cached.mtime - stamp.mtime) < 0.001,
+               cached.fileSize == stamp.fileSize {
+                if let cwd = cached.record?.cwd {
+                    map["deepseek", default: []].insert(PathTools.canonical(cwd))
+                }
+                continue
+            }
+            if let cwd = lightweightDeepSeekCwd(in: file) {
+                map["deepseek", default: []].insert(PathTools.canonical(cwd))
+            }
+        }
+
+        let agyCwds = lightweightAgyCwds(homeDirectory: homeDirectory)
+        if !agyCwds.isEmpty {
+            map["agy"] = agyCwds
         }
 
         for record in ideWorkspaceRecords(
@@ -1070,5 +1118,348 @@ enum SessionIndex {
             return ""
         }
         return String(trimmed.prefix(400))
+    }
+
+    // MARK: - DeepSeek Harness (.dsh)
+
+    private static func lightweightDeepSeekCwd(in file: URL) -> String? {
+        guard let object = FileTools.json(file),
+              let record = object["record"] as? [String: Any]
+        else { return nil }
+        return extractDeepSeekCwd(from: record)
+    }
+
+    private static func parseDeepSeek(_ file: URL) -> SessionRecord? {
+        guard let object = FileTools.json(file),
+              let record = object["record"] as? [String: Any],
+              let cwd = extractDeepSeekCwd(from: record)
+        else { return nil }
+
+        let identity = record["identity"] as? [String: Any]
+        let rows = record["rows"] as? [String: Any]
+
+        let startedAt = dateFromEpochMillis(identity?["createdAt"])
+        let timeVal = (rows?["timeContext"] as? [String: Any])?["val"] as? [String: Any]
+        let modified = dateFromEpochMillis(timeVal?["lastMessageTime"])
+            ?? FileTools.modificationDate(file)
+            ?? startedAt
+            ?? Date()
+
+        let titleText = (rows?["title"] as? [String: Any])?["val"] as? String
+        let firstInputText = (((rows?["titleInput"] as? [String: Any])?["val"] as? [String: Any])?["first"] as? [String: Any])?["text"] as? String
+        let turns = ((rows?["turnOutline"] as? [String: Any])?["val"] as? [String: Any])?["turns"] as? [[String: Any]]
+        let lastTurnPrompt = turns?.last?["prompt"] as? String
+        let rawTitle = [titleText, firstInputText, lastTurnPrompt]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+        let lastUser = rawTitle.map { cleanUserText($0) }.flatMap { $0.isEmpty ? nil : $0 }
+
+        let modelVal = (rows?["modelSelection"] as? [String: Any])?["val"] as? [String: Any]
+        let lastUsedModel = (modelVal?["lastUsed"] as? [String: Any])?["model"] as? String
+        let activityModel = ((rows?["contextActivity"] as? [String: Any])?["val"] as? [String: Any])?["model"] as? String
+        let model = [lastUsedModel, activityModel]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+
+        let totals = ((rows?["tokenUsage"] as? [String: Any])?["val"] as? [String: Any])?["totals"] as? [String: Any]
+        var usage: TokenUsage?
+        if let totals {
+            let uncached = int(totals["uncachedInputTokens"])
+            let cacheRead = int(totals["cacheReadTokens"])
+            let cacheWrite = int(totals["cacheWriteTokens"])
+            let output = int(totals["outputTokens"])
+            let inputTokens = uncached + cacheRead
+            let totalTokens = inputTokens + cacheWrite + output
+            if totalTokens > 0 {
+                usage = TokenUsage(
+                    inputTokens: inputTokens,
+                    cachedInputTokens: cacheRead,
+                    cacheWriteInputTokens: cacheWrite,
+                    outputTokens: output,
+                    reasoningOutputTokens: 0,
+                    totalTokens: totalTokens
+                )
+            }
+        }
+
+        let cost = PricingCatalog.estimate(model: model, usage: usage)
+        return SessionRecord(
+            tool: "deepseek",
+            id: file.deletingPathExtension().lastPathComponent,
+            cwd: cwd,
+            startedAt: startedAt,
+            modified: modified,
+            lastUser: lastUser,
+            kind: .conversation,
+            model: model,
+            usage: usage,
+            costUSD: cost,
+            costIsEstimate: cost != nil ? true : nil
+        )
+    }
+
+    private static func extractDeepSeekCwd(from record: [String: Any]) -> String? {
+        let identity = record["identity"] as? [String: Any]
+        let rows = record["rows"] as? [String: Any]
+        let workingDirVal = (rows?["workingDirectory"] as? [String: Any])?["val"] as? String
+        let raw = [identity?["cwd"] as? String, workingDirVal]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+        return raw
+    }
+
+    // MARK: - Antigravity / AGY CLI
+
+    private struct AgySummaryRow {
+        let id: String
+        let title: String
+        let lastModifiedTime: String
+        let cwd: String
+        let parentID: String
+    }
+
+    private static func lightweightAgyCwds(homeDirectory: URL) -> Set<String> {
+        let rows = loadAgySummaryRows(homeDirectory: homeDirectory)
+        return Set(rows.map { PathTools.canonical($0.cwd) })
+    }
+
+    private static func agyRecords(
+        homeDirectory: URL,
+        cache: [String: SessionCacheEntry]
+    ) -> (records: [SessionRecord], cacheEntries: [String: SessionCacheEntry], changed: Bool) {
+        let rows = loadAgySummaryRows(homeDirectory: homeDirectory)
+        guard !rows.isEmpty else { return ([], [:], false) }
+
+        var childrenByParent: [String: [String]] = [:]
+        var topLevelRows: [AgySummaryRow] = []
+        for row in rows {
+            if row.parentID.isEmpty {
+                topLevelRows.append(row)
+            } else {
+                childrenByParent[row.parentID, default: []].append(row.id)
+            }
+        }
+
+        let brainRoot = homeDirectory.appendingPathComponent(".gemini/antigravity/brain", isDirectory: true)
+        var records: [SessionRecord] = []
+        var cacheEntries: [String: SessionCacheEntry] = [:]
+        var changed = false
+
+        for row in topLevelRows {
+            let childIDs = childrenByParent[row.id] ?? []
+            let transcriptFiles = ([row.id] + childIDs).compactMap { id -> URL? in
+                let url = brainRoot
+                    .appendingPathComponent(id, isDirectory: true)
+                    .appendingPathComponent(".system_generated/logs/transcript.jsonl")
+                return FileTools.exists(url) ? url : nil
+            }
+
+            let parsedModified = parseAgyTimestamp(row.lastModifiedTime)
+            let stamp = bundleStamp(transcriptFiles) ?? (
+                mtime: parsedModified?.timeIntervalSince1970 ?? 0,
+                fileSize: Int64(childIDs.count)
+            )
+            let key = "\(agyCachePrefix)\(row.id)"
+
+            let entry: SessionCacheEntry
+            if let cached = cache[key],
+               abs(cached.mtime - stamp.mtime) < 0.001,
+               cached.fileSize == stamp.fileSize,
+               (parsedModified == nil || abs((cached.record?.modified ?? .distantPast).timeIntervalSince1970 - (parsedModified?.timeIntervalSince1970 ?? 0)) < 1.0) {
+                entry = cached
+            } else {
+                let info = agyUsageInfo(in: transcriptFiles)
+                let modified = parsedModified
+                    ?? transcriptFiles.compactMap(FileTools.modificationDate).max()
+                    ?? Date()
+                let title = row.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                let lastUser = title.isEmpty ? nil : String(title.prefix(400))
+                let cost = PricingCatalog.estimate(model: info.model, usage: info.usage)
+                let record = SessionRecord(
+                    tool: "agy",
+                    id: row.id,
+                    cwd: row.cwd,
+                    startedAt: info.startedAt,
+                    modified: modified,
+                    lastUser: lastUser,
+                    kind: .conversation,
+                    model: info.model,
+                    usage: info.usage,
+                    costUSD: cost,
+                    costIsEstimate: cost != nil ? true : nil
+                )
+                entry = SessionCacheEntry(
+                    mtime: stamp.mtime,
+                    fileSize: stamp.fileSize,
+                    record: record
+                )
+                changed = true
+            }
+
+            cacheEntries[key] = entry
+            if let record = entry.record {
+                records.append(record)
+            }
+        }
+
+        return (records, cacheEntries, changed)
+    }
+
+    private static func loadAgySummaryRows(homeDirectory: URL) -> [AgySummaryRow] {
+        let dbURL = homeDirectory.appendingPathComponent(".gemini/antigravity/conversation_summaries.db")
+        guard FileTools.exists(dbURL) else { return [] }
+
+        var database: OpaquePointer?
+        guard sqlite3_open_v2(
+            dbURL.path,
+            &database,
+            SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX,
+            nil
+        ) == SQLITE_OK,
+            let database
+        else {
+            sqlite3_close(database)
+            return []
+        }
+        defer { sqlite3_close(database) }
+
+        sqlite3_busy_timeout(database, 120)
+        var statement: OpaquePointer?
+        let sql = "SELECT conversation_id, title, last_modified_time, workspace_uris, parent_conversation_id FROM conversation_summaries WHERE workspace_uris != '' AND workspace_uris != '[]';"
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+              let statement
+        else { return [] }
+        defer { sqlite3_finalize(statement) }
+
+        var rows: [AgySummaryRow] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let idPtr = sqlite3_column_text(statement, 0),
+                  let urisPtr = sqlite3_column_text(statement, 3)
+            else { continue }
+            let id = String(cString: idPtr)
+            let title = sqlite3_column_text(statement, 1).map { String(cString: $0) } ?? ""
+            let modified = sqlite3_column_text(statement, 2).map { String(cString: $0) } ?? ""
+            let urisRaw = String(cString: urisPtr)
+            let parentID = sqlite3_column_text(statement, 4).map { String(cString: $0) } ?? ""
+
+            guard let cwd = firstWorkspacePath(from: urisRaw) else { continue }
+            rows.append(AgySummaryRow(
+                id: id,
+                title: title,
+                lastModifiedTime: modified,
+                cwd: cwd,
+                parentID: parentID
+            ))
+        }
+        return rows
+    }
+
+    private static func firstWorkspacePath(from workspaceUrisJSON: String) -> String? {
+        guard let data = workspaceUrisJSON.data(using: .utf8),
+              let array = try? JSONSerialization.jsonObject(with: data) as? [String]
+        else { return nil }
+        for uri in array {
+            if let url = URL(string: uri), url.isFileURL, !url.path.isEmpty {
+                return PathTools.normalize(url.path)
+            }
+        }
+        return nil
+    }
+
+    private static func agyUsageInfo(
+        in files: [URL]
+    ) -> (model: String?, usage: TokenUsage?, startedAt: Date?) {
+        var uncachedInput = 0
+        var cacheRead = 0
+        var cacheWrite = 0
+        var output = 0
+        var latestModel: String?
+        var latestModelTime = Date.distantPast
+        var earliestDate: Date?
+
+        for file in files {
+            guard let content = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            for line in content.split(separator: "\n", omittingEmptySubsequences: true) {
+                guard line.contains("input_tokens") || line.contains("output_tokens") || line.contains("created_at"),
+                      let data = String(line).data(using: .utf8),
+                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                else { continue }
+
+                let createdAt = (object["created_at"] as? String).flatMap(parseAgyTimestamp)
+                if let createdAt, earliestDate == nil || createdAt < earliestDate! {
+                    earliestDate = createdAt
+                }
+
+                let hasUsage = object["input_tokens"] != nil || object["output_tokens"] != nil
+                guard hasUsage else { continue }
+
+                uncachedInput += int(object["input_tokens"])
+                cacheRead += int(object["cache_read_tokens"])
+                cacheWrite += int(object["cache_write_tokens"])
+                output += int(object["output_tokens"])
+
+                if let modelName = object["model"] as? String, !modelName.isEmpty {
+                    let timestamp = createdAt ?? Date.distantPast
+                    if latestModel == nil || timestamp >= latestModelTime {
+                        latestModel = modelName
+                        latestModelTime = timestamp
+                    }
+                }
+            }
+        }
+
+        let inputTokens = uncachedInput + cacheRead
+        let totalTokens = inputTokens + cacheWrite + output
+        let usage = totalTokens > 0
+            ? TokenUsage(
+                inputTokens: inputTokens,
+                cachedInputTokens: cacheRead,
+                cacheWriteInputTokens: cacheWrite,
+                outputTokens: output,
+                reasoningOutputTokens: 0,
+                totalTokens: totalTokens
+            )
+            : nil
+
+        return (latestModel, usage, earliestDate)
+    }
+
+    private static func dateFromEpochMillis(_ raw: Any?) -> Date? {
+        guard let number = raw as? NSNumber else { return nil }
+        let value = number.doubleValue
+        guard value > 0 else { return nil }
+        let seconds = value > 10_000_000_000 ? value / 1000.0 : value
+        return Date(timeIntervalSince1970: seconds)
+    }
+
+    private static func parseAgyTimestamp(_ raw: String) -> Date? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: trimmed) { return date }
+
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        if let date = plain.date(from: trimmed) { return date }
+
+        let sqliteFormats = [
+            "yyyy-MM-dd HH:mm:ss.SSSSSSXXXXX",
+            "yyyy-MM-dd HH:mm:ss.SSSXXXXX",
+            "yyyy-MM-dd HH:mm:ssXXXXX",
+            "yyyy-MM-dd HH:mm:ss.SSSSSS",
+            "yyyy-MM-dd HH:mm:ss",
+        ]
+        for format in sqliteFormats {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = format
+            if let date = formatter.date(from: trimmed) {
+                return date
+            }
+        }
+        return nil
     }
 }

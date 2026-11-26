@@ -659,6 +659,40 @@ final class RepositoryStore {
         try? MetaStore.save(metadata)
     }
 
+    @discardableResult
+    func setCustomArtwork(from sourceURL: URL, for project: RepoProject) -> Bool {
+        guard let index = projects.firstIndex(where: { $0.path == project.path }) else { return false }
+        let previous = metadata[project.path]?.customArtwork ?? projects[index].customArtwork
+        guard let savedPath = try? ProjectArtwork.saveCustomArtwork(
+            from: sourceURL,
+            for: project.path,
+            existingCustomPath: previous
+        ) else { return false }
+
+        projects[index].customArtwork = savedPath
+        projects[index].artwork = savedPath
+        var meta = metadata[project.path] ?? ProjectMeta()
+        meta.customArtwork = savedPath
+        metadata[project.path] = meta
+        try? MetaStore.save(metadata)
+        ScanCacheStore.save(projects)
+        return true
+    }
+
+    func clearCustomArtwork(for project: RepoProject) {
+        guard let index = projects.firstIndex(where: { $0.path == project.path }) else { return }
+        let existing = metadata[project.path]?.customArtwork ?? projects[index].customArtwork
+        ProjectArtwork.removeCustomArtwork(at: existing)
+
+        var meta = metadata[project.path] ?? ProjectMeta()
+        meta.customArtwork = nil
+        metadata[project.path] = meta
+        projects[index].customArtwork = nil
+        projects[index].artwork = ProjectArtwork.find(in: URL(fileURLWithPath: project.path))
+        try? MetaStore.save(metadata)
+        ScanCacheStore.save(projects)
+    }
+
     func setGroup(_ group: String?, for project: RepoProject) {
         guard let index = projects.firstIndex(where: { $0.path == project.path }) else { return }
         let trimmed = group?.trimmingCharacters(in: .whitespacesAndNewlines)

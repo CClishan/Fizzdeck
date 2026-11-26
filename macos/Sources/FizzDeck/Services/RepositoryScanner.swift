@@ -211,7 +211,8 @@ enum RepositoryScanner {
             run: RunDetector.runConfig(directory),
             sessions: .empty,
             intro: IntroExtractor.extract(directory),
-            artwork: ProjectArtwork.find(in: directory),
+            artwork: ProjectArtwork.resolvedPath(in: directory, customArtwork: saved.customArtwork),
+            customArtwork: saved.customArtwork,
             test: RunDetector.testCommand(directory),
             starred: saved.starred,
             color: saved.color,
@@ -248,6 +249,10 @@ enum RepositoryScanner {
         var updated = project
         updated.group = saved.group ?? ProjectGrouping.detected(for: project.path, kind: project.kind)
         updated.detectedTools = tools
+        updated.customArtwork = saved.customArtwork
+        if saved.customArtwork != nil {
+            updated.artwork = ProjectArtwork.resolvedPath(in: directory, customArtwork: saved.customArtwork)
+        }
         updated.branch = git?.branch
         updated.lastCommit = git?.lastCommit
         updated.dirtyCount = git?.changes.total ?? 0

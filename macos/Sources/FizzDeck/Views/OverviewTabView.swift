@@ -1,7 +1,22 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
+
+enum ArtworkFilePicker {
+    @MainActor
+    static func pickImageURL() -> URL? {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canCreateDirectories = false
+        panel.prompt = "设为项目截图"
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+}
 
 struct OverviewTabView: View {
+    @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
     let project: RepoProject
     @Binding var noteDraft: String
@@ -269,13 +284,11 @@ struct OverviewTabView: View {
         Panel(title: "项目", symbol: "text.quote") {
             switch OverviewLayoutPolicy.summaryLayout(
                 width: contentWidth,
-                hasArtwork: project.artwork != nil
+                hasArtwork: true
             ) {
             case .threeColumns:
                 HStack(alignment: .top, spacing: 18) {
-                    if let artwork = project.artwork {
-                        ArtworkThumbnail(path: artwork)
-                    }
+                    artworkSlot
                     verticalHairline
                     projectIntro
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -286,9 +299,7 @@ struct OverviewTabView: View {
             case .twoPlusBottom:
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top, spacing: 18) {
-                        if let artwork = project.artwork {
-                            ArtworkThumbnail(path: artwork)
-                        }
+                        artworkSlot
                         verticalHairline
                         projectIntro
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -307,10 +318,8 @@ struct OverviewTabView: View {
                 }
             case .stacked:
                 VStack(alignment: .leading, spacing: 14) {
-                    if let artwork = project.artwork {
-                        ArtworkThumbnail(path: artwork)
-                        horizontalHairline
-                    }
+                    artworkSlot
+                    horizontalHairline
                     projectIntro
                         .frame(maxWidth: .infinity, alignment: .leading)
                     horizontalHairline
@@ -319,6 +328,23 @@ struct OverviewTabView: View {
                 }
             }
         }
+    }
+
+    private var artworkSlot: some View {
+        ArtworkThumbnail(
+            project: project,
+            onPickImage: {
+                if let url = ArtworkFilePicker.pickImageURL() {
+                    _ = store.setCustomArtwork(from: url, for: project)
+                }
+            },
+            onDropImage: { url in
+                _ = store.setCustomArtwork(from: url, for: project)
+            },
+            onResetCustom: {
+                store.clearCustomArtwork(for: project)
+            }
+        )
     }
 
     private var verticalHairline: some View {
@@ -516,39 +542,129 @@ private struct MicroBars: View {
 }
 
 private struct ArtworkThumbnail: View {
-    let path: String
+    let project: RepoProject
+    let onPickImage: () -> Void
+    let onDropImage: (URL) -> Void
+    let onResetCustom: () -> Void
+
     @State private var image: NSImage?
+    @State private var hovering = false
+    @State private var isDropTargeted = false
+
+    private var path: String? {
+        project.artwork
+    }
 
     var body: some View {
-        Button {
-            SystemActions.open(path)
-        } label: {
-            ZStack {
-                RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                    .fill(FizzTheme.recessedFill)
-
-                if let image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFill()
+        ZStack(alignment: .bottomTrailing) {
+            Button {
+                if let path {
+                    SystemActions.open(path)
                 } else {
-                    FizzIcon(symbol: "photo", size: 18)
-                        .foregroundStyle(.secondary)
+                    onPickImage()
+                }
+            } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
+                        .fill(FizzTheme.recessedFill)
+
+                    if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .interpolation(.high)
+                            .scaledToFill()
+                    } else if path != nil {
+                        FizzIcon(symbol: "photo", size: 18)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        VStack(spacing: 5) {
+                            FizzIcon(symbol: "photo.badge.plus", size: 17)
+                                .foregroundStyle(.secondary)
+                            Text("上传项目截图")
+                                .font(.system(size: 10.5, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(width: 176, height: 99)
+                .clipShape(RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous))
+                .overlay {
+                    if path == nil {
+                        RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
+                            .strokeBorder(
+                                isDropTargeted ? FizzTheme.accent : FizzTheme.stroke,
+                                style: StrokeStyle(lineWidth: isDropTargeted ? 1.5 : 1, dash: [4, 3])
+                            )
+                    } else {
+                        RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
+                            .strokeBorder(isDropTargeted ? FizzTheme.accent : FizzTheme.stroke, lineWidth: isDropTargeted ? 1.5 : 1)
+                    }
                 }
             }
-            .frame(width: 176, height: 99)
-            .clipShape(RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                    .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+            .buttonStyle(.plain)
+            .help(path == nil ? "点击或拖拽上传项目截图" : "点击查看大图，可右键或悬停替换")
+            .accessibilityLabel(path == nil ? "上传项目截图" : "打开项目封面图")
+
+            if path != nil && hovering {
+                Button {
+                    onPickImage()
+                } label: {
+                    Label("替换", systemImage: "photo.badge.plus")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .buttonStyle(.glass)
+                .controlSize(.mini)
+                .padding(6)
+                .help("替换项目截图")
             }
         }
-        .buttonStyle(.plain)
-        .help("打开项目封面图")
-        .accessibilityLabel("打开项目封面图")
+        .onHover { hovering = $0 }
+        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+            guard let provider = providers.first else { return false }
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                let url: URL? = {
+                    if let data = item as? Data {
+                        return URL(dataRepresentation: data, relativeTo: nil)
+                    }
+                    if let direct = item as? URL {
+                        return direct
+                    }
+                    return nil
+                }()
+                guard let url, ProjectArtwork.supportedExtensions.contains(url.pathExtension.lowercased()) else {
+                    return
+                }
+                Task { @MainActor in
+                    onDropImage(url)
+                }
+            }
+            return true
+        }
+        .contextMenu {
+            Button {
+                onPickImage()
+            } label: {
+                Label(path == nil ? "上传项目截图…" : "替换项目截图…", systemImage: "photo.badge.plus")
+            }
+            if let path {
+                Button {
+                    SystemActions.open(path)
+                } label: {
+                    Label("预览大图", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+            }
+            if project.customArtwork != nil {
+                Divider()
+                Button {
+                    onResetCustom()
+                } label: {
+                    Label("恢复自动识别截图", systemImage: "arrow.uturn.backward")
+                }
+            }
+        }
         .task(id: path) {
             image = nil
+            guard let path else { return }
             let data: Data? = await Task.detached(priority: .utility) { () -> Data? in
                 guard let value = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
                     return nil

@@ -44,6 +44,8 @@ enum WorkspaceWatchPaths {
         ".claude/projects",
         ".grok/sessions",
         ".gemini/tmp",
+        ".dsh/storages/session_projcache/sessions",
+        ".gemini/antigravity/brain",
     ]
 
     static func touchesGit(path: String, gitPath: String?) -> Bool {

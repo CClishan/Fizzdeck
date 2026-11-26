@@ -22,16 +22,6 @@ struct CommitHeatmapCard: View {
         )
     }
 
-    private var surfaceFill: Color {
-        colorScheme == .dark
-            ? Color(red: 0x22 / 255, green: 0x25 / 255, blue: 0x2A / 255)
-            : Color(red: 0x1B / 255, green: 0x1D / 255, blue: 0x20 / 255)
-    }
-
-    private var surfaceStroke: Color {
-        Color.white.opacity(colorScheme == .dark ? 0.09 : 0.07)
-    }
-
     var body: some View {
         let data = summary
 
@@ -40,17 +30,17 @@ struct CommitHeatmapCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("提交热力图")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
 
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text("\(data.totalCommits)")
                             .font(.system(size: 22, weight: .semibold))
                             .monospacedDigit()
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
 
                         Text("次 · 连续 \(data.currentStreak) 天")
                             .font(.system(size: 11))
-                            .foregroundStyle(Color.white.opacity(0.65))
+                            .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
                 }
@@ -65,15 +55,7 @@ struct CommitHeatmapCard: View {
             footer(summary: data)
         }
         .padding(16)
-        .background(
-            surfaceFill,
-            in: RoundedRectangle(cornerRadius: FizzRadius.panel, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: FizzRadius.panel, style: .continuous)
-                .strokeBorder(surfaceStroke, lineWidth: 1)
-        }
-        .fizzAdaptiveShadow(.raised)
+        .fizzCard(radius: FizzRadius.panel)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("提交热力图，\(range.title)共 \(data.totalCommits) 次本人提交，当前连续 \(data.currentStreak) 天，最长连续 \(data.longestStreak) 天")
     }
@@ -87,11 +69,11 @@ struct CommitHeatmapCard: View {
                 } label: {
                     Text(item.title)
                         .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
-                        .foregroundStyle(selected ? Color.black : Color.white.opacity(0.72))
+                        .foregroundStyle(selected ? Color.primary : Color.secondary)
                         .padding(.horizontal, 8)
                         .frame(height: 22)
                         .background(
-                            selected ? Color(red: 0xF5 / 255, green: 0xC4 / 255, blue: 0x51 / 255) : Color.clear,
+                            selected ? FizzTheme.elevatedFill : Color.clear,
                             in: Capsule()
                         )
                         .contentShape(Capsule())
@@ -100,7 +82,7 @@ struct CommitHeatmapCard: View {
             }
         }
         .padding(2)
-        .background(Color.white.opacity(0.08), in: Capsule())
+        .background(FizzTheme.recessedFill, in: Capsule())
     }
 
     private func dotMatrix(columns: [[HeatmapDayCell]]) -> some View {
@@ -134,7 +116,7 @@ struct CommitHeatmapCard: View {
                 .overlay {
                     if isHovered {
                         Circle()
-                            .strokeBorder(Color.white, lineWidth: 1.2)
+                            .strokeBorder(colorScheme == .dark ? Color.white : FizzTheme.accent, lineWidth: 1.2)
                     }
                 }
                 .contentShape(Rectangle())
@@ -154,13 +136,23 @@ struct CommitHeatmapCard: View {
     }
 
     private func dotColor(level: Int) -> Color {
-        let gold = Color(red: 0xF5 / 255, green: 0xC4 / 255, blue: 0x51 / 255)
+        if colorScheme == .dark {
+            let gold = Color(red: 0xF5 / 255, green: 0xC4 / 255, blue: 0x51 / 255)
+            switch level {
+            case 0: return Color.white.opacity(0.10)
+            case 1: return gold.opacity(0.32)
+            case 2: return gold.opacity(0.56)
+            case 3: return gold.opacity(0.78)
+            default: return gold
+            }
+        }
+
         switch level {
-        case 0: return Color.white.opacity(0.10)
-        case 1: return gold.opacity(0.32)
-        case 2: return gold.opacity(0.56)
-        case 3: return gold.opacity(0.78)
-        default: return gold
+        case 0: return Color.primary.opacity(0.08)
+        case 1: return Color(red: 0xF4 / 255, green: 0xD5 / 255, blue: 0x7A / 255)
+        case 2: return Color(red: 0xE6 / 255, green: 0xAE / 255, blue: 0x32 / 255)
+        case 3: return Color(red: 0xCE / 255, green: 0x85 / 255, blue: 0x10 / 255)
+        default: return Color(red: 0x9F / 255, green: 0x5D / 255, blue: 0x06 / 255)
         }
     }
 
@@ -169,13 +161,13 @@ struct CommitHeatmapCard: View {
             if let hoveredCell {
                 Text(hoverLabel(for: hoveredCell))
                     .font(.system(size: 10.5))
-                    .foregroundStyle(Color.white.opacity(0.88))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             } else {
                 Text("最长连续 \(summary.longestStreak) 天 · 点击有提交的日期筛选项目")
                     .font(.system(size: 10.5))
-                    .foregroundStyle(Color.white.opacity(0.56))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 

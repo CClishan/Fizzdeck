@@ -9,6 +9,8 @@ enum DetectedTool: String, CaseIterable, Codable, Identifiable, Hashable, Sendab
     case trae
     case windsurf
     case gemini
+    case deepseek
+    case agy
 
     var id: String { rawValue }
 
@@ -21,6 +23,8 @@ enum DetectedTool: String, CaseIterable, Codable, Identifiable, Hashable, Sendab
         case .trae: "Trae"
         case .windsurf: "Windsurf"
         case .gemini: "Gemini CLI"
+        case .deepseek: "DeepSeek Harness"
+        case .agy: "Antigravity (AGY)"
         }
     }
 
@@ -28,6 +32,8 @@ enum DetectedTool: String, CaseIterable, Codable, Identifiable, Hashable, Sendab
         switch self {
         case .claude: "Claude"
         case .gemini: "Gemini"
+        case .deepseek: "DeepSeek"
+        case .agy: "AGY"
         default: title
         }
     }
@@ -41,6 +47,8 @@ enum DetectedTool: String, CaseIterable, Codable, Identifiable, Hashable, Sendab
         case .trae: "wand.and.stars"
         case .windsurf: "wind"
         case .gemini: "diamond"
+        case .deepseek: "cpu"
+        case .agy: "sparkles.rectangle.stack"
         }
     }
 
@@ -53,13 +61,15 @@ enum DetectedTool: String, CaseIterable, Codable, Identifiable, Hashable, Sendab
         case .trae: .green
         case .windsurf: .cyan
         case .gemini: .indigo
+        case .deepseek: .mint
+        case .agy: .pink
         }
     }
 
     var supportsResume: Bool {
         switch self {
         case .codex, .claude, .grok, .gemini: true
-        case .cursor, .trae, .windsurf: false
+        case .cursor, .trae, .windsurf, .deepseek, .agy: false
         }
     }
 }
@@ -81,6 +91,8 @@ struct ToolEvidenceIndex: Sendable {
             ("claude", .claude),
             ("grok", .grok),
             ("gemini", .gemini),
+            ("deepseek", .deepseek),
+            ("agy", .agy),
         ] {
             if let cwds = resolvedSessions[name] {
                 map[tool, default: []].formUnion(cwds)
@@ -152,6 +164,8 @@ enum ToolEvidenceDetector {
         if has(".trae") { add(.trae) }
         if has(".windsurf") || has(".windsurfrules") { add(.windsurf) }
         if has(".gemini") || has("GEMINI.md") { add(.gemini) }
+        if has(".dsh") { add(.deepseek) }
+        if has(".antigravity") { add(.agy) }
 
         return DetectedTool.allCases.filter { found.contains($0) }
     }

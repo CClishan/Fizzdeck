@@ -28,6 +28,7 @@ struct RepoProject: Identifiable, Codable, Sendable {
     var sessions: SessionSummary
     var intro: ProjectIntro
     var artwork: String?
+    var customArtwork: String? = nil
     var test: TestCommand?
     var starred: Bool
     var color: TagColor?
@@ -61,6 +62,7 @@ struct RepoProject: Identifiable, Codable, Sendable {
         sessions: SessionSummary,
         intro: ProjectIntro,
         artwork: String?,
+        customArtwork: String? = nil,
         test: TestCommand?,
         starred: Bool,
         color: TagColor?,
@@ -91,6 +93,7 @@ struct RepoProject: Identifiable, Codable, Sendable {
         self.sessions = sessions
         self.intro = intro
         self.artwork = artwork
+        self.customArtwork = customArtwork
         self.test = test
         self.starred = starred
         self.color = color
@@ -295,6 +298,7 @@ struct ProjectMeta: Codable, Sendable {
     var color: TagColor?
     var group: String?
     var note = ""
+    var customArtwork: String? = nil
     var attention: [String: AttentionPreference] = [:]
 }
 

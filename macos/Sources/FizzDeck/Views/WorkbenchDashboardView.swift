@@ -20,10 +20,6 @@ struct WorkbenchDashboardView: View {
         )
     }
 
-    private var toolShares: [AIToolShare] {
-        DashboardMetrics.weeklyToolShares(projects: store.projects)
-    }
-
     private var continueItems: [ContinueWorkItem] {
         DashboardMetrics.continueWorkItems(projects: store.projects, limit: 4)
     }
@@ -61,9 +57,6 @@ struct WorkbenchDashboardView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: FizzSpacing.section) {
                         header
-                        if !toolShares.isEmpty {
-                            aiShareBar
-                        }
                         mainColumns
                     }
                     .onGeometryChange(for: CGFloat.self) {
@@ -163,54 +156,6 @@ struct WorkbenchDashboardView: View {
                 .lineLimit(1)
         }
         .accessibilityElement(children: .combine)
-    }
-
-    private var aiShareBar: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            GeometryReader { proxy in
-                HStack(spacing: 3) {
-                    ForEach(toolShares) { share in
-                        let width = max(22, (proxy.size.width - CGFloat(max(0, toolShares.count - 1)) * 3) * share.fraction)
-                        HStack(spacing: 4) {
-                            if width >= 78 {
-                                Text(share.title)
-                                    .font(.system(size: 10.5, weight: .medium))
-                                    .lineLimit(1)
-                                Text("\(Int((share.fraction * 100).rounded()))%")
-                                    .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                            } else if width >= 36 {
-                                Text("\(Int((share.fraction * 100).rounded()))%")
-                                    .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                            }
-                        }
-                        .foregroundStyle(.white)
-                        .frame(width: width, height: 24)
-                        .background(
-                            DetectedTool(rawValue: share.tool)?.tint ?? FizzTheme.accent,
-                            in: Capsule()
-                        )
-                        .help("\(share.title) · \(share.sessions) 会话 · \(Format.tokens(share.tokens)) tokens")
-                    }
-                }
-            }
-            .frame(height: 24)
-
-            HStack(spacing: 12) {
-                ForEach(toolShares) { share in
-                    HStack(spacing: 5) {
-                        Circle()
-                            .fill(DetectedTool(rawValue: share.tool)?.tint ?? FizzTheme.accent)
-                            .frame(width: 6, height: 6)
-                        Text("\(share.title) \(Int((share.fraction * 100).rounded()))%")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("本周 AI 用量占比：" + toolShares.map { "\($0.title) \(Int(($0.fraction * 100).rounded()))%" }.joined(separator: "，"))
     }
 
     @ViewBuilder

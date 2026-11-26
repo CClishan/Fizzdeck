@@ -14,8 +14,6 @@ struct SessionContinueButton: View {
     @State private var feedback: SessionResumeResult?
     @State private var showFeedbackPopover = false
     @State private var ideEditors: [ProjectEditor] = []
-    @State private var hoveringPrimary = false
-    @State private var hoveringMenu = false
 
     private var resumableSessions: [SessionRecord] {
         var result: [SessionRecord] = []
@@ -84,13 +82,12 @@ struct SessionContinueButton: View {
         if let editor = ideEditors.first {
             switch style {
             case .compact:
-                ideButton(editor: editor, height: 22, fontSize: 10.5)
+                ideButton(editor: editor, controlSize: .small, fontSize: 10.5, iconSize: 9, spacing: 3)
                     .popover(isPresented: $showFeedbackPopover, arrowEdge: .bottom) {
                         feedbackPopoverContent
                     }
             case .prominent:
-                ideButton(editor: editor, height: 32, fontSize: 12)
-                    .fizzAdaptiveShadow(.raised)
+                ideButton(editor: editor, controlSize: .regular, fontSize: 12, iconSize: 11, spacing: 4)
             case .dock:
                 dockIDEControls(editor: editor)
             }
@@ -99,103 +96,77 @@ struct SessionContinueButton: View {
 
     private func ideButton(
         editor: ProjectEditor,
-        height: CGFloat,
-        fontSize: CGFloat
+        controlSize: ControlSize,
+        fontSize: CGFloat,
+        iconSize: CGFloat,
+        spacing: CGFloat
     ) -> some View {
-        HStack(spacing: 0) {
-            Button {
-                SystemActions.open(project.path, in: editor)
-            } label: {
-                HStack(spacing: 4) {
-                    FizzIcon(symbol: "arrow.up.forward.app", size: 9)
-                    Text("打开 \(editor.title)")
-                        .font(.system(size: fontSize, weight: .semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .frame(height: height)
-                .background(FizzTheme.accent)
-            }
-            .buttonStyle(.plain)
-            .help("在 \(editor.title) 中打开项目")
-            .accessibilityLabel("在 \(editor.title) 中打开项目")
-            .accessibilityHint("用 \(editor.title) 打开当前项目目录")
-
-            if showsChevronMenu {
-                Rectangle()
-                    .fill(.white.opacity(0.24))
-                    .frame(width: 1, height: height * 0.55)
-                    .background(FizzTheme.accent)
-
-                Menu {
-                    toolMenuItems
+        GlassEffectContainer(spacing: spacing) {
+            HStack(spacing: spacing) {
+                Button {
+                    SystemActions.open(project.path, in: editor)
                 } label: {
-                    FizzIcon(symbol: "chevron.down", size: 8)
-                        .foregroundStyle(.white)
-                        .frame(width: 18, height: height)
-                        .background(FizzTheme.accent)
+                    HStack(spacing: 4) {
+                        FizzIcon(symbol: "arrow.up.forward.app", size: iconSize)
+                            .foregroundStyle(FizzTheme.accent)
+                        Text("打开 \(editor.title)")
+                            .font(.system(size: fontSize, weight: .semibold))
+                    }
                 }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("选择打开方式")
-                .accessibilityLabel("选择打开方式")
+                .buttonStyle(.glass)
+                .controlSize(controlSize)
+                .help("在 \(editor.title) 中打开项目")
+                .accessibilityLabel("在 \(editor.title) 中打开项目")
+                .accessibilityHint("用 \(editor.title) 打开当前项目目录")
+
+                if showsChevronMenu {
+                    chevronMenuButton(
+                        controlSize: controlSize,
+                        iconSize: max(8, iconSize - 1),
+                        help: "选择打开方式",
+                        label: "选择打开方式"
+                    )
+                }
             }
         }
-        .clipShape(Capsule())
     }
 
     private func compactControls(primary: SessionRecord) -> some View {
-        HStack(spacing: 0) {
-            Button {
-                Task { await trigger(session: primary, target: .auto) }
-            } label: {
-                HStack(spacing: 4) {
-                    if running {
-                        ProgressView()
-                            .controlSize(.mini)
-                    } else {
-                        FizzIcon(symbol: "play.fill", size: 9)
-                    }
-                    Text("继续")
-                        .font(.system(size: 10.5, weight: .semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .frame(height: 22)
-                .background(FizzTheme.accent)
-            }
-            .buttonStyle(.plain)
-            .disabled(running)
-            .help("继续最近 \(toolTitle(primary.tool)) 会话")
-            .accessibilityLabel("继续 \(toolTitle(primary.tool)) 会话")
-            .accessibilityHint("在终端恢复最近一次会话")
-
-            if showsChevronMenu {
-                Rectangle()
-                    .fill(.white.opacity(0.24))
-                    .frame(width: 1, height: 12)
-                    .background(FizzTheme.accent)
-
-                Menu {
-                    toolMenuItems
+        GlassEffectContainer(spacing: 3) {
+            HStack(spacing: 3) {
+                Button {
+                    Task { await trigger(session: primary, target: .auto) }
                 } label: {
-                    FizzIcon(symbol: "chevron.down", size: 8)
-                        .foregroundStyle(.white)
-                        .frame(width: 18, height: 22)
-                        .background(FizzTheme.accent)
+                    HStack(spacing: 4) {
+                        if running {
+                            ProgressView()
+                                .controlSize(.mini)
+                        } else {
+                            FizzIcon(symbol: "play.fill", size: 9)
+                                .foregroundStyle(FizzTheme.accent)
+                        }
+                        Text("继续")
+                            .font(.system(size: 10.5, weight: .semibold))
+                    }
                 }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .fixedSize()
+                .buttonStyle(.glass)
+                .controlSize(.small)
                 .disabled(running)
-                .help("选择要继续的工具")
-                .accessibilityLabel("选择要继续的工具或打开方式")
+                .help("继续最近 \(toolTitle(primary.tool)) 会话")
+                .accessibilityLabel("继续 \(toolTitle(primary.tool)) 会话")
+                .accessibilityHint("在终端恢复最近一次会话")
+
+                if showsChevronMenu {
+                    chevronMenuButton(
+                        controlSize: .small,
+                        iconSize: 8,
+                        help: "选择要继续的工具",
+                        label: "选择要继续的工具或打开方式"
+                    )
+                    .disabled(running)
+                }
             }
         }
-        .clipShape(Capsule())
     }
 
     private func prominentControls(primary: SessionRecord) -> some View {
@@ -204,56 +175,41 @@ struct SessionContinueButton: View {
                 feedbackBanner(feedback)
             }
 
-            HStack(spacing: 0) {
-                Button {
-                    Task { await trigger(session: primary, target: .auto) }
-                } label: {
-                    HStack(spacing: 6) {
-                        if running {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            FizzIcon(symbol: "play.fill", size: 11)
-                        }
-                        Text("继续 · \(toolTitle(primary.tool))")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 13)
-                    .frame(height: 32)
-                    .background(FizzTheme.accent)
-                }
-                .buttonStyle(.plain)
-                .disabled(running)
-                .help("继续最近 \(toolTitle(primary.tool)) 会话")
-                .accessibilityLabel("继续 \(toolTitle(primary.tool)) 会话")
-                .accessibilityHint("在终端恢复最近一次会话")
-
-                if showsChevronMenu {
-                    Rectangle()
-                        .fill(.white.opacity(0.28))
-                        .frame(width: 1, height: 16)
-                        .background(FizzTheme.accent)
-
-                    Menu {
-                        toolMenuItems
+            GlassEffectContainer(spacing: 4) {
+                HStack(spacing: 4) {
+                    Button {
+                        Task { await trigger(session: primary, target: .auto) }
                     } label: {
-                        FizzIcon(symbol: "chevron.down", size: 9)
-                            .foregroundStyle(.white)
-                            .frame(width: 26, height: 32)
-                            .background(FizzTheme.accent)
+                        HStack(spacing: 6) {
+                            if running {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                FizzIcon(symbol: "play.fill", size: 11)
+                                    .foregroundStyle(FizzTheme.accent)
+                            }
+                            Text("继续 · \(toolTitle(primary.tool))")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
                     }
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
+                    .buttonStyle(.glass)
+                    .controlSize(.regular)
                     .disabled(running)
-                    .help("选择工具或打开方式")
-                    .accessibilityLabel("选择要继续的工具或打开方式")
+                    .help("继续最近 \(toolTitle(primary.tool)) 会话")
+                    .accessibilityLabel("继续 \(toolTitle(primary.tool)) 会话")
+                    .accessibilityHint("在终端恢复最近一次会话")
+
+                    if showsChevronMenu {
+                        chevronMenuButton(
+                            controlSize: .regular,
+                            iconSize: 9,
+                            help: "选择工具或打开方式",
+                            label: "选择要继续的工具或打开方式"
+                        )
+                        .disabled(running)
+                    }
                 }
             }
-            .clipShape(Capsule())
-            .fizzAdaptiveShadow(.raised)
         }
     }
 
@@ -263,8 +219,8 @@ struct SessionContinueButton: View {
                 feedbackBanner(feedback)
             }
 
-            GlassEffectContainer(spacing: 0) {
-                HStack(spacing: 0) {
+            GlassEffectContainer(spacing: 4) {
+                HStack(spacing: 4) {
                     Button {
                         Task { await trigger(session: primary, target: .auto) }
                     } label: {
@@ -278,36 +234,32 @@ struct SessionContinueButton: View {
                             }
                             Text("继续 · \(toolTitle(primary.tool))")
                                 .font(.system(size: 12.5, weight: .semibold))
-                                .foregroundStyle(.primary)
                         }
-                        .padding(.horizontal, 14)
-                        .frame(height: 34)
-                        .background(hoveringPrimary ? FizzTheme.selectedFill : .clear, in: Capsule())
-                        .contentShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glass)
+                    .controlSize(.large)
                     .disabled(running)
-                    .onHover { hoveringPrimary = $0 }
                     .help("继续最近 \(toolTitle(primary.tool)) 会话")
                     .accessibilityLabel("继续 \(toolTitle(primary.tool)) 会话")
                     .accessibilityHint("在终端恢复最近一次会话")
 
                     if showsChevronMenu {
-                        dockDivider
-                        dockChevronMenu(help: "选择工具或打开方式", label: "选择要继续的工具或打开方式")
-                            .disabled(running)
+                        chevronMenuButton(
+                            controlSize: .large,
+                            iconSize: 10,
+                            help: "选择工具或打开方式",
+                            label: "选择要继续的工具或打开方式"
+                        )
+                        .disabled(running)
                     }
                 }
-                .padding(3)
-                .glassEffect(.regular.interactive(), in: Capsule())
             }
-            .fizzAdaptiveShadow(.floating)
         }
     }
 
     private func dockIDEControls(editor: ProjectEditor) -> some View {
-        GlassEffectContainer(spacing: 0) {
-            HStack(spacing: 0) {
+        GlassEffectContainer(spacing: 4) {
+            HStack(spacing: 4) {
                 Button {
                     SystemActions.open(project.path, in: editor)
                 } label: {
@@ -316,52 +268,42 @@ struct SessionContinueButton: View {
                             .foregroundStyle(FizzTheme.accent)
                         Text("打开 \(editor.title)")
                             .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(.primary)
                     }
-                    .padding(.horizontal, 14)
-                    .frame(height: 34)
-                    .background(hoveringPrimary ? FizzTheme.selectedFill : .clear, in: Capsule())
-                    .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
-                .onHover { hoveringPrimary = $0 }
+                .buttonStyle(.glass)
+                .controlSize(.large)
                 .help("在 \(editor.title) 中打开项目")
                 .accessibilityLabel("在 \(editor.title) 中打开项目")
                 .accessibilityHint("用 \(editor.title) 打开当前项目目录")
 
                 if showsChevronMenu {
-                    dockDivider
-                    dockChevronMenu(help: "选择打开方式", label: "选择打开方式")
+                    chevronMenuButton(
+                        controlSize: .large,
+                        iconSize: 10,
+                        help: "选择打开方式",
+                        label: "选择打开方式"
+                    )
                 }
             }
-            .padding(3)
-            .glassEffect(.regular.interactive(), in: Capsule())
         }
-        .fizzAdaptiveShadow(.floating)
     }
 
-    private var dockDivider: some View {
-        Rectangle()
-            .fill(FizzTheme.hairline)
-            .frame(width: 1, height: 16)
-            .padding(.horizontal, 2)
-    }
-
-    private func dockChevronMenu(help: String, label: String) -> some View {
+    private func chevronMenuButton(
+        controlSize: ControlSize,
+        iconSize: CGFloat,
+        help: String,
+        label: String
+    ) -> some View {
         Menu {
             toolMenuItems
         } label: {
-            FizzIcon(symbol: "chevron.down", size: 9)
-                .foregroundStyle(.secondary)
-                .frame(width: 28, height: 34)
-                .background(hoveringMenu ? FizzTheme.selectedFill : .clear, in: Capsule())
-                .contentShape(Capsule())
+            FizzIcon(symbol: "chevron.down", size: iconSize)
         }
         .menuStyle(.button)
-        .buttonStyle(.plain)
+        .buttonStyle(.glass)
         .menuIndicator(.hidden)
+        .controlSize(controlSize)
         .fixedSize()
-        .onHover { hoveringMenu = $0 }
         .help(help)
         .accessibilityLabel(label)
     }

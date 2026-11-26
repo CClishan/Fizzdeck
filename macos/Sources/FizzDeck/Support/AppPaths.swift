@@ -11,6 +11,7 @@ enum AppPaths {
     static let onboardingFile = stateDir.appendingPathComponent("onboarding.json")
     static let logsDir = stateDir.appendingPathComponent("logs", isDirectory: true)
     static let launchersDir = stateDir.appendingPathComponent("launchers", isDirectory: true)
+    static let coversDir = stateDir.appendingPathComponent("covers", isDirectory: true)
 
     static let docCandidates = [
         "README.md",
