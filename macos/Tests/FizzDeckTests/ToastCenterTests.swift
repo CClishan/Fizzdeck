@@ -1,3 +1,4 @@
+import Observation
 import XCTest
 @testable import FizzDeck
 
@@ -58,7 +59,10 @@ final class ToastCenterTests: XCTestCase {
         let first = center.show("自动收起", duration: 0.12)
         let second = center.show("保持", duration: nil)
 
-        try? await Task.sleep(for: .milliseconds(260))
+        let removal = XCTestExpectation(description: "Toast queue changes when the timed toast is dismissed")
+        withObservationTracking { _ = center.messages } onChange: { removal.fulfill() }
+        let waitResult = await XCTWaiter.fulfillment(of: [removal], timeout: 5)
+        XCTAssertEqual(waitResult, .completed)
 
         XCTAssertNil(center.messages.first(where: { $0.id == first }))
         XCTAssertEqual(center.messages.map(\.id), [second])

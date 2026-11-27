@@ -4,23 +4,25 @@
 
 | 项目 | 当前状态 |
 |---|---|
-| 公开安装包 | v0.8.0 发布准备时，GitHub API 的 [Latest](https://github.com/CClishan/Fizzdeck/releases/latest) 仍是 `v0.7.4`（Build 12，ad-hoc）；远端 `main` 在 `0ce126c`，未见 `v0.8.0` tag。 |
-| v0.8.0 / Build 16 | 两个脚本默认 `0.8.0 / 16`。候选 `macos/dist/candidates/v0.8.0-build16/FizzDeck-0.8.0-arm64.dmg`，6,568,529 字节，SHA-256 `bda4dc4de6d764d57498fed2aa86d648b174e1c0a196c866a07401990283b0db`。只读挂载确认 arm64、原 Bundle ID、版本和三个动作元数据，DMG 与严格签名校验通过。无 Team ID、未公证，`spctl` 拒绝。见[发行说明](docs/releases/v0.8.0.md)；源码指纹与构建日志留在 `output/release-v0.8.0/`。 |
+| 公开安装包 | [v0.8.0 / Build 16](https://github.com/CClishan/Fizzdeck/releases/tag/v0.8.0) 已设为 [Latest](https://github.com/CClishan/Fizzdeck/releases/latest)，非草稿、非预发布。[PR #3](https://github.com/CClishan/Fizzdeck/pull/3) 合并提交 [`3b6a846`](https://github.com/CClishan/Fizzdeck/commit/3b6a8464ee96b7531ffce3b720c0673d5b36e053) 即 tag 对应源码；[GitHub Actions](https://github.com/CClishan/Fizzdeck/actions/runs/46005894773) 生成并校验 DMG 和旁置 SHA-256。 |
+| v0.8.0 / Build 16 | 公开 `FizzDeck-0.8.0-arm64.dmg` 为 **6,726,887 字节**，SHA-256 `4f9334184d0596a8fbc20a46e7ab074bd9f40562007900111801079fe8cf58cf`。草稿时只读挂载实读 `0.8.0 / 16`、`com.a003.fizzdeck`、arm64、macOS 26.0、三个动作元数据，严格签名校验通过；公开后匿名重新下载两个资产，字节与草稿一致。签名为 ad-hoc，无 Team ID、未公证。本机带 Finder 排布的候选 SHA `bda4dc4de6d764d57498fed2aa86d648b174e1c0a196c866a07401990283b0db` 不适用于公开包。[发行说明](docs/releases/v0.8.0.md)。 |
 | v0.7.5 / Build 13 | 从原有未提交功能冻结独立源码，在其上升级版本：`macos/dist/FizzDeck-0.7.5-Build13-native-source.tar.gz`。源码归档 SHA-256 `414db0f4a29602463b68aa7a6443a020a6d1b79c2e8fee9915a00d83e646ed5c`。独立 `swift test` **264 项通过**。安装包 `macos/dist/FizzDeck-0.7.5-arm64.dmg`，SHA-256 `5378cbc78c863d019961e04c517ee5108af629430431f81d7afeb6bd59fbf844`，挂载后实读 `0.7.5 / 13`，`codesign --verify --deep --strict`、DMG 和旁置 SHA 校验均通过。未公证。 |
-| 后续阶段 | v0.7.6、v0.7.7、v0.8.0 的改动在同一开发工作树，不在上述 DMG 内。Build 13 安装包、校验文件与源码另存于 `macos/dist/candidates/v0.7.5-build13/`，普通打包不会覆盖。要重建 Build 13 用冻结包，**不要把当前工作树直接打 v0.7.5 tag**。开发构建另存 `macos/dist/development/FizzDeck.app`（实读 `0.8.0 / 16`）。见[能力矩阵](docs/CAPABILITIES_AND_ROADMAP.md)、[系统集成与验收](docs/SYSTEM_INTEGRATION.md)。 |
-| 官网 | [Studio Display 样机版](https://koroo.top/fizzdeck)已上线，官网仓库[提交 `5428dc2`](https://github.com/CClishan/koroo-blog/commit/5428dc216748836e2208f67cc839a7677a552089)。[Vercel Production](https://koroo-58etuli77-cclishans-projects.vercel.app) 部署成功。公网域名直接 HTTPS 返回的 HTML SHA-256 为 `adb8d4012fbb39fef6ef59eb2d06adf27f7b7844899e1a3dbb21d01bb528fffd`，HTML 和全部 9 个依赖逐字节匹配，无需代理或指定边缘 IP。 |
+| 阶段版本 | v0.7.6 的体检、v0.7.7 的趋势与保护、v0.8.0 的系统集成均随 Build 16 分发。独立 Build 13 安装包、校验和源码仍在 `macos/dist/candidates/v0.7.5-build13/`；不要用 Build 16 源码重建 Build 13。 |
+| 官网 | [koroo.top/fizzdeck](https://koroo.top/fizzdeck) 已上线 v0.8.0 文案，保留 Studio Display 与 Mac Studio 样机及 Build 13 实机图。官网[提交 `896e08d`](https://github.com/CClishan/koroo-blog/commit/896e08dc6baf1f9bb3f75413281f3a037c4506a7)。[Vercel 生产部署](https://vercel.com/cclishans-projects/koroo-me/FbbZUt86AY2eEqFo4YtzgLrRZrnA)成功。公网页面 SHA-256 `1a8d7743fedc671474481a3cadf21c0a953c76274e1f290a1c01df8f01ac86a0`，HTML 与 9 个依赖均与发布产物逐字节一致。 |
 | 本机开发签名 | 已用有效的 Apple Development 身份签好 `macos/dist/development-signed/FizzDeck.app`（`0.8.0 / 16`，原产品 Bundle ID）。严格签名校验通过；同构建的隔离副本在系统「快捷指令」中跑通了全部三项。 |
-| 外部依赖 | `gh` 身份、Release 查询及产品仓库 push/admin 权限已验。钥匙串现有 1 个有效 Apple Development 身份，0 个 Developer ID Application 身份，未设置 `NOTARY_PROFILE`。`/Applications/FizzDeck.app` 仍为 v0.5.3。`spctl` 对 Build 13 的 ad-hoc App 返回 `rejected`；其公证与两条旧版原地升级仍待验。 |
+| 外部验收 | 已实际用 Git 和 `gh` 推送源码、触发 CI 并发布。当前只有 Apple Development 测试身份，缺 Developer ID Application 与 `NOTARY_PROFILE`。v0.5.3 和 v0.7.4 的原地升级及状态保留、完整 VoiceOver 朗读尚未实测。 |
 
-**官网样机：** 原 Studio Display 与 Mac Studio 中展示真实 Build 13 工作台；其余三张为进度、版本和体检。此前已在 390px / 1440px 核对贴图、中英文和下载；WebP 边缘是 `#f6f6f6`，与展台背景同色。Build 16 文案沿用这组图片并标明截图来源。[本地预览](http://127.0.0.1:52020/landing.html)；其下载入口与公网均使用 `releases/latest`。版本文案在新版公开后再部署。坐标见[官网验收](src/landing/REHEARSAL.md)。
+**官网样机：** 原 Studio Display 与 Mac Studio 中展示真实 Build 13 工作台；其余三张为进度、版本和体检。此前已在 390px / 1440px 核对贴图、中英文和下载；WebP 边缘是 `#f6f6f6`，与展台背景同色。Build 16 文案沿用这组图片并标明截图来源。[本地预览](http://127.0.0.1:52020/landing.html)；其下载入口与公网均使用 `releases/latest`。已在 Latest 更新后部署新版文案。坐标见[官网验收](src/landing/REHEARSAL.md)。
 
 本次发布准备再次用 Chrome 在 1440px / 390px 各点击切换中英文，核对下载地址、版本、截图来源和屏幕贴图位置，四种组合均无横向溢出。官网导出仍为 HTML + 9 个依赖，8 个依赖与线上相同；部署只需替换 HTML 并新增带内容哈希的文案脚本。对应补丁在 `output/release-v0.8.0/koroo-fizzdeck-0.8.0.patch`，浏览器记录在 `output/playwright/fizzdeck-v0.8.0/`。不要将 Swift 编译和测试的临时目录混入 Tailwind 的网页构建目录；本次网页产物从独立、无编译缓存的源码目录生成。
 
 ## 真机与回归
 
+- 合并提交第一次 CI 的提示条测试在固定等待 260 毫秒后过早断言，原提交重跑通过。后续测试改为观察队列实际变动，再验证只移除目标提示；不改发布 App 的行为。
+
 - macOS 26 托管 CI 中，旧的结束会话测试以 `yes` 充当 CLI；该版本的 `yes` 会改写参数，`ps` 看到的 `resume` 与会话 ID 不再是两个参数。测试改用同名可执行文件 `cat` 阻塞读取名为 `resume` 的 FIFO，每次生成独立会话 ID，并核对测试子进程的 PID 后才测试停止。保留应用的精确匹配规则。
 
-最后一笔 Swift 改动后，使用 `-strict-concurrency=complete` 复测：**296 项，295 通过、1 项图形压测默认跳过、0 失败、0 编译警告**；该压测另行在解锁桌面通过。用同一份源码重建开发 App，实读 `0.8.0 / 16`，包含快捷指令元数据。Build 13 的 264 项属于单独源码快照。两个 workflow 通过 actionlint v1.7.12，所有 Shell 脚本通过语法检查，干净 `npm ci` + `npm run build` 通过。原生 `main` / `origin/main` 在 `0ce126c`；GitHub API 返回 0 个 workflow，尚无本次托管运行。打包与压测日志在 `output/roadmap-qa-2026-11-27/`，键盘、快捷指令、最终构建与公网校验在 `output/integration-qa-2026-11-27/`，均不入 Git。
+最后一笔 Swift 改动后，使用 `-strict-concurrency=complete` 复测：**296 项，295 通过、1 项图形压测默认跳过、0 失败、0 编译警告**；该压测另行在解锁桌面通过。用同一份源码重建开发 App，实读 `0.8.0 / 16`，包含快捷指令元数据。Build 13 的 264 项属于单独源码快照。两个 workflow 通过 actionlint v1.7.12，所有 Shell 脚本通过语法检查，干净 `npm ci` + `npm run build` 通过。[PR CI](https://github.com/CClishan/Fizzdeck/actions/runs/46004663046)、[合并提交 CI](https://github.com/CClishan/Fizzdeck/actions/runs/46005782077) 与 [tag 工作流](https://github.com/CClishan/Fizzdeck/actions/runs/46005894773) 均通过。打包与压测日志在 `output/roadmap-qa-2026-11-27/`，键盘、快捷指令、最终构建与公网校验在 `output/integration-qa-2026-11-27/`，均不入 Git。
 
 - L0 按产品设计跟踪前 8 个关注项目的根目录输入，文件变化仅重检该项目。L1 首扫后覆盖全部关注 Git 项目，串行、单项目 24 小时一次；应用重新激活会补排已到期项。HTTPS 与非交互 SSH 的支持边界见 [云端体检](docs/QUIET_FETCH.md)。L2 只有点击才运行，日志和停止状态跨页共享。端口释放重新核对身份，只发一次 `SIGTERM`；工作台、菜单与命令面板的旧入口不再按端口批量终止进程。
 - L1 启动回归全程停留在工作台：10 个手动关注项目均完成检查，实测并发峰值为 1。跨进程复测用真实目录和符号链接：跨午夜不重置，第 86,399 秒仍限流，第 86,400 秒放行。刚挂载的 FSEvents 流可能补送旧 `HEAD` / `index` 事件；现在先核对文件状态，回放旧事件不会触发多余刷新。
@@ -37,7 +39,7 @@
 
 ## 继续工作
 
-本次发布目标为 **v0.8.0 / Build 16**。从冻结的发布源码推 `codex/fizzdeck-roadmap-ci` 并开 PR；建分支依当前用户约定处理。验完 `native` 和 `web-and-shell`，合并后在实际包含 Build 16 的提交上打 tag。tag 工作流补跑 CI、打包并上传草稿。CI 跳过 Finder 排布，所以不得将本机 DMG 的 SHA 套到 CI 产物；公开前后均核对同一个 DMG 和旁置校验文件。发布后记录 tag 提交、run URL、公开下载 SHA、官网部署与两条升级路径。Apple 公证和 VoiceOver 完整朗读另验。
+本次发版已完成。后续需在旧版实机验证两条更新路径并核对项目、星标和设置；补完整键盘与 VoiceOver 朗读。取得 Developer ID Application 和公证凭据后，再从对应源码制作公证分发版。公开 DMG 校验记录留在 `output/release-v0.8.0/public-verification.json`。
 
 ## 网页版对齐 macOS（2026-11-26，本地未提交）
 
