@@ -5,6 +5,8 @@ MODE="${1:-run}"
 APP_NAME="FizzDeck"
 BUNDLE_ID="com.a003.fizzdeck"
 MIN_SYSTEM_VERSION="26.0"
+VERSION="${VERSION:-0.7.4}"
+BUILD_NUM="${BUILD_NUM:-12}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -51,9 +53,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.5.3</string>
+  <string>$VERSION</string>
   <key>CFBundleVersion</key>
-  <string>11</string>
+  <string>$BUILD_NUM</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
@@ -101,7 +103,7 @@ case "$MODE" in
     pgrep -x "$APP_NAME" >/dev/null
     ;;
   *)
-    echo "usage: $0 [run|--sign-local|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: [VERSION=0.7.4 BUILD_NUM=12] $0 [run|--sign-local|--debug|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

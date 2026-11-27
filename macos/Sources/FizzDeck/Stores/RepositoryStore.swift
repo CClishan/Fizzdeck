@@ -34,7 +34,7 @@ final class RepositoryStore {
                 Self.homeSelection
             case .project(let path):
                 path
-            case .library, .cleanup:
+            case .conversations, .library, .cleanup:
                 nil
             }
         }
@@ -70,6 +70,10 @@ final class RepositoryStore {
     var scannedAt: Date?
     var scanDuration: TimeInterval = 0
     var requestedTab: ProjectTab?
+    var requestedSessionID: String?
+    var requestedMarkIDForDiff: String?
+    var requestedSaveVersionForPath: String?
+    var requestedCleanupSheet = false
     var commitActivity: CommitActivitySnapshot = .empty
     var isCommandPalettePresented = false
     var isFolderManagerPresented = false
@@ -77,6 +81,13 @@ final class RepositoryStore {
     private(set) var missingRemotes: Set<String> = []
     private(set) var recentProjectPaths: [String] = []
     private(set) var recentActionIDs: [String] = []
+    private(set) var activeAIProjectPaths: Set<String> = []
+    private(set) var activeAISessionIDs: Set<String> = []
+    private(set) var marks: [SessionMark] = MarkStore.load()
+    private(set) var doctorReports: [String: DoctorProjectReport] = [:]
+    private(set) var machineEnv: MachineEnvironmentReport?
+    private(set) var isRunningDoctor = false
+    private(set) var lastDoctorCheckAt: Date?
 
     private var metadata: [String: ProjectMeta] = [:]
     private var remoteTasks: [String: Task<GitRemote?, Never>] = [:]
@@ -86,7 +97,12 @@ final class RepositoryStore {
     private var isRefreshingSessions = false
     private var refreshSessionsAfterScan = false
     private var scheduledSessionRefresh: Task<Void, Never>?
+    private var sessionSearchRebuildTask: Task<Void, Never>?
+    private(set) var hasIndexedSessionSearch = false
     private var didPrepare = false
+    private var previousActiveAISessionIDs: Set<String> = []
+    private var hasSeededActiveAISessions = false
+    private var lastSessionFinishToastByProject: [String: Date] = [:]
 
     init() {
         recentProjectPaths = UserDefaults.standard.stringArray(forKey: Self.recentProjectsKey) ?? []
@@ -122,7 +138,7 @@ final class RepositoryStore {
             if query.dirtyOnly { return .dirty }
             if query.runningOnly { return .running }
             return .all
-        case .cleanup, .project:
+        case .conversations, .cleanup, .project:
             return nil
         }
     }
@@ -148,10 +164,16 @@ final class RepositoryStore {
         if !cached.isEmpty {
             projects = cached
             phase = .ready
+            scheduleSessionSearchRebuild()
         }
         commitActivity = CommitActivityService.loadCache()
         await scan()
         startWorkspaceWatcher()
+        if machineEnv == nil {
+            Task { @MainActor [weak self] in
+                await self?.refreshMachineEnvironment()
+            }
+        }
     }
 
     func presentFirstRunScan() {
@@ -268,6 +290,9 @@ final class RepositoryStore {
         startSizeEnrichment(for: projects.map(\.path))
         startCommitActivityRefresh(for: projects)
         flushDeferredSessionRefresh()
+        scheduleSessionSearchRebuild()
+        Task { await refreshActiveAISessions() }
+        Task { await refreshDoctorForFocused() }
     }
 
     func rescanProjects(_ projects: [RepoProject]) async {
@@ -298,6 +323,7 @@ final class RepositoryStore {
 
         startSizeEnrichment(for: paths)
         startCommitActivityRefresh(for: self.projects)
+        scheduleSessionSearchRebuild()
     }
 
     func addRoot() async {
@@ -489,25 +515,100 @@ final class RepositoryStore {
     func openDashboard() {
         destination = .dashboard
         requestedTab = nil
+        requestedSessionID = nil
+        isCommandPalettePresented = false
+    }
+
+    func openConversations() {
+        destination = .conversations
+        requestedTab = nil
+        requestedSessionID = nil
         isCommandPalettePresented = false
     }
 
     func openLibrary(_ query: LibraryQuery = LibraryQuery()) {
         destination = .library(query)
         requestedTab = nil
+        requestedSessionID = nil
         isCommandPalettePresented = false
     }
 
     func openCleanup() {
         destination = .cleanup
         requestedTab = nil
+        requestedSessionID = nil
         isCommandPalettePresented = false
     }
 
-    func openProject(_ project: RepoProject, tab: ProjectTab? = nil) {
+    func openProject(_ project: RepoProject, tab: ProjectTab? = nil, sessionID: String? = nil) {
         destination = .project(project.path)
         requestedTab = tab
+        requestedSessionID = sessionID
         isCommandPalettePresented = false
+    }
+
+    func marks(for projectPath: String) -> [SessionMark] {
+        MarkStore.marks(for: projectPath, in: marks)
+    }
+
+    func reloadMarks() {
+        marks = MarkStore.load()
+    }
+
+    func openProjectDiff(project: RepoProject, markID: String) {
+        requestedMarkIDForDiff = markID
+        openProject(project, tab: .progress)
+    }
+
+    func openProjectSaveVersion(project: RepoProject) {
+        requestedSaveVersionForPath = project.path
+        openProject(project, tab: .version)
+    }
+
+    @discardableResult
+    func createMark(
+        for project: RepoProject,
+        session: SessionRecord? = nil,
+        label: String? = nil,
+        allowGitSnapshot: Bool? = nil
+    ) async -> SessionMark {
+        let allowSnapshot = allowGitSnapshot ?? MarkPreferences.implicitMarksEnabled()
+        let mark = await SessionMarkService.createMark(
+            for: URL(fileURLWithPath: project.path),
+            sessionID: session?.id,
+            sessionStableID: session?.stableID,
+            tool: session?.tool,
+            label: label,
+            allowGitSnapshot: allowSnapshot
+        )
+        marks = MarkStore.upsert(mark)
+
+        if mark.kind == .gitSnapshot, !MarkPreferences.firstMarkToastShown() {
+            MarkPreferences.setFirstMarkToastShown(true)
+            ToastCenter.shared.show(
+                "已为这次对话记下开始前的样子，保留约 14 天",
+                symbol: "bookmark.circle.fill",
+                tint: FizzTheme.accent,
+                duration: 4.0,
+                subtitle: "以后随时可在进度时间线对比或还原"
+            )
+        }
+        return mark
+    }
+
+    @discardableResult
+    func togglePin(mark: SessionMark) async -> Bool {
+        let updatedPinned = !mark.pinned
+        let ok = await SessionMarkService.setPinned(
+            updatedPinned,
+            mark: mark,
+            in: URL(fileURLWithPath: mark.projectPath)
+        )
+        guard ok else { return false }
+        var copy = mark
+        copy.pinned = updatedPinned
+        marks = MarkStore.upsert(copy)
+        return true
     }
 
     func recordRecentProject(_ path: String) {
@@ -816,6 +917,214 @@ final class RepositoryStore {
         projects = updated
         ScanCacheStore.save(projects)
         pruneRemotes(for: projects)
+        scheduleSessionSearchRebuild()
+        Task { await refreshActiveAISessions() }
+    }
+
+    func scheduleSessionSearchRebuild() {
+        let snapshot = projects
+        let headlines = SummaryEngine.shared.sessionSummaries.mapValues(\.headline)
+        sessionSearchRebuildTask?.cancel()
+        sessionSearchRebuildTask = Task(priority: .utility) { @MainActor [weak self] in
+            await Task.detached(priority: .utility) {
+                await SessionSearchIndex.shared.rebuild(from: snapshot, aiHeadlines: headlines)
+            }.value
+            guard !Task.isCancelled else { return }
+            self?.hasIndexedSessionSearch = true
+        }
+    }
+
+    func searchSessions(
+        query: String,
+        toolFilter: String? = nil,
+        errorOnly: Bool = false,
+        limit: Int = 40
+    ) async -> [SessionSearchResult] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        if hasIndexedSessionSearch {
+            return await SessionSearchIndex.shared.search(
+                query: trimmed,
+                toolFilter: toolFilter,
+                errorOnly: errorOnly,
+                limit: limit
+            )
+        }
+        scheduleSessionSearchRebuild()
+        let headlines = SummaryEngine.shared.sessionSummaries.mapValues(\.headline)
+        return SessionSearchIndex.inMemorySearch(
+            projects: projects,
+            query: trimmed,
+            aiHeadlines: headlines,
+            toolFilter: toolFilter,
+            errorOnly: errorOnly,
+            limit: limit
+        )
+    }
+
+    var focusedDoctorIssueCount: Int {
+        let focused = ProjectFocusPolicy.partition(projects: projects).focused
+        return focused.reduce(0) { sum, entry in
+            sum + (doctorReports[entry.project.path]?.actionableCount ?? 0)
+        }
+    }
+
+    func refreshDoctorForFocused(includeIdle: Bool = false) async {
+        guard !isRunningDoctor else { return }
+        isRunningDoctor = true
+        defer { isRunningDoctor = false }
+
+        let copyMode = CopyModePreferences.mode()
+        let partition = ProjectFocusPolicy.partition(projects: projects)
+        let focusedProjects = partition.focused.map(\.project)
+        let idleProjects = includeIdle ? partition.idle : []
+
+        var freshReports: [String: DoctorProjectReport] = doctorReports
+        await withTaskGroup(of: DoctorProjectReport.self) { group in
+            for project in focusedProjects {
+                group.addTask {
+                    await DoctorService.inspectProject(project, scope: .focused, copyMode: copyMode)
+                }
+            }
+            for project in idleProjects {
+                group.addTask {
+                    await DoctorService.inspectProject(project, scope: .idle, copyMode: copyMode)
+                }
+            }
+            for await report in group {
+                freshReports[report.projectPath] = report
+            }
+        }
+        doctorReports = freshReports
+        lastDoctorCheckAt = Date()
+    }
+
+    func refreshDoctor(for project: RepoProject, scope: DoctorCheckScope = .focused) async {
+        let copyMode = CopyModePreferences.mode()
+        let report = await DoctorService.inspectProject(project, scope: scope, copyMode: copyMode)
+        doctorReports[project.path] = report
+        lastDoctorCheckAt = Date()
+    }
+
+    func refreshMachineEnvironment() async {
+        machineEnv = await DoctorService.inspectMachineEnvironment()
+    }
+
+    func refreshActiveAISessions() async {
+        let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
+        var recentSessions: [SessionRecord] = []
+        var contextBySessionID: [String: (project: RepoProject, session: SessionRecord)] = [:]
+
+        for project in projects {
+            for session in project.sessions.recentSessions
+            where session.kind == .conversation && session.modified >= cutoff {
+                recentSessions.append(session)
+                contextBySessionID[session.stableID] = (project, session)
+            }
+        }
+
+        let live: [String: [Int32]] = recentSessions.isEmpty
+            ? [:]
+            : await SessionProcessService.liveProcesses(for: recentSessions)
+        let activeIDs = Set(live.keys)
+        let activePaths = Set(activeIDs.compactMap { contextBySessionID[$0]?.project.path })
+        if activeAISessionIDs != activeIDs {
+            activeAISessionIDs = activeIDs
+        }
+        if activeAIProjectPaths != activePaths {
+            activeAIProjectPaths = activePaths
+        }
+
+        guard hasSeededActiveAISessions else {
+            hasSeededActiveAISessions = true
+            previousActiveAISessionIDs = activeIDs
+            return
+        }
+
+        let startedIDs = activeIDs.subtracting(previousActiveAISessionIDs)
+        let endedIDs = previousActiveAISessionIDs.subtracting(activeIDs)
+        previousActiveAISessionIDs = activeIDs
+
+        if MarkPreferences.implicitMarksEnabled() {
+            for id in startedIDs {
+                guard let context = contextBySessionID[id] else { continue }
+                let alreadyMarked = marks.contains { $0.sessionStableID == id }
+                guard !alreadyMarked else { continue }
+                Task { @MainActor [weak self] in
+                    _ = await self?.createMark(
+                        for: context.project,
+                        session: context.session,
+                        label: "对话开始前的样子",
+                        allowGitSnapshot: true
+                    )
+                }
+            }
+        }
+
+        for id in endedIDs {
+            guard let context = contextBySessionID[id] else { continue }
+            Task { @MainActor [weak self] in
+                await self?.handleAISessionEnded(project: context.project, session: context.session)
+            }
+        }
+    }
+
+    private func handleAISessionEnded(project: RepoProject, session: SessionRecord) async {
+        await refreshGit(for: project.path)
+        let updatedProject = projects.first { $0.path == project.path } ?? project
+        let copyMode = CopyModePreferences.mode()
+        let issues = await LightweightProjectCheckService.check(
+            directory: URL(fileURLWithPath: updatedProject.path),
+            copyMode: copyMode
+        )
+
+        if session.endedWithError {
+            let errSubtitle = session.lastError.map { String($0.prefix(80)) }
+            ToastCenter.shared.show(
+                "「\(updatedProject.displayName)」的对话以报错结束",
+                symbol: "exclamationmark.triangle.fill",
+                tint: .orange,
+                subtitle: errSubtitle,
+                action: ToastAction(title: "去看看", symbol: "arrow.right.circle") { [weak self] in
+                    self?.openProject(updatedProject, tab: .progress, sessionID: session.id)
+                }
+            )
+            return
+        }
+
+        let changedCount = max(updatedProject.dirtyCount, session.touchedFiles.count)
+        guard (updatedProject.dirtyCount > 0 || !issues.isEmpty),
+              !MarkPreferences.saveVersionToastDisabled() else {
+            return
+        }
+
+        let now = Date()
+        if let lastShown = lastSessionFinishToastByProject[updatedProject.path],
+           now.timeIntervalSince(lastShown) < 30 * 60 {
+            return
+        }
+        lastSessionFinishToastByProject[updatedProject.path] = now
+
+        let subtitle = issues.first?.title ?? "可查看改动或顺手存个版本"
+        let toolTitle = HomeDashboardModel.toolTitle(session.tool)
+        let mark = marks(for: updatedProject.path).first { $0.kind == .gitSnapshot }
+        let action: ToastAction = if let mark {
+            ToastAction(title: "看改了什么", symbol: "doc.text.magnifyingglass") { [weak self] in
+                self?.openProjectDiff(project: updatedProject, markID: mark.id)
+            }
+        } else {
+            ToastAction(title: "存个版本", symbol: "checkmark.circle") { [weak self] in
+                self?.openProjectSaveVersion(project: updatedProject)
+            }
+        }
+
+        ToastCenter.shared.show(
+            "\(toolTitle) 刚在 \(updatedProject.displayName) 改了 \(max(1, changedCount)) 个文件",
+            symbol: "sparkles",
+            tint: FizzTheme.accent,
+            subtitle: subtitle,
+            action: action
+        )
     }
 
     private func scheduleDeferredSessionRefresh() {

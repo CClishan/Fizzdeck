@@ -30,11 +30,11 @@ struct ContentView: View {
                         FizzMotion.resolved(reduceMotion, FizzMotion.standard),
                         value: sidebarCollapsed
                     )
-
+                }
+                .overlay(alignment: .topTrailing) {
                     ToastOverlayView(center: ToastCenter.shared)
+                        .padding(.top, 14)
                         .padding(.trailing, 20)
-                        .padding(.bottom, 20)
-                        .zIndex(30)
                 }
             }
         }
@@ -169,10 +169,12 @@ struct ContentView: View {
         switch store.destination {
         case .dashboard:
             WorkbenchDashboardView()
+        case .conversations:
+            ConversationsWorkspaceView()
         case .library(let query):
             LibraryView(query: query)
         case .cleanup:
-            CleanupWorkspaceView()
+            DoctorWorkspaceView()
         case .project:
             if let project = store.selectedProject {
                 ProjectDetailView(project: project)

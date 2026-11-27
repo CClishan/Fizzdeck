@@ -110,6 +110,119 @@ enum FileTools {
         return false
     }
 
+    @discardableResult
+    static func scanLines(
+        in url: URL,
+        chunkBytes: Int = 128 * 1024,
+        maxBytes: Int = 8 * 1024 * 1024,
+        _ body: (String) -> Bool
+    ) -> Bool {
+        guard chunkBytes > 0,
+              maxBytes > 0,
+              let attributes = try? manager.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber,
+              let handle = try? FileHandle(forReadingFrom: url)
+        else { return false }
+        defer { try? handle.close() }
+
+        let totalSize = size.int64Value
+        guard totalSize > 0 else { return false }
+
+        if totalSize <= Int64(maxBytes) {
+            return scanRangeForward(
+                handle: handle,
+                startOffset: 0,
+                byteCount: totalSize,
+                chunkBytes: chunkBytes,
+                dropLeadingPartialLine: false,
+                dropTrailingPartialLine: false,
+                body: body
+            )
+        }
+
+        let headLimit = Int64(maxBytes / 2)
+        let tailLimit = Int64(maxBytes) - headLimit
+        if scanRangeForward(
+            handle: handle,
+            startOffset: 0,
+            byteCount: headLimit,
+            chunkBytes: chunkBytes,
+            dropLeadingPartialLine: false,
+            dropTrailingPartialLine: true,
+            body: body
+        ) {
+            return true
+        }
+
+        let tailOffset = max(headLimit, totalSize - tailLimit)
+        return scanRangeForward(
+            handle: handle,
+            startOffset: tailOffset,
+            byteCount: totalSize - tailOffset,
+            chunkBytes: chunkBytes,
+            dropLeadingPartialLine: true,
+            dropTrailingPartialLine: false,
+            body: body
+        )
+    }
+
+    private static func scanRangeForward(
+        handle: FileHandle,
+        startOffset: Int64,
+        byteCount: Int64,
+        chunkBytes: Int,
+        dropLeadingPartialLine: Bool,
+        dropTrailingPartialLine: Bool,
+        body: (String) -> Bool
+    ) -> Bool {
+        guard byteCount > 0 else { return false }
+        do {
+            try handle.seek(toOffset: UInt64(startOffset))
+        } catch {
+            return false
+        }
+
+        var remaining = byteCount
+        var carry = Data()
+        var skippedLeading = !dropLeadingPartialLine
+
+        while remaining > 0 {
+            let toRead = Int(min(Int64(chunkBytes), remaining))
+            guard let chunk = try? handle.read(upToCount: toRead), !chunk.isEmpty else {
+                break
+            }
+            remaining -= Int64(chunk.count)
+            carry.append(chunk)
+
+            var lineStart = carry.startIndex
+            while let newline = carry[lineStart..<carry.endIndex].firstIndex(of: 0x0A) {
+                if !skippedLeading {
+                    skippedLeading = true
+                    lineStart = carry.index(after: newline)
+                    continue
+                }
+                if lineStart < newline,
+                   let line = String(data: carry[lineStart..<newline], encoding: .utf8),
+                   body(line) {
+                    return true
+                }
+                lineStart = carry.index(after: newline)
+            }
+            if lineStart > carry.startIndex {
+                carry = Data(carry[lineStart..<carry.endIndex])
+            }
+        }
+
+        if !dropTrailingPartialLine,
+           skippedLeading,
+           !carry.isEmpty,
+           let line = String(data: carry, encoding: .utf8),
+           body(line) {
+            return true
+        }
+        return false
+    }
+
     static func modificationDate(_ url: URL) -> Date? {
         (try? manager.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
     }

@@ -13,6 +13,8 @@ final class AppDestinationTests: XCTestCase {
         XCTAssertEqual(library.libraryQuery, query)
         XCTAssertNil(library.projectPath)
 
+        XCTAssertTrue(AppDestination.conversations.isConversations)
+        XCTAssertFalse(AppDestination.conversations.isDashboard)
         XCTAssertTrue(AppDestination.cleanup.isCleanup)
         XCTAssertEqual(AppDestination.project("/tmp/app").projectPath, "/tmp/app")
     }
@@ -42,6 +44,10 @@ final class AppDestinationTests: XCTestCase {
 
         store.openLibrary(LibraryQuery(group: "工具"))
         XCTAssertEqual(store.destination, .library(LibraryQuery(group: "工具")))
+        XCTAssertNil(store.selectedPath)
+
+        store.openConversations()
+        XCTAssertEqual(store.destination, .conversations)
         XCTAssertNil(store.selectedPath)
 
         store.openCleanup()

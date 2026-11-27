@@ -545,6 +545,104 @@ final class SessionIndexTests: XCTestCase {
         XCTAssertTrue(cwdMap["agy"]?.contains(PathTools.canonical("/tmp/fizzdeck-agy-demo")) == true)
     }
 
+    func testCodexRichSessionExtractionAndErrorRecovery() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FizzDeckCodexRich-\(UUID().uuidString)")
+        let sessionsDir = home.appendingPathComponent(".codex/sessions", isDirectory: true)
+        try FileManager.default.createDirectory(at: sessionsDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let failingRollout = sessionsDir.appendingPathComponent("rollout-fail.jsonl")
+        let failingContent = """
+        {"timestamp":"2026-11-26T10:00:00Z","type":"session_meta","payload":{"id":"codex-fail","cwd":"/tmp/demo-app"}}
+        {"timestamp":"2026-11-26T10:00:10Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"text":"加上拖拽排序"}]}}}
+        {"timestamp":"2026-11-26T10:01:00Z","type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","input":"*** Begin Patch\\n*** Update File: /tmp/demo-app/src/App.jsx\\n*** Add File: src/TodoList.jsx\\n*** Update File: /tmp/demo-app/src/App.jsx\\n*** End Patch"}}
+        {"timestamp":"2026-11-26T10:02:00Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"text":"顺便跑一下测试"}]}}}
+        {"timestamp":"2026-11-26T10:03:00Z","type":"response_item","payload":{"type":"function_call","name":"write_file","arguments":"{\\"file_path\\":\\"/tmp/demo-app/src/Helper.js\\"}"}}
+        {"timestamp":"2026-11-26T10:05:00Z","type":"response_item","payload":{"type":"function_call_output","output":"{\\"output\\":\\"Error: Missing script test sk-proj-1234567890abcdefghij\\",\\"metadata\\":{\\"exit_code\\":1}}"}}
+        """
+        try failingContent.write(to: failingRollout, atomically: true, encoding: .utf8)
+
+        let recoveredRollout = sessionsDir.appendingPathComponent("rollout-recovered.jsonl")
+        let recoveredContent = """
+        {"timestamp":"2026-11-26T11:00:00Z","type":"session_meta","payload":{"id":"codex-ok","cwd":"/tmp/demo-app"}}
+        {"timestamp":"2026-11-26T11:00:05Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"text":"修复构建"}]}}}
+        {"timestamp":"2026-11-26T11:01:00Z","type":"response_item","payload":{"type":"function_call_output","output":"{\\"output\\":\\"Error: build failed\\",\\"metadata\\":{\\"exit_code\\":1}}"}}
+        {"timestamp":"2026-11-26T11:02:00Z","type":"response_item","payload":{"type":"function_call_output","output":"{\\"output\\":\\"Build succeeded\\",\\"metadata\\":{\\"exit_code\\":0}}"}}
+        """
+        try recoveredContent.write(to: recoveredRollout, atomically: true, encoding: .utf8)
+
+        let records = SessionIndex.build(
+            homeDirectory: home,
+            cacheFile: home.appendingPathComponent("session-cache.json")
+        )
+        let failed = try XCTUnwrap(records.first { $0.id == "codex-fail" })
+        XCTAssertEqual(failed.firstUser, "加上拖拽排序")
+        XCTAssertEqual(failed.lastUser, "顺便跑一下测试")
+        XCTAssertEqual(failed.primaryIntent, "加上拖拽排序")
+        XCTAssertEqual(failed.turnCount, 2)
+        XCTAssertEqual(failed.touchedFiles, ["src/App.jsx", "src/TodoList.jsx", "src/Helper.js"])
+        XCTAssertEqual(failed.endedWithError, true)
+        XCTAssertTrue(failed.lastError?.contains("Missing script test") == true)
+        XCTAssertFalse(failed.lastError?.contains("sk-proj-") == true)
+        XCTAssertEqual(failed.durationMinutes, 5)
+
+        let recovered = try XCTUnwrap(records.first { $0.id == "codex-ok" })
+        XCTAssertNotNil(recovered.lastError)
+        XCTAssertEqual(recovered.endedWithError, false)
+    }
+
+    func testClaudeRichSessionExtractionAndLegacyDecode() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FizzDeckClaudeRich-\(UUID().uuidString)")
+        let project = home.appendingPathComponent(".claude/projects/-tmp-claude-app", isDirectory: true)
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let file = project.appendingPathComponent("claude-rich.jsonl")
+        let content = """
+        {"timestamp":"2026-11-26T09:00:00Z","type":"user","cwd":"/tmp/claude-app","message":{"role":"user","content":[{"type":"text","text":"创建登录页"}]}}
+        {"timestamp":"2026-11-26T09:01:00Z","type":"assistant","message":{"role":"assistant","model":"claude-sonnet-4-5","content":[{"type":"tool_use","name":"Write","input":{"file_path":"/tmp/claude-app/src/Login.tsx"}}]}}
+        {"timestamp":"2026-11-26T09:02:00Z","type":"user","cwd":"/tmp/claude-app","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"1","is_error":false,"content":"ok"}]}}
+        {"timestamp":"2026-11-26T09:03:00Z","type":"user","cwd":"/tmp/claude-app","message":{"role":"user","content":[{"type":"text","text":"运行构建检查"}]}}
+        {"timestamp":"2026-11-26T09:04:00Z","type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"src/App.tsx"}}]}}
+        {"timestamp":"2026-11-26T09:05:00Z","type":"user","cwd":"/tmp/claude-app","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"2","is_error":true,"content":"TypeScript compile error in Login.tsx"}]}}
+        {"timestamp":"2026-11-26T09:06:00Z","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"构建失败了，请检查类型。"}]}}
+        """
+        try content.write(to: file, atomically: true, encoding: .utf8)
+
+        let cacheFile = home.appendingPathComponent("session-cache.json")
+        // Seed a stale v4 cache to verify v5 invalidation rebuilds rich fields
+        let staleV4 = """
+        {"version":4,"entries":{"stale":{"mtime":0,"fileSize":0,"record":{"tool":"claude","id":"claude-rich","cwd":"/tmp/claude-app","modified":0}}}}
+        """
+        try staleV4.write(to: cacheFile, atomically: true, encoding: .utf8)
+
+        let records = SessionIndex.build(homeDirectory: home, cacheFile: cacheFile)
+        let claude = try XCTUnwrap(records.first { $0.id == "claude-rich" })
+        XCTAssertNotNil(claude.startedAt)
+        XCTAssertEqual(claude.firstUser, "创建登录页")
+        XCTAssertEqual(claude.lastUser, "运行构建检查")
+        XCTAssertEqual(claude.turnCount, 2)
+        XCTAssertEqual(claude.touchedFiles, ["src/Login.tsx", "src/App.tsx"])
+        XCTAssertEqual(claude.lastError, "TypeScript compile error in Login.tsx")
+        XCTAssertEqual(claude.endedWithError, true)
+        XCTAssertEqual(claude.durationMinutes, 6)
+
+        // Legacy JSON missing the 6 new fields decodes cleanly
+        let legacyJSON = """
+        {"tool":"codex","id":"legacy-1","cwd":"/tmp/a","modified":1700000000,"lastUser":"old"}
+        """
+        let decoded = try JSONDecoder().decode(SessionRecord.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(decoded.firstUser)
+        XCTAssertEqual(decoded.touchedFiles, [])
+        XCTAssertNil(decoded.lastError)
+        XCTAssertFalse(decoded.endedWithError)
+        XCTAssertNil(decoded.turnCount)
+        XCTAssertNil(decoded.durationMinutes)
+        XCTAssertEqual(decoded.primaryIntent, "old")
+    }
+
     private func runSQLite(_ statements: [String], database: URL) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")

@@ -623,6 +623,7 @@ struct ProjectLogsPanel: View {
     @State private var source: ProjectLogSource = .dev
     @State private var expanded = true
     @State private var text = ""
+    @State private var showingErrorSheet = false
 
     private var testRun: TestRunState? {
         actions.testRun(for: project.path)
@@ -662,9 +663,15 @@ struct ProjectLogsPanel: View {
     }
 
     var body: some View {
-        Panel(title: "日志", symbol: "terminal") {
+        let detectedError = LogErrorHelper.extractError(from: text)
+        return Panel(title: "日志", symbol: "terminal") {
             if expanded {
-                viewport
+                VStack(alignment: .leading, spacing: 10) {
+                    viewport
+                    if let detectedError {
+                        errorCallout(detectedError)
+                    }
+                }
             }
         } accessory: {
             HStack(spacing: 8) {
@@ -723,6 +730,95 @@ struct ProjectLogsPanel: View {
                 selected: source
             )
         }
+        .sheet(isPresented: $showingErrorSheet) {
+            if let match = LogErrorHelper.extractError(from: text) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 8) {
+                        FizzIcon(symbol: "exclamationmark.triangle.fill", size: 16)
+                            .foregroundStyle(.orange)
+                        Text("这是什么意思")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+
+                    Text(match.plainExplanation)
+                        .font(.system(size: 14, weight: .medium))
+
+                    Text("建议动作：\(match.suggestedAction)")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    ScrollView {
+                        Text(verbatim: match.contextBlock)
+                            .font(.system(size: 11, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                    }
+                    .frame(height: 180)
+                    .background(FizzTheme.recessedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
+
+                    HStack {
+                        Spacer()
+                        Button("关闭") {
+                            showingErrorSheet = false
+                        }
+                        .buttonStyle(.glass)
+                        Button {
+                            let prompt = LogErrorHelper.buildHelpPrompt(project: project, match: match)
+                            SystemActions.copy(prompt)
+                            ToastCenter.shared.show("已复制求助 prompt，可直接粘贴给 AI", symbol: "doc.on.clipboard.fill", tint: FizzTheme.accent)
+                            showingErrorSheet = false
+                        } label: {
+                            Label("复制求助 prompt", systemImage: "doc.on.clipboard")
+                        }
+                        .buttonStyle(.glassProminent)
+                        .tint(FizzTheme.accent)
+                    }
+                }
+                .padding(22)
+                .frame(width: 520)
+            }
+        }
+    }
+
+    private func errorCallout(_ match: LogErrorMatch) -> some View {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.orange)
+                .frame(width: 3, height: 32)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(match.matchedLine)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(match.plainExplanation)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Button("这是什么意思") {
+                showingErrorSheet = true
+            }
+            .buttonStyle(.glass)
+            .controlSize(.small)
+
+            Button("复制求助 prompt") {
+                let prompt = LogErrorHelper.buildHelpPrompt(project: project, match: match)
+                SystemActions.copy(prompt)
+                ToastCenter.shared.show("已复制求助 prompt，可直接粘贴给 AI", symbol: "doc.on.clipboard.fill", tint: FizzTheme.accent)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(FizzTheme.accent)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
     }
 
     private var sourceSwitcher: some View {

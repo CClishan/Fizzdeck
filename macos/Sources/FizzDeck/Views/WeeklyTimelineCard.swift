@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WeeklyTimelineCard: View {
     let columns: [TimelineDayColumn]
+    var copyMode: CopyMode = .plain
     let onOpenProject: (String) -> Void
 
     private var hasActivity: Bool {
@@ -10,7 +11,7 @@ struct WeeklyTimelineCard: View {
 
     var body: some View {
         if hasActivity {
-            Panel(title: "本周活动时间线", symbol: "clock") {
+            Panel(title: FizzCopy.timelineTitle(copyMode), symbol: "clock") {
                 HStack(alignment: .top, spacing: 6) {
                     ForEach(columns) { column in
                         dayColumn(column)
@@ -19,8 +20,13 @@ struct WeeklyTimelineCard: View {
                 .padding(.top, 2)
             } accessory: {
                 HStack(spacing: 10) {
-                    legendDot(color: .green, label: "提交")
-                    legendDot(color: FizzTheme.accent, label: "会话")
+                    if copyMode == .plain {
+                        legendDot(color: FizzTheme.accent, label: "对话")
+                        legendDot(color: .green, label: "版本")
+                    } else {
+                        legendDot(color: .green, label: "提交")
+                        legendDot(color: FizzTheme.accent, label: "会话")
+                    }
                 }
             }
         }
@@ -42,8 +48,16 @@ struct WeeklyTimelineCard: View {
                     )
             }
 
-            let visibleBlocks = Array(column.blocks.prefix(4))
-            let overflowCount = max(0, column.blocks.count - visibleBlocks.count)
+            let orderedBlocks: [TimelineBlock] = copyMode == .plain
+                ? column.blocks.sorted { left, right in
+                    if left.kind != right.kind {
+                        return left.kind == .session
+                    }
+                    return left.startHour < right.startHour
+                }
+                : column.blocks
+            let visibleBlocks = Array(orderedBlocks.prefix(4))
+            let overflowCount = max(0, orderedBlocks.count - visibleBlocks.count)
 
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(visibleBlocks) { block in

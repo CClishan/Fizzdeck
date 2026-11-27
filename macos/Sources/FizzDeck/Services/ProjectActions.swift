@@ -80,6 +80,10 @@ final class ProjectActions {
         testMessages[path]
     }
 
+    var testRunsSnapshot: [String: TestRunState] {
+        testRuns
+    }
+
     func testRun(for path: String) -> TestRunState? {
         testRuns[path]
     }
@@ -215,7 +219,7 @@ final class ProjectActions {
                         title: "开发服务已就绪",
                         body: "\(project.displayName) · localhost:\(run.port)",
                         projectPath: project.path,
-                        tab: .overview
+                        tab: .progress
                     )
                 }
                 updateServiceToast(
@@ -539,6 +543,27 @@ final class ProjectActions {
         scriptLogURL(for: project, script: script).path
     }
 
+    static func installDependenciesScript(command: String) -> ProjectScript {
+        ProjectScript(
+            id: "doctor-install-deps",
+            name: "安装依赖",
+            command: command,
+            source: .npm
+        )
+    }
+
+    func installRun(for project: RepoProject, command: String) -> ScriptRunState? {
+        scriptRun(for: project, script: Self.installDependenciesScript(command: command))
+    }
+
+    func runInstallDependencies(command: String, for project: RepoProject, store: RepositoryStore) {
+        runScript(Self.installDependenciesScript(command: command), project: project, store: store)
+    }
+
+    func stopInstallDependencies(command: String, for project: RepoProject) {
+        stopScript(Self.installDependenciesScript(command: command), project: project)
+    }
+
     func openLog(for project: RepoProject, test: Bool = false) {
         let path = logPath(for: project, prefix: test ? "test-" : "")
         if test {
@@ -705,7 +730,7 @@ final class ProjectActions {
                     title: "测试失败",
                     body: "\(project.displayName) · \(state.command)",
                     projectPath: project.path,
-                    tab: .tests
+                    tab: .run
                 )
             }
         }

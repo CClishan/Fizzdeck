@@ -34,6 +34,8 @@ struct AppSettingsView: View {
                     GeneralSettingsPage()
                 case .sessions:
                     SessionsSettingsPage()
+                case .aiAndMarks:
+                    AIAndMarksSettingsPage()
                 case .about:
                     AboutSettingsPage()
                 }
@@ -50,6 +52,7 @@ struct AppSettingsView: View {
 private enum SettingsPage: String, CaseIterable, Identifiable {
     case general
     case sessions
+    case aiAndMarks
     case about
 
     var id: String { rawValue }
@@ -58,6 +61,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
         switch self {
         case .general: "通用"
         case .sessions: "会话与终端"
+        case .aiAndMarks: "AI 与标记"
         case .about: "关于"
         }
     }
@@ -66,6 +70,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
         switch self {
         case .general: "slider.horizontal.3"
         case .sessions: "terminal"
+        case .aiAndMarks: "sparkles"
         case .about: "info.circle"
         }
     }
@@ -116,6 +121,7 @@ private struct SettingsNavigationRow: View {
 
 private struct GeneralSettingsPage: View {
     @AppStorage(AppearancePreferences.key) private var appearance: AppAppearance = .system
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     @State private var loginState = LoginItemService.state
     @State private var loginError: String?
     @State private var notificationPermission: NotificationPermission = .unknown
@@ -133,6 +139,25 @@ private struct GeneralSettingsPage: View {
                         Picker("", selection: appearanceBinding) {
                             ForEach(AppAppearance.allCases) { item in
                                 Text(item.title).tag(item)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .fixedSize()
+                    }
+
+                    Divider()
+                        .padding(.leading, 34)
+
+                    SettingsPickerRow(
+                        symbol: "text.bubble",
+                        title: "界面术语",
+                        detail: "默认使用人话描述版本与运行状态，悬停可看对应专业术语；熟悉 Git 可切换专业模式。"
+                    ) {
+                        Picker("", selection: $copyMode) {
+                            ForEach(CopyMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
                             }
                         }
                         .labelsHidden()
@@ -816,5 +841,398 @@ private struct AboutLinkRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct AIAndMarksSettingsPage: View {
+    @AppStorage(MarkPreferences.implicitMarksEnabledKey) private var implicitMarksEnabled = true
+    @AppStorage(MarkPreferences.saveVersionToastDisabledKey) private var saveVersionToastDisabled = false
+    @AppStorage(SummaryPreferences.enabledKey) private var summaryEnabled = false
+    @AppStorage(SummaryPreferences.consentAcceptedKey) private var consentAccepted = false
+    @AppStorage(SummaryPreferences.providerKindKey) private var providerKind: SummaryProviderKind = .agentCLI
+    @AppStorage(SummaryPreferences.agentCLIKey) private var agentCLI: AgentCLIKind = .auto
+    @AppStorage(SummaryPreferences.apiBaseURLKey) private var apiBaseURL = SummaryPreferences.defaultAPIBaseURL
+    @AppStorage(SummaryPreferences.apiModelKey) private var apiModel = SummaryPreferences.defaultAPIModel
+    @AppStorage(SummaryPreferences.localBaseURLKey) private var localBaseURL = SummaryPreferences.defaultLocalBaseURL
+    @AppStorage(SummaryPreferences.localModelKey) private var localModel = SummaryPreferences.defaultLocalModel
+
+    @State private var summaryEngine = SummaryEngine.shared
+    @State private var apiKeyDraft = ""
+    @State private var hasStoredAPIKey = false
+    @State private var showingConsentSheet = false
+    @State private var showingPromptPreview = false
+    @State private var isTestingConnection = false
+    @State private var testFeedback: String?
+    @State private var testSucceeded = false
+    @State private var keySavedFeedback: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("AI 与标记")
+                    .font(.system(size: 19, weight: .semibold))
+
+                marksSection
+                aiSummarySection
+
+                if summaryEnabled {
+                    providerSection
+                    diagnosticsSection
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(28)
+        }
+        .onAppear {
+            hasStoredAPIKey = !(KeychainStore.load(account: SummaryPreferences.keychainAccount) ?? "").isEmpty
+            summaryEngine.refreshUsageTotals()
+        }
+        .sheet(isPresented: $showingConsentSheet) {
+            SummaryConsentSheet(
+                onCancel: {
+                    summaryEnabled = false
+                },
+                onAccept: {
+                    consentAccepted = true
+                    summaryEnabled = true
+                }
+            )
+        }
+        .sheet(isPresented: $showingPromptPreview) {
+            PromptPreviewSheet(sampleText: SummaryPromptBuilder.sampleRedactedPromptPreview())
+        }
+    }
+
+    private var marksSection: some View {
+        SettingsCard {
+            Text("隐形标记与版本安全")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 12) {
+                SettingsIcon(symbol: "bookmark.circle")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("AI 完成或出错时自动做一次轻量记录点")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("默认使用 Git 原生对象留档，不会写入项目代码目录，也不影响提交记录。")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                Toggle("", isOn: $implicitMarksEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+
+            Divider()
+                .padding(.leading, 34)
+
+            HStack(spacing: 12) {
+                SettingsIcon(symbol: "checkmark.bubble")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("自动弹出「建议存个版本」提示")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("关闭后仍可在进展卡片和顶部按钮手动存个版本。")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                Toggle("", isOn: Binding(
+                    get: { !saveVersionToastDisabled },
+                    set: { saveVersionToastDisabled = !$0 }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+            }
+        }
+    }
+
+    private var aiSummarySection: some View {
+        SettingsCard {
+            HStack(spacing: 12) {
+                SettingsIcon(symbol: "sparkles")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("启用 AI 智能总结（实验性 · 默认关闭）")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("用更通俗的语言概括每次对话成果与项目进度；未开启或调用失败时自动使用本地规则摘要。")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                Toggle("", isOn: Binding(
+                    get: { summaryEnabled },
+                    set: { newValue in
+                        if newValue && !consentAccepted {
+                            showingConsentSheet = true
+                        } else {
+                            summaryEnabled = newValue
+                        }
+                    }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+            }
+
+            Divider()
+                .padding(.leading, 34)
+
+            HStack(spacing: 12) {
+                SettingsIcon(symbol: "eye.slash")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("仅发送最小脱敏字段，绝不上传源码与完整对话")
+                        .font(.system(size: 12, weight: .medium))
+                    Text("只包含项目名、文件名、变动计数与脱敏后的一句话意图。")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                Button("查看发送示例") {
+                    showingPromptPreview = true
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private var providerSection: some View {
+        SettingsCard {
+            SettingsPickerRow(
+                symbol: "cpu",
+                title: "总结引擎",
+                detail: "优先推荐使用本机已登录的 Agent CLI，无需额外填写密钥。"
+            ) {
+                Picker("", selection: $providerKind) {
+                    ForEach(SummaryProviderKind.allCases) { item in
+                        Text(item.shortTitle).tag(item)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                .fixedSize()
+            }
+
+            Divider()
+                .padding(.leading, 34)
+
+            switch providerKind {
+            case .agentCLI:
+                SettingsPickerRow(
+                    symbol: "terminal",
+                    title: "CLI 工具",
+                    detail: "所有汇总都在 ~/.repodeck/llm-workdir 中隔离运行，不会污染项目对话记录。"
+                ) {
+                    Picker("", selection: $agentCLI) {
+                        ForEach(AgentCLIKind.allCases) { item in
+                            Text(item.title).tag(item)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                    .fixedSize()
+                }
+            case .openAICompatible:
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("Base URL（如 https://api.openai.com/v1）", text: $apiBaseURL)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("模型名称（如 gpt-4o-mini / deepseek-chat）", text: $apiModel)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack(spacing: 8) {
+                        SecureField(
+                            hasStoredAPIKey ? "已保存在钥匙串中（输入新 Key 可覆盖）" : "填入 API Key（存入 macOS 钥匙串）",
+                            text: $apiKeyDraft
+                        )
+                        .textFieldStyle(.roundedBorder)
+
+                        Button("保存 Key") {
+                            let ok = KeychainStore.save(
+                                account: SummaryPreferences.keychainAccount,
+                                secret: apiKeyDraft
+                            )
+                            hasStoredAPIKey = !(KeychainStore.load(account: SummaryPreferences.keychainAccount) ?? "").isEmpty
+                            apiKeyDraft = ""
+                            keySavedFeedback = ok ? "已存入系统钥匙串" : "保存失败，请检查钥匙串权限"
+                        }
+                        .controlSize(.small)
+                        .disabled(apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                        if hasStoredAPIKey {
+                            Button("清除") {
+                                KeychainStore.delete(account: SummaryPreferences.keychainAccount)
+                                hasStoredAPIKey = false
+                                keySavedFeedback = "已从钥匙串移除"
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+
+                    if let keySavedFeedback {
+                        Text(keySavedFeedback)
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.leading, 34)
+            case .localModel:
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("本地服务地址（如 http://127.0.0.1:11434/v1）", text: $localBaseURL)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("本地模型名称（如 qwen2.5:7b）", text: $localModel)
+                        .textFieldStyle(.roundedBorder)
+                }
+                .padding(.leading, 34)
+            }
+
+            Divider()
+                .padding(.leading, 34)
+
+            HStack(spacing: 12) {
+                SettingsIcon(symbol: "bolt.horizontal")
+                VStack(alignment: .leading, spacing: 2) {
+                    if let testFeedback {
+                        Text(testFeedback)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(testSucceeded ? .green : .orange)
+                    } else {
+                        Text("发送极短的「回复 OK」测试，验证配置是否畅通。")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 12)
+                Button(isTestingConnection ? "测试中…" : "测试连接") {
+                    Task {
+                        isTestingConnection = true
+                        defer { isTestingConnection = false }
+                        let result = await summaryEngine.testConnection()
+                        switch result {
+                        case .success(let text):
+                            testSucceeded = true
+                            testFeedback = text
+                        case .failure(let err):
+                            testSucceeded = false
+                            testFeedback = err.errorDescription ?? "连接失败"
+                        }
+                    }
+                }
+                .controlSize(.small)
+                .disabled(isTestingConnection)
+            }
+        }
+    }
+
+    private var diagnosticsSection: some View {
+        SettingsCard {
+            HStack(spacing: 12) {
+                SettingsIcon(symbol: "chart.pie")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("近 30 天 FizzDeck 自身汇总消耗")
+                        .font(.system(size: 13, weight: .medium))
+                    let usage = summaryEngine.monthlySelfUsage
+                    let costText = usage.hasCostData ? (Format.cost(usage.estimatedCostUSD, estimated: true) ?? "$0") : "计入本地/CLI"
+                    Text("共 \(usage.callCount) 次调用 · \(Format.tokens(usage.totalTokens)) · \(costText)")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                Button("清空摘要缓存") {
+                    summaryEngine.clearCache()
+                }
+                .controlSize(.small)
+            }
+
+            if let lastError = summaryEngine.lastError, !lastError.isEmpty {
+                Divider()
+                    .padding(.leading, 34)
+                HStack(spacing: 12) {
+                    SettingsIcon(symbol: "exclamationmark.circle")
+                    Text("最近一次静默回退原因：\(lastError)")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.orange)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+    }
+}
+
+private struct SummaryConsentSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let onCancel: () -> Void
+    let onAccept: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                FizzIcon(symbol: "lock.shield", size: 18)
+                    .foregroundStyle(FizzTheme.accent)
+                Text("开启 AI 智能总结前确认")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+
+            Text("开启后，FizzDeck 会调用你选择的模型把对话和改动翻译成更易懂的大白话：")
+                .font(.system(size: 12.5))
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Label("仅发送项目名、文件名、变更计数和脱敏后的起始意图", systemImage: "checkmark.circle")
+                Label("绝不发送完整代码、环境变量或完整聊天记录", systemImage: "checkmark.circle")
+                Label("自动过滤常见密钥与令牌；调用失败会静默回退到本地规则摘要", systemImage: "checkmark.circle")
+            }
+            .font(.system(size: 12))
+
+            Spacer(minLength: 4)
+
+            HStack {
+                Spacer()
+                Button("暂不开启") {
+                    onCancel()
+                    dismiss()
+                }
+                Button("我已知晓并开启") {
+                    onAccept()
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(22)
+        .frame(width: 440)
+    }
+}
+
+private struct PromptPreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let sampleText: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("实际发送内容示例（已脱敏）")
+                .font(.system(size: 15, weight: .semibold))
+
+            ScrollView {
+                Text(sampleText)
+                    .font(.system(size: 12, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                            .fill(FizzTheme.cardFill)
+                    )
+            }
+            .frame(height: 220)
+
+            HStack {
+                Spacer()
+                Button("关闭") { dismiss() }
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20)
+        .frame(width: 460)
     }
 }

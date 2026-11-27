@@ -1,7 +1,11 @@
 import SwiftUI
 
 struct CleanupTabView: View {
+    @Environment(RepositoryStore.self) private var store
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     let project: RepoProject
+
+    @State private var confirmTrashItem: CleanupItem?
 
     var body: some View {
         ScrollView {
@@ -63,6 +67,26 @@ struct CleanupTabView: View {
             .padding(FizzSpacing.page)
         }
         .fizzTracksScrollPastTop()
+        .alert(
+            "将目录移到废纸篓？",
+            isPresented: Binding(
+                get: { confirmTrashItem != nil },
+                set: { if !$0 { confirmTrashItem = nil } }
+            )
+        ) {
+            Button("取消", role: .cancel) {
+                confirmTrashItem = nil
+            }
+            Button("移到废纸篓", role: .destructive) {
+                guard let item = confirmTrashItem else { return }
+                confirmTrashItem = nil
+                Task { await trashSingleItem(item) }
+            }
+        } message: {
+            if let item = confirmTrashItem {
+                Text("将把「\(item.label)」（\(Format.bytes(item.bytes))）移到系统废纸篓，随时可恢复或重新生成。")
+            }
+        }
     }
 
     private func cleanupRow(_ item: CleanupItem) -> some View {
@@ -93,19 +117,44 @@ struct CleanupTabView: View {
             Spacer(minLength: 8)
 
             Button {
-                SystemActions.copy(
-                    project.cleanup.removalCommand(for: item),
-                    microViz: .compact(state: .done)
-                )
+                if copyMode == .plain {
+                    confirmTrashItem = item
+                } else {
+                    SystemActions.copy(
+                        project.cleanup.removalCommand(for: item),
+                        microViz: .compact(state: .done)
+                    )
+                }
             } label: {
-                FizzIcon(symbol: "doc.on.doc", size: 12)
+                if copyMode == .plain {
+                    Label("移到废纸篓", systemImage: "trash")
+                        .font(.system(size: 11, weight: .medium))
+                } else {
+                    FizzIcon(symbol: "doc.on.doc", size: 12)
+                }
             }
             .buttonStyle(.glass)
             .controlSize(.small)
-            .help("复制删除命令")
-            .accessibilityLabel("复制删除命令")
+            .help(copyMode == .plain ? "安全移到系统废纸篓" : "复制删除命令")
+            .accessibilityLabel(copyMode == .plain ? "移到废纸篓" : "复制删除命令")
         }
         .padding(.vertical, 7)
+    }
+
+    private func trashSingleItem(_ item: CleanupItem) async {
+        let dir = URL(fileURLWithPath: project.path)
+        let res = DoctorService.trashCleanupItems([item], in: dir)
+        if let err = res.error {
+            ToastCenter.shared.show(err, symbol: "exclamationmark.triangle.fill", tint: .orange)
+        } else {
+            ToastCenter.shared.show(
+                "已移入废纸篓（\(Format.bytes(res.freedBytes))）",
+                symbol: "trash.fill",
+                tint: .green,
+                subtitle: item.label
+            )
+            await store.rescanProjects([project])
+        }
     }
 
     private func sizeRow(_ row: SizeRow) -> some View {

@@ -4,29 +4,51 @@ set -euo pipefail
 APP_NAME="FizzDeck"
 BUNDLE_ID="com.a003.fizzdeck"
 MIN_SYSTEM_VERSION="26.0"
-VERSION="0.5.3"
-BUILD_NUM="11"
+VERSION="${VERSION:-0.7.4}"
+BUILD_NUM="${BUILD_NUM:-12}"
 CONFIG="release"
 SKIP_FINDER_LAYOUT=0
 OUTPUT_DMG=""
+SIGN_IDENTITY=""
+NOTARIZE=0
+NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
 
+need_value() {
+  if [[ $# -lt 2 ]]; then
+    echo "ERROR: $1 requires a value." >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --output)
+      need_value "$@"
       OUTPUT_DMG="$2"
       shift 2
       ;;
     --version)
+      need_value "$@"
       VERSION="$2"
       shift 2
       ;;
     --build-num)
+      need_value "$@"
       BUILD_NUM="$2"
       shift 2
+      ;;
+    --sign-identity)
+      need_value "$@"
+      SIGN_IDENTITY="$2"
+      shift 2
+      ;;
+    --notarize)
+      NOTARIZE=1
+      shift
       ;;
     --debug)
       CONFIG="debug"
@@ -37,7 +59,24 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "usage: $0 [--output <path>] [--version <ver>] [--build-num <num>] [--debug] [--skip-finder-layout]"
+      cat <<'HELP'
+usage: package_dmg.sh [options]
+
+Options:
+  --output <path>          Custom DMG output path
+  --version <ver>          App version (default: 0.7.4, env: VERSION)
+  --build-num <num>        Bundle build number (default: 12, env: BUILD_NUM)
+  --sign-identity <id>     Developer ID Application identity
+                           (or set DEVELOPER_ID_APP)
+  --notarize               Submit the signed DMG with notarytool and staple it
+                           (requires DEVELOPER_ID_APP/--sign-identity and NOTARY_PROFILE)
+  --debug                  Build the debug configuration
+  --skip-finder-layout     Skip the Finder .DS_Store layout pass
+  -h, --help               Show this help
+
+Without --sign-identity or DEVELOPER_ID_APP, the script keeps the default
+ad-hoc signature and verifies it with codesign --verify --deep --strict.
+HELP
       exit 0
       ;;
     *)
@@ -47,12 +86,28 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -z "$SIGN_IDENTITY" ]]; then
+  SIGN_IDENTITY="${DEVELOPER_ID_APP:-}"
+fi
+
+if [[ "$NOTARIZE" -eq 1 ]]; then
+  if [[ -z "$SIGN_IDENTITY" ]]; then
+    echo "ERROR: --notarize requires --sign-identity or DEVELOPER_ID_APP." >&2
+    exit 2
+  fi
+  if [[ -z "$NOTARY_PROFILE" ]]; then
+    echo "ERROR: --notarize requires the NOTARY_PROFILE environment variable." >&2
+    exit 2
+  fi
+fi
+
 if [[ -z "$OUTPUT_DMG" ]]; then
   mkdir -p "$DIST_DIR"
   OUTPUT_DMG="$DIST_DIR/$APP_NAME-$VERSION-arm64.dmg"
 else
   mkdir -p "$(dirname "$OUTPUT_DMG")"
 fi
+rm -f "$OUTPUT_DMG.sha256"
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/fizzdeck-dmg.XXXXXX")"
 STAGE_APP="$WORK_DIR/$APP_NAME.app"
@@ -129,9 +184,16 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-echo "Signing $APP_NAME.app (ad-hoc)..."
-codesign --force --deep --sign - --identifier "$BUNDLE_ID" "$STAGE_APP"
-codesign --verify --deep --strict "$STAGE_APP"
+if [[ -n "$SIGN_IDENTITY" ]]; then
+  echo "Signing $APP_NAME.app with Developer ID (Hardened Runtime)..."
+  codesign --force --options runtime --timestamp \
+    --sign "$SIGN_IDENTITY" --identifier "$BUNDLE_ID" "$STAGE_APP"
+  codesign --verify --deep --strict "$STAGE_APP"
+else
+  echo "Signing $APP_NAME.app (ad-hoc)..."
+  codesign --force --deep --sign - --identifier "$BUNDLE_ID" "$STAGE_APP"
+  codesign --verify --deep --strict "$STAGE_APP"
+fi
 
 echo "Rendering Retina DMG background..."
 swift "$SCRIPT_DIR/render_dmg_bg.swift" "$BG_TMP"
@@ -185,5 +247,25 @@ fi
 echo "Compressing final UDZO DMG..."
 hdiutil convert "$RW_DMG" -format UDZO -imagekey zlib-level=9 -ov -o "$OUTPUT_DMG" >/dev/null
 hdiutil verify "$OUTPUT_DMG" >/dev/null
+
+if [[ -n "$SIGN_IDENTITY" ]]; then
+  echo "Signing final DMG with Developer ID..."
+  codesign --force --timestamp --sign "$SIGN_IDENTITY" "$OUTPUT_DMG"
+  codesign --verify --verbose=2 "$OUTPUT_DMG"
+fi
+
+if [[ "$NOTARIZE" -eq 1 ]]; then
+  echo "Submitting DMG for notarization (profile: $NOTARY_PROFILE)..."
+  xcrun notarytool submit "$OUTPUT_DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+  echo "Stapling notarization ticket..."
+  xcrun stapler staple "$OUTPUT_DMG"
+  xcrun stapler validate "$OUTPUT_DMG"
+  spctl -a -vvv -t open --context context:primary-signature "$OUTPUT_DMG"
+fi
+
 echo "DMG ready: $OUTPUT_DMG"
-shasum -a 256 "$OUTPUT_DMG"
+(
+  cd "$(dirname "$OUTPUT_DMG")"
+  shasum -a 256 "$(basename "$OUTPUT_DMG")" > "$(basename "$OUTPUT_DMG").sha256"
+)
+cat "$OUTPUT_DMG.sha256"

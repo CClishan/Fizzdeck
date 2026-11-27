@@ -44,12 +44,18 @@ struct LibraryQuery: Equatable, Hashable, Sendable {
 
 enum AppDestination: Equatable, Hashable, Sendable {
     case dashboard
+    case conversations
     case library(LibraryQuery = LibraryQuery())
     case cleanup
     case project(String)
 
     var isDashboard: Bool {
         if case .dashboard = self { return true }
+        return false
+    }
+
+    var isConversations: Bool {
+        if case .conversations = self { return true }
         return false
     }
 

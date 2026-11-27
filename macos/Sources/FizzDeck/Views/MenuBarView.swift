@@ -5,15 +5,27 @@ struct MenuBarLabel: View {
     let store: RepositoryStore
     let actions: ProjectActions
 
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     @State private var now = Date()
 
     private var attentionCount: Int {
-        ProjectAttentionQueue
-            .items(projects: store.projects, testRuns: actions.testRuns)
-            .filter {
-                !store.isAttentionSuppressed(
-                    for: $0.project,
-                    kind: $0.kind,
+        let focusedPaths = copyMode == .plain
+            ? ProjectFocusPolicy.partition(projects: store.projects).focusedPaths
+            : nil
+        return ProjectAttentionQueue
+            .items(
+                projects: store.projects,
+                testRuns: actions.testRuns,
+                focusedPaths: focusedPaths,
+                copyMode: copyMode
+            )
+            .filter { item in
+                if copyMode == .plain && !item.kind.isCritical {
+                    return false
+                }
+                return !store.isAttentionSuppressed(
+                    for: item.project,
+                    kind: item.kind,
                     at: now
                 )
             }
@@ -49,6 +61,7 @@ struct MenuBarMenu: View {
     let actions: ProjectActions
 
     @Environment(\.openWindow) private var openWindow
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
 
     private var recentProjects: [RepoProject] {
         Array(store.projects.prefix(6))
@@ -56,8 +69,16 @@ struct MenuBarMenu: View {
 
     private var attentionItems: [ProjectAttentionItem] {
         let now = Date()
+        let focusedPaths = copyMode == .plain
+            ? ProjectFocusPolicy.partition(projects: store.projects).focusedPaths
+            : nil
         return ProjectAttentionQueue
-            .items(projects: store.projects, testRuns: actions.testRuns)
+            .items(
+                projects: store.projects,
+                testRuns: actions.testRuns,
+                focusedPaths: focusedPaths,
+                copyMode: copyMode
+            )
             .filter {
                 !store.isAttentionSuppressed(
                     for: $0.project,
@@ -65,6 +86,12 @@ struct MenuBarMenu: View {
                     at: now
                 )
             }
+    }
+
+    private var activeAIProjects: [RepoProject] {
+        store.projects
+            .filter { store.activeAIProjectPaths.contains($0.path) }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
     }
 
     private var runningProjects: [RepoProject] {
@@ -100,10 +127,22 @@ struct MenuBarMenu: View {
         }
         .disabled(store.phase == .scanning)
 
+        if !activeAIProjects.isEmpty {
+            Divider()
+            Section("AI 正在干活") {
+                ForEach(activeAIProjects) { project in
+                    Button("AI 正在 \(project.displayName) 里干活") {
+                        store.openProject(project, tab: .progress)
+                        presentMainWindow()
+                    }
+                }
+            }
+        }
+
         if !attentionItems.isEmpty {
             Divider()
-            Section("待处理") {
-                Button("查看 \(attentionItems.count) 项待处理") {
+            Section(FizzCopy.attentionTitle(copyMode)) {
+                Button("查看 \(attentionItems.count) 项\(FizzCopy.attentionTitle(copyMode))") {
                     show(nil)
                 }
             }
@@ -165,8 +204,20 @@ struct MenuBarMenu: View {
             Divider()
             Section("最近项目") {
                 ForEach(recentProjects) { project in
-                    Button(project.displayName) {
-                        show(project)
+                    Menu(project.displayName) {
+                        Button("打开项目") {
+                            show(project)
+                        }
+                        Button("复制接力卡") {
+                            let result = HandoffCardBuilder.build(project: project, copyMode: copyMode)
+                            SystemActions.copy(result.markdown)
+                            ToastCenter.shared.show(
+                                "接力卡已复制",
+                                symbol: "doc.on.clipboard.fill",
+                                tint: FizzTheme.accent,
+                                subtitle: "\(project.displayName) · \(result.characterCount) 字"
+                            )
+                        }
                     }
                 }
             }
@@ -189,7 +240,7 @@ struct MenuBarMenu: View {
                     title: "会话恢复失败",
                     body: "\(item.project.displayName) · \(result.message)",
                     projectPath: item.project.path,
-                    tab: .sessions
+                    tab: .progress
                 )
             }
         }
@@ -203,6 +254,10 @@ struct MenuBarMenu: View {
             store.selectedPath = RepositoryStore.homeSelection
             store.requestedTab = nil
         }
+        presentMainWindow()
+    }
+
+    private func presentMainWindow() {
         if let window = NSApp.windows.first(where: {
             $0.canBecomeMain && $0.title == "FizzDeck"
         }) {

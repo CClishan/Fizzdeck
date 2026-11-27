@@ -11,7 +11,9 @@ enum SidebarLayout {
 
 struct SidebarView: View {
     @Environment(RepositoryStore.self) private var store
+    @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
 
     let collapsed: Bool
 
@@ -42,6 +44,10 @@ struct SidebarView: View {
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: store.destination)
         .task {
             disk = DiskProbe.current()
+            while !Task.isCancelled {
+                await store.refreshActiveAISessions()
+                try? await Task.sleep(for: .seconds(15))
+            }
         }
         .onAppear {
             revealSelection()
@@ -104,6 +110,16 @@ struct SidebarView: View {
                 }
 
                 SidebarRailButton(
+                    symbol: "bubble.left.and.bubble.right",
+                    label: FizzCopy.conversationsNavTitle,
+                    selected: store.destination.isConversations,
+                    showsDot: !store.activeAIProjectPaths.isEmpty,
+                    selectionNamespace: selectionNamespace
+                ) {
+                    store.openConversations()
+                }
+
+                SidebarRailButton(
                     symbol: "square.grid.2x2",
                     label: "项目库",
                     selected: store.destination.isLibrary,
@@ -114,10 +130,10 @@ struct SidebarView: View {
                 }
 
                 SidebarRailButton(
-                    symbol: "archivebox",
-                    label: "可清理 \(Format.bytes(cleanupBytes))",
+                    symbol: "stethoscope",
+                    label: store.focusedDoctorIssueCount > 0 ? "体检（\(store.focusedDoctorIssueCount) 个问题）" : "体检",
                     selected: store.destination.isCleanup,
-                    showsDot: cleanupBytes > 0,
+                    showsDot: store.focusedDoctorIssueCount > 0,
                     selectionNamespace: selectionNamespace
                 ) {
                     store.openCleanup()
@@ -132,7 +148,7 @@ struct SidebarView: View {
 
             ScrollView {
                 VStack(spacing: 4) {
-                    ForEach(starredProjects) { project in
+                    ForEach(focusedProjects) { project in
                         SidebarRailProjectButton(
                             project: project,
                             selected: store.selectedPath == project.path,
@@ -145,7 +161,7 @@ struct SidebarView: View {
                         }
                     }
 
-                    if !starredProjects.isEmpty && !railProjects.isEmpty {
+                    if !focusedProjects.isEmpty && !railProjects.isEmpty {
                         Rectangle()
                             .fill(FizzTheme.hairline)
                             .frame(height: 1)
@@ -225,6 +241,17 @@ struct SidebarView: View {
             }
 
             SidebarSignalRow(
+                symbol: "bubble.left.and.bubble.right",
+                title: FizzCopy.conversationsNavTitle,
+                detail: store.activeAIProjectPaths.isEmpty ? nil : "\(store.activeAIProjectPaths.count) 进行中",
+                detailColor: .green,
+                selected: store.destination.isConversations,
+                selectionNamespace: selectionNamespace
+            ) {
+                store.openConversations()
+            }
+
+            SidebarSignalRow(
                 symbol: "square.grid.2x2",
                 title: "项目库",
                 detail: "\(store.projects.count)",
@@ -235,9 +262,11 @@ struct SidebarView: View {
             }
 
             SidebarSignalRow(
-                symbol: "archivebox",
-                title: "可清理",
-                detail: Format.bytes(cleanupBytes),
+                symbol: "stethoscope",
+                title: "体检",
+                detail: store.focusedDoctorIssueCount > 0
+                    ? "\(store.focusedDoctorIssueCount)"
+                    : (cleanupBytes > 0 ? Format.bytes(cleanupBytes) : "良好"),
                 selected: store.destination.isCleanup,
                 selectionNamespace: selectionNamespace
             ) {
@@ -247,12 +276,13 @@ struct SidebarView: View {
     }
 
     private var projectSections: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if !starredProjects.isEmpty {
-                starredSection
+        let partition = focusPartition
+        return VStack(alignment: .leading, spacing: 12) {
+            if !partition.focused.isEmpty {
+                focusSection(partition)
             }
 
-            if !runningProjects.isEmpty {
+            if !runningProjects.isEmpty || !activeAIProjects.isEmpty {
                 runningSection
             }
 
@@ -262,22 +292,65 @@ struct SidebarView: View {
         }
     }
 
-    private var starredSection: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            SidebarSectionHeader(title: "星标") {
-                FizzIcon(symbol: "star.fill", size: FizzIconScale.micro)
-                    .foregroundStyle(.yellow)
+    private func focusSection(_ partition: FocusPartition) -> some View {
+        let manualEntries = partition.focused.filter { $0.reason == .manual }
+        let autoEntries = partition.focused.filter { $0.reason == .recentActivity }
+        let sectionTitle = FizzCopy.focusSectionTitle(copyMode)
+
+        return VStack(alignment: .leading, spacing: 1) {
+            SidebarSectionHeader(title: sectionTitle) {
+                FizzIcon(
+                    symbol: copyMode == .plain ? "pin.fill" : "star.fill",
+                    size: FizzIconScale.micro
+                )
+                .foregroundStyle(copyMode == .plain ? FizzTheme.accent : Color.yellow)
             }
 
-            ForEach(starredProjects) { project in
-                projectRow(
-                    project,
-                    portText: project.port == .running ? project.run.map { ":\($0.port)" } : nil
-                )
+            ForEach(manualEntries) { entry in
+                focusRow(entry.project)
+            }
+
+            if !autoEntries.isEmpty {
+                Text("7 天内活跃（自动）")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .padding(.leading, 9)
+                    .padding(.top, manualEntries.isEmpty ? 2 : 5)
+                    .padding(.bottom, 1)
+
+                ForEach(autoEntries) { entry in
+                    focusRow(entry.project)
+                }
+            }
+
+            if partition.overflowActiveCount > 0 {
+                Button {
+                    store.openLibrary()
+                } label: {
+                    Text("还有 \(partition.overflowActiveCount) 个活跃项目")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 9)
+                        .frame(height: 22, alignment: .leading)
+                }
+                .buttonStyle(.plain)
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("星标项目")
+        .accessibilityLabel("\(sectionTitle)项目")
+    }
+
+    private func focusRow(_ project: RepoProject) -> some View {
+        let dot = ProjectFocusPolicy.statusDot(
+            for: project,
+            testRuns: actions.testRunsSnapshot,
+            activeAIProjectPaths: store.activeAIProjectPaths
+        )
+        return projectRow(
+            project,
+            portText: project.port == .running ? project.run.map { ":\($0.port)" } : nil,
+            statusDot: dot
+        )
     }
 
     private var runningSection: some View {
@@ -289,7 +362,16 @@ struct SidebarView: View {
             ForEach(runningProjects) { project in
                 projectRow(
                     project,
-                    portText: project.run.map { ":\($0.port)" }
+                    portText: project.run.map { ":\($0.port)" },
+                    tagText: FizzCopy.runningServicesTag
+                )
+            }
+
+            ForEach(activeAIProjects) { project in
+                projectRow(
+                    project,
+                    tagText: FizzCopy.runningAITag,
+                    statusDot: .aiWorking
                 )
             }
         }
@@ -357,11 +439,19 @@ struct SidebarView: View {
         }
     }
 
-    private func projectRow(_ project: RepoProject, portText: String? = nil) -> some View {
+    private func projectRow(
+        _ project: RepoProject,
+        portText: String? = nil,
+        tagText: String? = nil,
+        statusDot: ProjectStatusDot = .none
+    ) -> some View {
         SidebarProjectRow(
             project: project,
             selected: store.selectedPath == project.path,
             portText: portText,
+            tagText: tagText,
+            statusDot: statusDot,
+            copyMode: copyMode,
             selectionNamespace: selectionNamespace
         ) {
             store.selectedPath = project.path
@@ -373,8 +463,22 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func projectMenu(_ project: RepoProject) -> some View {
-        Button(project.starred ? "取消星标" : "设为星标") {
+        Button(project.starred
+            ? (copyMode == .plain ? "取消关注" : "取消星标")
+            : (copyMode == .plain ? "加入关注" : "设为星标")
+        ) {
             store.toggleStar(project)
+        }
+
+        Button("复制接力卡") {
+            let result = HandoffCardBuilder.build(project: project, copyMode: copyMode)
+            SystemActions.copy(result.markdown)
+            ToastCenter.shared.show(
+                "接力卡已复制",
+                symbol: "doc.on.clipboard.fill",
+                tint: FizzTheme.accent,
+                subtitle: "\(result.characterCount) 字"
+            )
         }
 
         Menu("标签颜色") {
@@ -448,12 +552,23 @@ struct SidebarView: View {
         store.projects.reduce(0) { $0 + $1.cleanup.reusableBytes }
     }
 
-    private var starredProjects: [RepoProject] {
-        store.projects.filter(\.starred)
+    private var activeAIProjects: [RepoProject] {
+        store.projects
+            .filter { store.activeAIProjectPaths.contains($0.path) }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    private var focusPartition: FocusPartition {
+        ProjectFocusPolicy.partition(projects: store.projects)
+    }
+
+    private var focusedProjects: [RepoProject] {
+        focusPartition.focused.map(\.project)
     }
 
     private var railProjects: [RepoProject] {
-        store.projects.filter { !$0.starred }
+        let focusedPaths = focusPartition.focusedPaths
+        return store.projects.filter { !focusedPaths.contains($0.path) }
     }
 
     private var groups: [SidebarGroup] {
@@ -572,6 +687,9 @@ private struct SidebarProjectRow: View {
     let project: RepoProject
     let selected: Bool
     let portText: String?
+    var tagText: String? = nil
+    var statusDot: ProjectStatusDot = .none
+    var copyMode: CopyMode = .plain
     let selectionNamespace: Namespace.ID
     let action: () -> Void
 
@@ -588,12 +706,23 @@ private struct SidebarProjectRow: View {
 
                 Spacer(minLength: 4)
 
+                if let tagText {
+                    Text(tagText)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(FizzTheme.recessedFill, in: Capsule())
+                }
+
                 if let portText {
                     Text(portText)
                         .font(.system(size: 9.5, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.tertiary)
                 }
+
+                dotIndicator
             }
             .foregroundStyle(selected ? Color.primary : Color.secondary)
             .padding(.horizontal, 7)
@@ -619,6 +748,27 @@ private struct SidebarProjectRow: View {
         .accessibilityLabel(project.displayName)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityRemoveTraits(selected ? [] : .isSelected)
+    }
+
+    @ViewBuilder
+    private var dotIndicator: some View {
+        switch statusDot {
+        case .aiWorking:
+            RunningPulseDot(size: 6)
+                .help("AI 正在干活")
+        case .broken:
+            Circle()
+                .fill(Color.red)
+                .frame(width: 6, height: 6)
+                .help("跑不起来或上次对话报错")
+        case .unsaved:
+            Circle()
+                .fill(Color.orange)
+                .frame(width: 6, height: 6)
+                .help(FizzCopy.uncommittedChanges(mode: copyMode).text)
+        case .none:
+            EmptyView()
+        }
     }
 }
 

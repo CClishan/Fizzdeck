@@ -279,4 +279,60 @@ final class DashboardMetricsTests: XCTestCase {
         XCTAssertEqual(partitioned.active.map(\.path), ["/tmp/a", "/tmp/c"])
         XCTAssertEqual(partitioned.idle.map(\.path), ["/tmp/b"])
     }
+
+    func testWeeklyTouchedFilesAIActivityHeatmapAndEnrichedContinueWork() {
+        let now = date("2026-11-26 15:00")
+        let s1 = SessionRecord(
+            tool: "claude",
+            id: "s1",
+            cwd: "/tmp/a",
+            startedAt: date("2026-11-26 10:00"),
+            modified: date("2026-11-26 10:15"),
+            lastUser: "Continue touch",
+            firstUser: "添加拖拽排序",
+            touchedFiles: ["src/App.jsx", "src/Todo.jsx"],
+            lastError: "Build failed",
+            endedWithError: true,
+            turnCount: 2,
+            durationMinutes: 15
+        )
+        let s2 = SessionRecord(
+            tool: "codex",
+            id: "s2",
+            cwd: "/tmp/a",
+            startedAt: date("2026-11-25 14:00"),
+            modified: date("2026-11-25 14:10"),
+            lastUser: "Init",
+            firstUser: "初始化",
+            touchedFiles: ["src/App.jsx", "package.json"] // src/App.jsx overlaps with s1
+        )
+        let pA = makeProject(path: "/tmp/a", displayName: "Alpha", recent: now, sessions: [s2, s1])
+
+        let kpi = DashboardMetrics.kpiSummary(
+            projects: [pA],
+            commitActivity: .empty,
+            now: now,
+            calendar: calendar
+        )
+        // Unique across (project, file): App.jsx, Todo.jsx, package.json => 3
+        XCTAssertEqual(kpi.weeklyTouchedFiles, 3)
+
+        let aiHeatmap = DashboardMetrics.buildAIActivityHeatmap(
+            projects: [pA],
+            range: .weeks26,
+            now: now,
+            calendar: calendar
+        )
+        XCTAssertEqual(aiHeatmap.totalCommits, 4) // 2 + 2 touched files
+        XCTAssertEqual(aiHeatmap.weekCommits, 4)
+        XCTAssertEqual(aiHeatmap.currentStreak, 2)
+
+        let continueItems = DashboardMetrics.continueWorkItems(projects: [pA])
+        let item = try! XCTUnwrap(continueItems.first)
+        XCTAssertEqual(item.summary, "添加拖拽排序")
+        XCTAssertEqual(item.touchedFileCount, 2)
+        XCTAssertEqual(item.durationMinutes, 15)
+        XCTAssertTrue(item.endedWithError)
+        XCTAssertEqual(item.lastError, "Build failed")
+    }
 }

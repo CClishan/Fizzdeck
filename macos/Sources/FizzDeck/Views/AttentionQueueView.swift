@@ -4,6 +4,7 @@ struct AttentionQueueView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
 
     @State private var expanded = false
     @State private var pendingGitAction: PendingGitAction?
@@ -14,10 +15,24 @@ struct AttentionQueueView: View {
     @State private var selectedKind: ProjectAttentionKind?
 
     var showsTabs = false
+    var focusedOnly = false
     private let collapsedLimit = 4
 
+    private var effectiveCollapsedLimit: Int {
+        copyMode == .plain ? 3 : collapsedLimit
+    }
+
     private var allItems: [ProjectAttentionItem] {
-        ProjectAttentionQueue.items(projects: store.projects, testRuns: actions.testRuns)
+        let focusedPaths = focusedOnly
+            ? ProjectFocusPolicy.partition(projects: store.projects).focusedPaths
+            : nil
+        return ProjectAttentionQueue.items(
+            projects: store.projects,
+            testRuns: actions.testRuns,
+            focusedPaths: focusedPaths,
+            copyMode: copyMode,
+            doctorReports: store.doctorReports
+        )
     }
 
     private var items: [ProjectAttentionItem] {
@@ -41,7 +56,7 @@ struct AttentionQueueView: View {
     }
 
     private var visibleItems: [ProjectAttentionItem] {
-        expanded ? filteredItems : Array(filteredItems.prefix(collapsedLimit))
+        expanded ? filteredItems : Array(filteredItems.prefix(effectiveCollapsedLimit))
     }
 
     private var availableKinds: [(kind: ProjectAttentionKind, count: Int)] {
@@ -61,7 +76,7 @@ struct AttentionQueueView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
                     FizzIcon(symbol: "exclamationmark.circle", size: 13)
                         .foregroundStyle(FizzTheme.accent)
-                    Text("待处理")
+                    Text(FizzCopy.attentionTitle(copyMode))
                         .font(.system(size: 13, weight: .semibold))
                     Text("\(projectCount)")
                         .font(.caption.monospacedDigit())
@@ -85,7 +100,7 @@ struct AttentionQueueView: View {
                     .padding(.horizontal, 14)
                     .opacity(0.55)
 
-                if showsTabs && availableKinds.count > 1 {
+                if showsTabs && copyMode == .pro && availableKinds.count > 1 {
                     categoryTabs
                     Divider()
                         .padding(.horizontal, 14)
@@ -99,6 +114,7 @@ struct AttentionQueueView: View {
                         isActing: isActing(item),
                         copied: copiedItemID == item.id,
                         feedback: feedback[item.id],
+                        copyMode: copyMode,
                         open: {
                             store.openProject(item.project, tab: item.kind.tab)
                         },
@@ -140,14 +156,14 @@ struct AttentionQueueView: View {
                     .padding(.vertical, 12)
                 }
 
-                if filteredItems.count > collapsedLimit {
+                if filteredItems.count > effectiveCollapsedLimit {
                     Button {
                         withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
                             expanded.toggle()
                         }
                     } label: {
                         HStack(spacing: 5) {
-                            Text(expanded ? "收起" : "还有 \(filteredItems.count - collapsedLimit) 项")
+                            Text(expanded ? "收起" : "还有 \(filteredItems.count - effectiveCollapsedLimit) 项")
                             FizzIcon(symbol: expanded ? "chevron.up" : "chevron.down", size: 8)
                         }
                         .font(.system(size: 11, weight: .medium))
@@ -342,6 +358,7 @@ private struct AttentionRow: View {
     let isActing: Bool
     let copied: Bool
     let feedback: AttentionFeedback?
+    var copyMode: CopyMode = .plain
     let open: () -> Void
     let perform: (AttentionInlineAction) -> Void
 
@@ -380,28 +397,46 @@ private struct AttentionRow: View {
             .help("打开 \(item.project.displayName) 的\(item.kind.destinationTitle)；右键可稍后或忽略")
 
             if let inlineAction {
-                Button {
-                    perform(inlineAction)
-                } label: {
-                    Group {
+                if copyMode == .plain {
+                    Button {
+                        perform(inlineAction)
+                    } label: {
                         if isActing {
                             ProgressView()
                                 .controlSize(.mini)
                         } else {
-                            FizzIcon(
-                                symbol: copied ? "checkmark" : inlineAction.symbol,
-                                size: 11
-                            )
-                                .foregroundStyle(copied ? Color.green : item.kind.tint)
+                            Text(copied ? "已复制" : inlineAction.plainTitle)
+                                .font(.system(size: 10.5, weight: .medium))
                         }
                     }
-                    .frame(width: 25, height: 25)
-                    .contentShape(Circle())
+                    .buttonStyle(.glass)
+                    .controlSize(.mini)
+                    .disabled(isActing)
+                    .help(inlineAction.plainTitle)
+                } else {
+                    Button {
+                        perform(inlineAction)
+                    } label: {
+                        Group {
+                            if isActing {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            } else {
+                                FizzIcon(
+                                    symbol: copied ? "checkmark" : inlineAction.symbol,
+                                    size: 11
+                                )
+                                    .foregroundStyle(copied ? Color.green : item.kind.tint)
+                            }
+                        }
+                        .frame(width: 25, height: 25)
+                        .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isActing)
+                    .help(inlineAction.title)
+                    .accessibilityLabel(inlineAction.title)
                 }
-                .buttonStyle(.plain)
-                .disabled(isActing)
-                .help(inlineAction.title)
-                .accessibilityLabel(inlineAction.title)
             }
 
             FizzIcon(symbol: "chevron.right", size: 8)
@@ -432,6 +467,15 @@ private enum AttentionInlineAction {
         case .pull: "拉取远端"
         case .push: "推送提交"
         case .copyCleanup: "复制清理命令"
+        }
+    }
+
+    var plainTitle: String {
+        switch self {
+        case .runTests: "重新检查"
+        case .pull: "更新代码"
+        case .push: "上传版本"
+        case .copyCleanup: "复制命令"
         }
     }
 
@@ -469,9 +513,11 @@ private struct AttentionFeedback {
 private extension ProjectAttentionItem {
     var inlineAction: AttentionInlineAction? {
         switch kind {
+        case .doctorCritical:
+            nil
         case .testFailed:
             project.test == nil ? nil : .runTests
-        case .dirty:
+        case .sessionError, .dirty:
             nil
         case .behind:
             .pull
@@ -486,7 +532,9 @@ private extension ProjectAttentionItem {
 private extension ProjectAttentionKind {
     var symbol: String {
         switch self {
+        case .doctorCritical: "exclamationmark.shield.fill"
         case .testFailed: "xmark.octagon"
+        case .sessionError: "exclamationmark.triangle"
         case .dirty: "square.and.pencil"
         case .behind: "arrow.down"
         case .unpushed: "arrow.up"
@@ -496,8 +544,8 @@ private extension ProjectAttentionKind {
 
     var tint: Color {
         switch self {
-        case .testFailed: .red
-        case .dirty: .orange
+        case .doctorCritical, .testFailed: .red
+        case .sessionError, .dirty: .orange
         case .behind: .blue
         case .unpushed: .purple
         case .cleanup: .teal
@@ -506,15 +554,17 @@ private extension ProjectAttentionKind {
 
     var destinationTitle: String {
         switch self {
-        case .testFailed: "测试"
-        case .dirty, .behind, .unpushed: "改动"
-        case .cleanup: "清理"
+        case .doctorCritical, .testFailed: "运行"
+        case .sessionError, .cleanup: "进度"
+        case .dirty, .behind, .unpushed: "版本"
         }
     }
 
     var shortTitle: String {
         switch self {
+        case .doctorCritical: "体检阻塞"
         case .testFailed: "测试失败"
+        case .sessionError: "对话报错"
         case .dirty: "未提交"
         case .behind: "落后远端"
         case .unpushed: "未推送"

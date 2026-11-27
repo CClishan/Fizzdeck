@@ -2,7 +2,7 @@
 
 The native, SwiftUI-first client for FizzDeck.
 
-Download: [FizzDeck 0.5.3 for macOS](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+, ad-hoc signed (not notarized).
+Download: [FizzDeck 0.7.4 for macOS](https://github.com/CClishan/Fizzdeck/releases/download/v0.7.4/FizzDeck-0.7.4-arm64.dmg) — Apple Silicon, macOS 26+. Public DMGs use ad-hoc signing unless the release notes explicitly name a Developer ID notarized build.
 
 FizzDeck reads and writes the same local state as the web UI, but runs without Node.js and without a local HTTP server.
 
@@ -10,8 +10,51 @@ FizzDeck reads and writes the same local state as the web UI, but runs without N
 
 ## Requirements
 
+- Apple Silicon
 - macOS 26 or later
 - Xcode 26 or later with a Swift 6 toolchain
+
+## What is implemented
+
+### Remember
+
+- Plain-language mode, enabled by default, with a professional Git terminology switch
+- A cross-project conversation timeline with first request, touched files, status, and cost
+- Chinese-capable local search over conversations, including short-query fallback, from the Conversations workspace and `⌘K`
+- Clipboard-only handoff cards with secret redaction
+
+### Rewind
+
+- A quiet pre-conversation mark stored as temporary Git objects without moving branches or writing commits
+- Conversation diff review, per-file or whole-worktree restore, and undo feedback
+- New files created after a conversation are kept by default during restore
+- Inline “save a version” with rule-based or optional AI commit messages
+- Pre-push checks for unignored `.env` files and tracked-file secret patterns
+
+### Run
+
+- Sidebar Doctor for focused projects: run state, dependencies, ports, secrets, and version protection
+- Idle-project cleanup that defaults to moving reclaimable directories to the system Trash
+- Inline local-environment and Git-identity checks
+- Run-tab preflight with install, port-conflict, `.env`, and version-protection actions
+- Log-error explanations and a copyable agent-help prompt
+
+### Optional AI summaries
+
+- Off by default
+- Agent CLI without an API key, OpenAI-compatible API with the key stored in macOS Keychain, or a local model
+- Minimal redacted fields only, isolated agent working directory, and silent fallback to rule-based summaries
+
+### Project detail
+
+Four tabs, shared by plain-language and professional modes:
+
+| Tab | Contents |
+|---|---|
+| **Progress** | “Where did I leave off?”, conversation timeline and marks, touched files, restore entry |
+| **Run** | Doctor issues, services, scripts, tests, logs, error help |
+| **Version** | Branch, changes, diffs, staging, inline version save, push, advanced Git |
+| **Project info** | Intro, note, stack, disk usage, cleanup entry, compact document list with preview |
 
 ## Build and run
 
@@ -27,6 +70,12 @@ Build, launch, and verify:
 ./script/build_and_run.sh --verify
 ```
 
+The default version is `0.7.4`, Build `12`. Both values can be overridden:
+
+```sh
+VERSION=0.7.4 BUILD_NUM=12 ./script/build_and_run.sh --sign-local
+```
+
 Run the Swift test baseline:
 
 ```sh
@@ -38,40 +87,177 @@ The app bundle is written to `dist/FizzDeck.app`.
 Other entry points:
 
 ```sh
-./script/build_and_run.sh          # build and launch
-./script/build_and_run.sh --sign-local  # ad-hoc sign, then launch for local notification testing
-./script/build_and_run.sh --logs   # launch and stream app logs
-./script/build_and_run.sh --debug  # launch the binary under LLDB
+./script/build_and_run.sh              # build and launch
+./script/build_and_run.sh --sign-local # ad-hoc sign, then launch for local notification testing
+./script/build_and_run.sh --logs       # launch and stream app logs
+./script/build_and_run.sh --debug      # launch the binary under LLDB
 ```
-
-`--sign-local` is an ad-hoc signature for local testing only. It is not a distribution signature and is never applied by the default `run` or `--verify` modes.
 
 To work in Xcode, open `Package.swift`.
 
-## What is implemented
+## Package a DMG
 
-- Native overview with starred, changed, and running filters
-- Attention queue for failing tests, unpushed or behind commits, uncommitted files, and reclaimable disk, with inline actions plus per-project snooze, mute, and restore
-- Menu bar pending count with quick access to the overview and recent projects
-- Local notifications when a dev server becomes ready or a test fails
-- `⌘K` command palette for projects, branches, and actions
-- Finder, preferred terminal, and editor quick actions for Cursor, VS Code, Zed, Antigravity, JetBrains IDEs, and top-level or nested Xcode targets, including `⌘⇧T` for the terminal
-- Terminal preference for Terminal, iTerm2, Ghostty, or Warp, plus automatic or Codex Desktop resume routing
-- Collapsible project groups with automatic path-based classification plus manual group assignment, new-group creation, and restore-to-automatic
-- Search across projects, paths, stacks, and branches
-- Dashboard and list layouts, with a half-width attention card beside four summary cards
-- Group filtering plus multi-select batch rescan and cleanup-command copy across both layouts
-- Native Liquid Glass folder manager with nested project discovery, scan-depth control, duplicate protection, and managed roots
-- Disk usage and cleanup suggestions
-- Git status, ahead/behind state, dirty files, and recent commits
-- Branch switching, confirmed fetch, fast-forward pull, and push with inline results
-- Project documentation discovery and reading
-- Codex, Claude Code, and Grok session list with tool filters, last user request, resume in the preferred terminal or Codex Desktop, and confirmed ending of dedicated CLI processes
-- Start/stop and test controls in a floating Liquid Glass action dock
-- Port readiness checks and log access
-- Background test execution with live output
-- Stars, color tags, and notes
-- Light and low-saturation charcoal dark appearances with native glass controls and a floating Liquid Glass action dock
+Default ad-hoc package:
+
+```sh
+./script/package_dmg.sh
+```
+
+Output:
+
+```text
+dist/FizzDeck-0.7.4-arm64.dmg
+dist/FizzDeck-0.7.4-arm64.dmg.sha256
+```
+
+The checksum file is standard `shasum -a 256` output containing only the DMG filename. Custom version, build number, and output path are available:
+
+```sh
+./script/package_dmg.sh \
+  --version 0.7.4 \
+  --build-num 12 \
+  --output dist/FizzDeck-0.7.4-arm64.dmg
+```
+
+Run `./script/package_dmg.sh --help` for all options.
+
+## Signing and notarization
+
+### Default: ad-hoc
+
+Without a Developer ID identity, the script keeps the existing behavior:
+
+- ad-hoc signs the staged app
+- runs `codesign --verify --deep --strict`
+- packages and verifies the DMG
+- writes the `.sha256` file
+
+No signing or notarization error is raised in this path.
+
+### Developer ID
+
+Pass the identity with `--sign-identity` or provide `DEVELOPER_ID_APP`:
+
+```sh
+export DEVELOPER_ID_APP="Developer ID Application: <your name> (<TEAMID>)"
+./script/package_dmg.sh --sign-identity "$DEVELOPER_ID_APP"
+```
+
+When an identity is present, the staged app is signed with:
+
+```text
+--options runtime --timestamp
+```
+
+The final DMG is signed as well. Nothing is hardcoded in the repository.
+
+### Notarization
+
+Store notarization credentials in a Keychain profile once:
+
+```sh
+xcrun notarytool store-credentials "$NOTARY_PROFILE"
+```
+
+Follow the prompts for the Apple ID, team ID, and app-specific password. The profile name is stored in the keychain; no credentials belong in this repository.
+
+Then package, submit, staple, and verify:
+
+```sh
+export DEVELOPER_ID_APP="Developer ID Application: <your name> (<TEAMID>)"
+export NOTARY_PROFILE="<notarytool profile name>"
+./script/package_dmg.sh --notarize
+```
+
+The notarized path runs:
+
+```sh
+xcrun notarytool submit "$OUTPUT_DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun stapler staple "$OUTPUT_DMG"
+xcrun stapler validate "$OUTPUT_DMG"
+spctl -a -vvv -t open --context context:primary-signature "$OUTPUT_DMG"
+```
+
+## Release verification
+
+### 1. Local preflight
+
+```sh
+bash -n macos/script/build_and_run.sh
+bash -n macos/script/package_dmg.sh
+swift build --package-path macos --product FizzDeck
+swift test --package-path macos
+```
+
+If `src/landing` changed:
+
+```sh
+npm run build
+```
+
+### 2. Build and inspect the DMG
+
+```sh
+./macos/script/package_dmg.sh
+hdiutil verify macos/dist/FizzDeck-0.7.4-arm64.dmg
+mkdir -p /tmp/fizzdeck-verify
+hdiutil attach -nobrowse -readonly -mountpoint /tmp/fizzdeck-verify macos/dist/FizzDeck-0.7.4-arm64.dmg
+/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /tmp/fizzdeck-verify/FizzDeck.app/Contents/Info.plist
+/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' /tmp/fizzdeck-verify/FizzDeck.app/Contents/Info.plist
+codesign --verify --deep --strict /tmp/fizzdeck-verify/FizzDeck.app
+hdiutil detach /tmp/fizzdeck-verify
+cd macos/dist && shasum -a 256 -c FizzDeck-0.7.4-arm64.dmg.sha256
+```
+
+Expected values: version `0.7.4`, build `12`.
+
+### 3. In-app update: v0.5.3 or v0.7.3 → v0.7.4
+
+Run this once from each old version, on a Mac that can keep the existing `~/.repodeck` state:
+
+1. Install the old app into `/Applications` and publish the new v0.7.4 DMG plus its `.sha256` to a test release or the final release.
+2. Launch the old app and open **Settings → About**.
+3. Click check for updates and confirm the app finds `v0.7.4`.
+4. Start the download and watch the progress state; confirm it fetches both the DMG and checksum.
+5. Let FizzDeck verify SHA-256, mount the DMG, verify the bundle identifier and code signature, replace the app atomically, and relaunch.
+6. Confirm the relaunched app reads `0.7.4` and Build `12`:
+
+```sh
+/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /Applications/FizzDeck.app/Contents/Info.plist
+/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' /Applications/FizzDeck.app/Contents/Info.plist
+```
+
+7. Confirm projects, stars, notes, and the previous update setting survived the update.
+8. Open the app once more from Finder and confirm it launches without a blank window or repeated update prompt.
+9. Repeat the same steps starting from the other old version (`v0.5.3` and `v0.7.3`).
+
+Do not claim the update is release-ready if either starting version fails, or if the checksum, bundle ID, or version check is skipped.
+
+### 4. Notarized release verification
+
+```sh
+./macos/script/package_dmg.sh --notarize
+xcrun stapler validate macos/dist/FizzDeck-0.7.4-arm64.dmg
+spctl -a -vvv -t open --context context:primary-signature macos/dist/FizzDeck-0.7.4-arm64.dmg
+```
+
+For the installed notarized app:
+
+```sh
+spctl -a -vvv -t exec /Applications/FizzDeck.app
+codesign --display --verbose=4 /Applications/FizzDeck.app
+```
+
+### 5. Release assets
+
+Upload both:
+
+```text
+FizzDeck-0.7.4-arm64.dmg
+FizzDeck-0.7.4-arm64.dmg.sha256
+```
+
+After publishing, verify the release tag, filenames, checksum, and in-app update once from a clean install.
 
 ## Shared state
 
@@ -81,7 +267,10 @@ FizzDeck keeps its state in `~/.repodeck`, a path retained for backward compatib
 |---|---|
 | `roots.json` | Managed folders and display aliases |
 | `state.json` | Stars, tags, groups, notes, and UI state |
-| `roots-cache.json` | Scan cache |
+| `scan-cache.json` | Scan cache |
+| `marks.json` | Conversation marks |
+| `session-search.sqlite` | Cross-project FTS5 conversation index |
+| `summaries/` | Optional AI summary cache |
 | `logs/` | Development server logs |
 | `launchers/` | Short-lived resume scripts, cleaned after 24 hours |
 
@@ -93,7 +282,7 @@ The app is a local developer tool. It is **not sandboxed**, because it needs acc
 
 FizzDeck itself does not upload project data. Commands launched for a project may make their own network requests.
 
-Local notifications require system permission. The `--sign-local` build uses an ad-hoc signature, which is enough to register with Notification Center for local testing; distribution still needs a Developer ID signature and notarization.
+Local notifications require system permission. The `--sign-local` build uses an ad-hoc signature, which is enough to register with Notification Center for local testing.
 
 Project removal only accepts managed roots, refuses shallow or protected paths, is blocked while a dev server or test is running, and requires typing the directory name. Move to Trash uses the system Trash; permanent deletion first copies the project to `~/.repodeck/trash`.
 
@@ -102,16 +291,18 @@ Project removal only accepts managed roots, refuses shallow or protected paths, 
 ```text
 Sources/FizzDeck/App         App entry point
 Sources/FizzDeck/Models      Data models and dashboard filters
-Sources/FizzDeck/Services    Scanner, Git, docs, sessions, shell, and process actions
+Sources/FizzDeck/Services    Scanner, Git, docs, sessions, Doctor, summaries, and process actions
 Sources/FizzDeck/Stores      Observable app state
 Sources/FizzDeck/Views       SwiftUI screens and components
-Sources/FizzDeck/Support     Theme, paths, formatting, and system helpers
+Sources/FizzDeck/Support     Theme, paths, formatting, copy, and system helpers
 Resources/                   Logo and app icon
 script/build_and_run.sh      Build and launch entry point
+script/package_dmg.sh        Packaging, signing, notarization, and checksum entry point
 ```
 
-## Not implemented yet
+## Current boundaries
 
-- Warp auto-running resume commands; FizzDeck opens the project directory and offers the command to copy
-- Ending Codex Desktop sessions; FizzDeck never terminates the shared app-server
-- Code signing and notarization
+- Warp resume commands still need to be copied; FizzDeck opens the project directory rather than injecting a command.
+- Ending Codex Desktop sessions is intentionally unsupported; FizzDeck never terminates the shared app-server.
+- Developer ID signing and notarization are implemented in the packaging script, but public releases remain ad-hoc until credentials are supplied at build time.
+- Conversation marks depend on temporary Git objects and normally expire after about 14 days unless pinned.

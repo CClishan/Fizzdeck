@@ -45,7 +45,7 @@ struct ToastOverlayView: View {
 
     var body: some View {
         if !visibleMessages.isEmpty {
-            ZStack(alignment: .bottomTrailing) {
+            ZStack(alignment: .topTrailing) {
                 Color.clear
                     .contentShape(Rectangle())
 
@@ -60,7 +60,7 @@ struct ToastOverlayView: View {
                         }
                     )
                     .offset(y: yOffset(for: index))
-                    .scaleEffect(scale(for: index), anchor: .bottomTrailing)
+                    .scaleEffect(scale(for: index), anchor: .topTrailing)
                     .opacity(opacity(for: index))
                     .zIndex(Double(10 - index))
                     .allowsHitTesting(expanded || index == 0)
@@ -79,7 +79,7 @@ struct ToastOverlayView: View {
                     )
                 }
             }
-            .frame(width: cardWidth, height: stageHeight, alignment: .bottomTrailing)
+            .frame(width: cardWidth, height: stageHeight, alignment: .topTrailing)
             .contentShape(Rectangle())
             .onHover { inside in
                 stageHovered = inside
@@ -94,9 +94,9 @@ struct ToastOverlayView: View {
 
     private func yOffset(for index: Int) -> CGFloat {
         if expanded {
-            return -CGFloat(index) * (cardHeight + expandedGap)
+            return CGFloat(index) * (cardHeight + expandedGap)
         }
-        return -CGFloat(index) * 10
+        return CGFloat(index) * 10
     }
 
     private func scale(for index: Int) -> CGFloat {

@@ -4,44 +4,50 @@ import SwiftUI
 struct ProjectDetailView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     let project: RepoProject
 
-    @State private var tab: ProjectTab = .overview
+    @State private var tab: ProjectTab = .progress
     @State private var detail: ProjectDetail = .empty
     @State private var loadingDetail = false
     @State private var scrolledPastTop = false
     @State private var noteDraft = ""
+    @State private var showingCleanupSheet = false
+    @State private var showingHandoffSheet = false
     @Namespace private var tabNamespace
-    @Namespace private var dockNamespace
 
     var body: some View {
         VStack(spacing: 0) {
-            ProjectHero(project: project)
+            ProjectHero(
+                project: project,
+                onShowHandoff: { showingHandoffSheet = true },
+                onShowCleanup: { showingCleanupSheet = true }
+            )
             Group {
                 switch tab {
-                case .overview:
-                    OverviewTabView(
-                        project: project,
-                        noteDraft: $noteDraft,
-                        saveNote: {
-                            store.setNote(noteDraft, for: project)
-                            ToastCenter.shared.show("备注已保存", symbol: "checkmark.circle.fill", tint: .green)
-                        }
-                    )
-                case .git:
+                case .progress:
+                    ProgressTabView(project: project)
+                case .run:
+                    RunTabView(project: project)
+                case .version:
                     GitTabView(project: project, detail: detail, loading: loadingDetail) {
                         await store.refreshGit(for: project.path)
                         await reloadDetail()
                     }
                     .id(project.path)
-                case .docs:
-                    DocsTabView(project: project, docs: detail.docs)
-                case .sessions:
-                    SessionsTabView(project: project)
-                case .tests:
-                    TestsTabView(project: project)
-                case .cleanup:
-                    CleanupTabView(project: project)
+                case .info:
+                    ProjectInfoTabView(
+                        project: project,
+                        docs: detail.docs,
+                        noteDraft: $noteDraft,
+                        saveNote: {
+                            store.setNote(noteDraft, for: project)
+                            ToastCenter.shared.show("备注已保存", symbol: "checkmark.circle.fill", tint: .green)
+                        },
+                        onShowCleanup: {
+                            showingCleanupSheet = true
+                        }
+                    )
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -51,27 +57,6 @@ struct ProjectDetailView: View {
                     visible: scrolledPastTop
                 )
             }
-            .contentMargins(.bottom, 76, for: .scrollContent)
-            .scrollEdgeEffectHidden(true, for: .bottom)
-            .overlay(alignment: .bottom) {
-                GlassEffectContainer(spacing: 10) {
-                    HStack(spacing: 10) {
-                        if showsActionDock {
-                            ProjectActionDock(project: project, tab: tab)
-                                .glassEffectID("actionDock", in: dockNamespace)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                        }
-                        SessionContinueButton(project: project, style: .dock)
-                            .glassEffectID("continueDock", in: dockNamespace)
-                    }
-                }
-                .padding(.horizontal, FizzSpacing.page)
-                .padding(.bottom, 16)
-            }
-            .animation(
-                FizzMotion.resolved(reduceMotion, FizzMotion.morph),
-                value: showsActionDock
-            )
         }
         .task(id: project.path) {
             store.startWatchingGit(for: project.path)
@@ -92,12 +77,38 @@ struct ProjectDetailView: View {
         }
         .onAppear {
             applyRequestedTab()
+            applyRequestedCleanupSheet()
         }
         .onChange(of: store.requestedTab) {
             applyRequestedTab()
         }
+        .onChange(of: store.requestedCleanupSheet) {
+            applyRequestedCleanupSheet()
+        }
         .onPreferenceChange(FizzScrollPastTopKey.self) { value in
             scrolledPastTop = value
+        }
+        .sheet(isPresented: $showingHandoffSheet) {
+            HandoffCardSheet(project: project)
+        }
+        .sheet(isPresented: $showingCleanupSheet) {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("清理空间 · \(project.displayName)")
+                        .font(.system(size: 15, weight: .semibold))
+                    Spacer()
+                    Button("完成") {
+                        showingCleanupSheet = false
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                Divider()
+                CleanupTabView(project: project)
+            }
+            .frame(minWidth: 680, minHeight: 460)
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -117,26 +128,16 @@ struct ProjectDetailView: View {
         project.color?.color ?? ProjectGrouping.color(for: project.group)
     }
 
-    private var showsActionDock: Bool {
-        switch tab {
-        case .overview:
-            false
-        case .tests:
-            project.test != nil
-        default:
-            false
-        }
-    }
-
     private func projectTabButton(_ item: ProjectTab) -> some View {
         let selected = tab == item
+        let labelTitle = item.title(for: copyMode)
 
         return Button {
             withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                 tab = item
             }
         } label: {
-            Text(item.title)
+            Text(labelTitle)
                 .font(.system(size: 11.5, weight: selected ? .semibold : .medium))
                 .foregroundStyle(selected ? Color.white : Color.secondary)
                 .padding(.horizontal, 10)
@@ -151,9 +152,15 @@ struct ProjectDetailView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help(item.title)
+        .help(item.title(for: copyMode))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityRemoveTraits(selected ? [] : .isSelected)
+    }
+
+    private func applyRequestedCleanupSheet() {
+        guard store.requestedCleanupSheet else { return }
+        showingCleanupSheet = true
+        store.requestedCleanupSheet = false
     }
 
     private func applyRequestedTab() {
@@ -177,6 +184,8 @@ struct ProjectDetailView: View {
 
 private struct ProjectHero: View {
     let project: RepoProject
+    let onShowHandoff: () -> Void
+    let onShowCleanup: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -233,7 +242,11 @@ private struct ProjectHero: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            ProjectHeroActions(project: project)
+            ProjectHeroActions(
+                project: project,
+                onShowHandoff: onShowHandoff,
+                onShowCleanup: onShowCleanup
+            )
                 .layoutPriority(1)
         }
         .padding(17)
@@ -264,7 +277,10 @@ private struct ProjectHeroActions: View {
     @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     let project: RepoProject
+    let onShowHandoff: () -> Void
+    let onShowCleanup: () -> Void
 
     @State private var hovering: Action?
     @State private var remote: GitRemote?
@@ -299,8 +315,12 @@ private struct ProjectHeroActions: View {
                         .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                 }
                 .buttonStyle(.plain)
-                .help(project.starred ? "取消星标" : "设为星标")
-                .accessibilityLabel(project.starred ? "取消星标" : "设为星标")
+                .help(copyMode == .plain
+                    ? (project.starred ? "取消关注" : "加入关注")
+                    : (project.starred ? "取消星标" : "设为星标"))
+                .accessibilityLabel(copyMode == .plain
+                    ? (project.starred ? "取消关注" : "加入关注")
+                    : (project.starred ? "取消星标" : "设为星标"))
                 .onHover { hovering = $0 ? .star : nil }
 
                 segmentDivider
@@ -383,6 +403,33 @@ private struct ProjectHeroActions: View {
                             Label("没有远程仓库", systemImage: "link.badge.plus")
                         }
                         .disabled(true)
+                    }
+
+                    Button {
+                        let result = HandoffCardBuilder.build(project: project, copyMode: copyMode)
+                        SystemActions.copy(result.markdown)
+                        ToastCenter.shared.show(
+                            "接力卡已复制",
+                            symbol: "doc.on.clipboard.fill",
+                            tint: FizzTheme.accent,
+                            subtitle: "\(result.characterCount) 字"
+                        )
+                    } label: {
+                        Label("复制接力卡", systemImage: "doc.on.clipboard")
+                    }
+                    Button {
+                        onShowHandoff()
+                    } label: {
+                        Label("预览接力卡…", systemImage: "text.viewfinder")
+                    }
+                    Button {
+                        onShowCleanup()
+                    } label: {
+                        if project.cleanup.reusableBytes > 0 {
+                            Label("清理空间（可腾出 \(Format.bytes(project.cleanup.reusableBytes))）…", systemImage: "trash.slash")
+                        } else {
+                            Label("清理空间…", systemImage: "trash.slash")
+                        }
                     }
 
                     Divider()

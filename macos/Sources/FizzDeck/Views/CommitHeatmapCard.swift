@@ -60,6 +60,7 @@ struct CommitHeatmapCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("fizzdeck.heatmap.range") private var rangeRaw = HeatmapRange.weeks26.rawValue
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
 
     let snapshot: CommitActivitySnapshot
     let projects: [RepoProject]
@@ -74,7 +75,13 @@ struct CommitHeatmapCard: View {
     }
 
     private var summary: HeatmapSummary {
-        DashboardMetrics.buildHeatmap(
+        if copyMode == .plain {
+            return DashboardMetrics.buildAIActivityHeatmap(
+                projects: projects,
+                range: range
+            )
+        }
+        return DashboardMetrics.buildHeatmap(
             snapshot: snapshot,
             projects: projects,
             range: range
@@ -87,7 +94,7 @@ struct CommitHeatmapCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("提交热力图")
+                    Text(copyMode == .plain ? FizzCopy.heatmapTitle(.plain) : "提交热力图")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.primary)
 
@@ -98,7 +105,9 @@ struct CommitHeatmapCard: View {
                             .contentTransition(.numericText())
                             .foregroundStyle(.primary)
 
-                        Text("次 · 连续 \(data.currentStreak) 天")
+                        Text(copyMode == .plain
+                            ? "次活动 · 连续 \(data.currentStreak) 天"
+                            : "次 · 连续 \(data.currentStreak) 天")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
@@ -275,7 +284,9 @@ struct CommitHeatmapCard: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             } else {
-                Text("最长连续 \(summary.longestStreak) 天 · 点击有提交的日期筛选项目")
+                Text(copyMode == .plain
+                    ? "最长连续 \(summary.longestStreak) 天 · 点击查看对话"
+                    : "最长连续 \(summary.longestStreak) 天 · 点击有提交的日期筛选项目")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -299,7 +310,7 @@ struct CommitHeatmapCard: View {
         formatter.dateFormat = "M 月 d 日"
         let dateText = formatter.string(from: cell.date)
         if cell.count == 0 {
-            return "\(dateText) · 无提交"
+            return "\(dateText) · \(copyMode == .plain ? "无对话活动" : "无提交")"
         }
         let breakdown = cell.projects.prefix(3).map { "\($0.name) \($0.count)" }.joined(separator: "、")
         return breakdown.isEmpty

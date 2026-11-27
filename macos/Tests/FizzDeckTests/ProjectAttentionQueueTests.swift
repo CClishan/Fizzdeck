@@ -85,6 +85,65 @@ final class ProjectAttentionQueueTests: XCTestCase {
         return project
     }
 
+    func testPlainModeFocusFilteringSessionErrorAndUrgencyOrder() {
+        let now = Date()
+        let failingSession = SessionRecord(
+            tool: "claude",
+            id: "s1",
+            cwd: "/tmp/focused",
+            startedAt: nil,
+            modified: now,
+            lastUser: "build",
+            lastError: "Compile failed",
+            endedWithError: true
+        )
+        let focused = makeProject(
+            path: "/tmp/focused",
+            recent: now,
+            changes: ChangeStats(tracked: 2, untracked: 0, total: 2),
+            ahead: 1,
+            behind: 1,
+            cleanupBytes: 2_000_000_000,
+            cleanupItems: 1,
+            sessions: [failingSession]
+        )
+        let unfocused = makeProject(
+            path: "/tmp/unfocused",
+            recent: now,
+            changes: ChangeStats(tracked: 5, untracked: 0, total: 5)
+        )
+        let testRuns = [
+            focused.path: TestRunState(
+                path: focused.path,
+                status: .failed,
+                output: "",
+                startedAt: now,
+                duration: 0.2,
+                exitCode: 1,
+                command: "npm test",
+                logPath: ""
+            ),
+        ]
+
+        let items = ProjectAttentionQueue.items(
+            projects: [focused, unfocused],
+            testRuns: testRuns,
+            focusedPaths: [focused.path],
+            copyMode: .plain
+        )
+
+        XCTAssertTrue(items.allSatisfy { $0.project.path == focused.path })
+        XCTAssertEqual(
+            items.map(\.kind),
+            [.testFailed, .sessionError, .dirty, .unpushed, .behind]
+        )
+        XCTAssertTrue(ProjectAttentionKind.testFailed.isCritical)
+        XCTAssertTrue(ProjectAttentionKind.sessionError.isCritical)
+        XCTAssertFalse(ProjectAttentionKind.dirty.isCritical)
+        XCTAssertEqual(items.first?.title, "跑不起来：检查没通过")
+        XCTAssertEqual(items[1].title, "上次 AI 对话报错结束")
+    }
+
     private func makeProject(
         path: String = "/tmp/project",
         recent: Date? = nil,
@@ -93,7 +152,8 @@ final class ProjectAttentionQueueTests: XCTestCase {
         ahead: Int = 0,
         behind: Int = 0,
         cleanupBytes: Int64 = 0,
-        cleanupItems: Int = 0
+        cleanupItems: Int = 0,
+        sessions: [SessionRecord] = []
     ) -> RepoProject {
         let cleanup = CleanupInfo(
             reusableBytes: cleanupBytes,
@@ -126,7 +186,16 @@ final class ProjectAttentionQueueTests: XCTestCase {
             size: .empty,
             cleanup: cleanup,
             run: nil,
-            sessions: .empty,
+            sessions: SessionSummary(
+                detected: Array(Set(sessions.map(\.tool))),
+                lastSessionAt: sessions.map(\.modified).max(),
+                lastUserMessage: sessions.last?.lastUser,
+                lastSessionID: sessions.last?.id,
+                lastTool: sessions.last?.tool,
+                sessionCount: sessions.count,
+                byTool: [],
+                recentSessions: sessions
+            ),
             intro: .empty,
             artwork: nil,
             test: nil,

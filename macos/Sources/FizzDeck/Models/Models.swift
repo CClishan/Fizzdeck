@@ -367,35 +367,41 @@ struct ScanOutput: Sendable {
     var duration: TimeInterval
 }
 
-enum ProjectTab: String, CaseIterable, Identifiable {
-    case overview
-    case git
-    case docs
-    case sessions
-    case tests
-    case cleanup
+enum ProjectTab: String, CaseIterable, Identifiable, Sendable {
+    case progress
+    case run
+    case version
+    case info
 
     var id: String { rawValue }
 
-    var title: String {
+    var title: String { title(for: .plain) }
+
+    func title(for mode: CopyMode) -> String {
         switch self {
-        case .overview: "概览"
-        case .git: "改动"
-        case .docs: "文档"
-        case .sessions: "会话"
-        case .tests: "测试"
-        case .cleanup: "清理"
+        case .progress: FizzCopy.tabTitle(.progress, mode: mode)
+        case .run: FizzCopy.tabTitle(.run, mode: mode)
+        case .version: FizzCopy.tabTitle(.version, mode: mode)
+        case .info: FizzCopy.tabTitle(.info, mode: mode)
         }
     }
 
     var symbol: String {
         switch self {
-        case .overview: "square.grid.2x2"
-        case .git: "arrow.triangle.branch"
-        case .docs: "doc.text"
-        case .sessions: "bubble.left.and.bubble.right"
-        case .tests: "checkmark.shield"
-        case .cleanup: "trash.slash"
+        case .progress: "clock.arrow.circlepath"
+        case .run: "play.circle"
+        case .version: "arrow.triangle.branch"
+        case .info: "info.circle"
+        }
+    }
+
+    static func fromRoutingValue(_ raw: String) -> ProjectTab? {
+        switch raw {
+        case "progress", "overview", "sessions", "cleanup": .progress
+        case "run", "tests": .run
+        case "version", "git": .version
+        case "info", "docs": .info
+        default: nil
         }
     }
 }

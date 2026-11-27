@@ -27,7 +27,7 @@ enum AppRouting {
         guard let path = userInfo["projectPath"] as? String, !path.isEmpty else {
             return nil
         }
-        let tab = (userInfo["tab"] as? String).flatMap(ProjectTab.init(rawValue:))
+        let tab = (userInfo["tab"] as? String).flatMap(ProjectTab.fromRoutingValue)
         return ProjectRequest(path: path, tab: tab)
     }
 

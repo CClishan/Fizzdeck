@@ -18,10 +18,85 @@ struct SessionRecord: Codable, Sendable, Hashable {
     var usage: TokenUsage? = nil
     var costUSD: Double? = nil
     var costIsEstimate: Bool? = nil
+    var firstUser: String? = nil
+    var touchedFiles: [String] = []
+    var lastError: String? = nil
+    var endedWithError: Bool = false
+    var turnCount: Int? = nil
+    var durationMinutes: Int? = nil
+
+    init(
+        tool: String,
+        id: String,
+        cwd: String?,
+        startedAt: Date?,
+        modified: Date,
+        lastUser: String? = nil,
+        kind: SessionRecordKind = .conversation,
+        model: String? = nil,
+        usage: TokenUsage? = nil,
+        costUSD: Double? = nil,
+        costIsEstimate: Bool? = nil,
+        firstUser: String? = nil,
+        touchedFiles: [String] = [],
+        lastError: String? = nil,
+        endedWithError: Bool = false,
+        turnCount: Int? = nil,
+        durationMinutes: Int? = nil
+    ) {
+        self.tool = tool
+        self.id = id
+        self.cwd = cwd
+        self.startedAt = startedAt
+        self.modified = modified
+        self.lastUser = lastUser
+        self.kind = kind
+        self.model = model
+        self.usage = usage
+        self.costUSD = costUSD
+        self.costIsEstimate = costIsEstimate
+        self.firstUser = firstUser
+        self.touchedFiles = touchedFiles
+        self.lastError = lastError
+        self.endedWithError = endedWithError
+        self.turnCount = turnCount
+        self.durationMinutes = durationMinutes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tool = try container.decode(String.self, forKey: .tool)
+        id = try container.decode(String.self, forKey: .id)
+        cwd = try container.decodeIfPresent(String.self, forKey: .cwd)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        modified = try container.decode(Date.self, forKey: .modified)
+        lastUser = try container.decodeIfPresent(String.self, forKey: .lastUser)
+        kind = try container.decodeIfPresent(SessionRecordKind.self, forKey: .kind) ?? .conversation
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        usage = try container.decodeIfPresent(TokenUsage.self, forKey: .usage)
+        costUSD = try container.decodeIfPresent(Double.self, forKey: .costUSD)
+        costIsEstimate = try container.decodeIfPresent(Bool.self, forKey: .costIsEstimate)
+        firstUser = try container.decodeIfPresent(String.self, forKey: .firstUser)
+        touchedFiles = try container.decodeIfPresent([String].self, forKey: .touchedFiles) ?? []
+        lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
+        endedWithError = try container.decodeIfPresent(Bool.self, forKey: .endedWithError) ?? false
+        turnCount = try container.decodeIfPresent(Int.self, forKey: .turnCount)
+        durationMinutes = try container.decodeIfPresent(Int.self, forKey: .durationMinutes)
+    }
 
     var stableID: String { "\(tool):\(id)" }
 
     var isWorkspaceSummary: Bool { kind == .workspaceSummary }
+
+    var primaryIntent: String? {
+        if let first = firstUser?.trimmingCharacters(in: .whitespacesAndNewlines), !first.isEmpty {
+            return first
+        }
+        if let last = lastUser?.trimmingCharacters(in: .whitespacesAndNewlines), !last.isEmpty {
+            return last
+        }
+        return nil
+    }
 
     var resumeCommand: String? {
         guard kind == .conversation else { return nil }
@@ -55,14 +130,27 @@ private struct SessionCachePayload: Codable {
 
 enum SessionIndex {
     private static let scanBytes = 8 * 1024 * 1024
-    private static let cacheVersion = 4
+    private static let cacheVersion = 5
+    private static let maxTouchedFiles = 40
+    private static let maxErrorCharacters = 240
     private static let maxIDEWorkspaces = 300
     private static let ideCachePrefix = "ide:"
     private static let agyCachePrefix = "agy:"
 
+    static func isInternalLLMWorkdir(
+        _ cwd: String?,
+        excludedCwd: URL? = AppPaths.llmWorkdir
+    ) -> Bool {
+        guard let cwd, let excludedCwd else { return false }
+        let candidate = PathTools.canonical(cwd)
+        let excluded = PathTools.canonical(excludedCwd.path)
+        return candidate == excluded || candidate.hasPrefix(excluded + "/")
+    }
+
     static func build(
         homeDirectory: URL = AppPaths.home,
-        cacheFile: URL? = AppPaths.sessionCacheFile
+        cacheFile: URL? = AppPaths.sessionCacheFile,
+        excludedCwd: URL? = AppPaths.llmWorkdir
     ) -> [SessionRecord] {
         let cache = loadCache(from: cacheFile)
         var nextCache: [String: SessionCacheEntry] = [:]
@@ -213,12 +301,15 @@ enum SessionIndex {
             saveCache(nextCache, to: cacheFile)
         }
 
-        return records.sorted { $0.modified > $1.modified }
+        return records
+            .filter { !isInternalLLMWorkdir($0.cwd, excludedCwd: excludedCwd) }
+            .sorted { $0.modified > $1.modified }
     }
 
     static func buildLightweightCwdMap(
         homeDirectory: URL = AppPaths.home,
-        cacheFile: URL? = AppPaths.sessionCacheFile
+        cacheFile: URL? = AppPaths.sessionCacheFile,
+        excludedCwd: URL? = AppPaths.llmWorkdir
     ) -> [String: Set<String>] {
         let cache = loadCache(from: cacheFile)
         var map: [String: Set<String>] = [:]
@@ -333,7 +424,12 @@ enum SessionIndex {
             map[record.tool, default: []].insert(PathTools.canonical(cwd))
         }
 
-        return map
+        return map.reduce(into: [String: Set<String>]()) { filtered, entry in
+            let kept = entry.value.filter { !isInternalLLMWorkdir($0, excludedCwd: excludedCwd) }
+            if !kept.isEmpty {
+                filtered[entry.key] = kept
+            }
+        }
     }
 
     static func summary(for directory: URL, in index: [SessionRecord]) -> SessionSummary {
@@ -484,9 +580,91 @@ enum SessionIndex {
             ?? (payload["id"] as? String)
             ?? file.deletingPathExtension().lastPathComponent
         let startedAt = (meta["timestamp"] as? String).flatMap(Format.isoDate)
-        let lastUser = codexLastUserMessage(in: file)
-        let info = codexUsageInfo(in: file)
-        let cost = PricingCatalog.estimate(model: info.model, usage: info.usage)
+
+        var firstUser: String?
+        var lastUser: String?
+        var userTurnCount = 0
+        var lastTimestamp = startedAt
+        var rawTouchedFiles: [String] = []
+        var lastError: String?
+        var endedWithError = false
+        var model: String?
+        var usage: TokenUsage?
+
+        FileTools.scanLines(in: file, maxBytes: scanBytes) { line in
+            if let message = codexUserMessage(in: line) {
+                if firstUser == nil { firstUser = message }
+                lastUser = message
+                userTurnCount += 1
+                endedWithError = false
+            }
+
+            guard let lineData = line.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
+            else { return false }
+
+            if let ts = (object["timestamp"] as? String).flatMap(Format.isoDate) {
+                if lastTimestamp == nil || ts > lastTimestamp! {
+                    lastTimestamp = ts
+                }
+            }
+
+            let topType = object["type"] as? String
+            if let linePayload = object["payload"] as? [String: Any] {
+                let payloadType = linePayload["type"] as? String
+
+                if topType == "turn_context", let lineModel = linePayload["model"] as? String {
+                    model = lineModel
+                } else if payloadType == "token_count",
+                          let info = linePayload["info"] as? [String: Any],
+                          let total = info["total_token_usage"] as? [String: Any] {
+                    let input = int(total["input_tokens"])
+                    let output = int(total["output_tokens"])
+                    usage = TokenUsage(
+                        inputTokens: input,
+                        cachedInputTokens: int(total["cached_input_tokens"]),
+                        cacheWriteInputTokens: int(total["cache_write_input_tokens"]),
+                        outputTokens: output,
+                        reasoningOutputTokens: int(total["reasoning_output_tokens"]),
+                        totalTokens: int(total["total_tokens"]) == 0 ? input + output : int(total["total_tokens"])
+                    )
+                }
+
+                if topType == "response_item" {
+                    if payloadType == "custom_tool_call",
+                       linePayload["name"] as? String == "apply_patch",
+                       let patchInput = linePayload["input"] as? String {
+                        rawTouchedFiles.append(contentsOf: extractApplyPatchPaths(from: patchInput))
+                    } else if payloadType == "function_call",
+                              let callName = linePayload["name"] as? String,
+                              ["apply_patch", "write_file", "edit_file", "create_file"].contains(callName),
+                              let argsString = linePayload["arguments"] as? String {
+                        rawTouchedFiles.append(contentsOf: extractCodexFunctionCallPaths(from: argsString))
+                    } else if payloadType == "custom_tool_call_output" || payloadType == "function_call_output" {
+                        let parsed = extractCodexToolOutput(linePayload["output"])
+                        let isError = (parsed.exitCode != nil && parsed.exitCode != 0)
+                            || containsErrorMarker(parsed.text)
+                        if isError {
+                            lastError = meaningfulErrorSnippet(from: parsed.text) ?? "命令执行失败"
+                            endedWithError = true
+                        } else {
+                            endedWithError = false
+                        }
+                    } else if linePayload["role"] as? String == "assistant" {
+                        endedWithError = false
+                    }
+                }
+            }
+
+            return false
+        }
+
+        let touchedFiles = normalizeTouchedFiles(rawTouchedFiles, cwd: cwd)
+        let durationMinutes = computeDurationMinutes(
+            startedAt: startedAt,
+            endedAt: lastTimestamp ?? modified
+        )
+        let cost = PricingCatalog.estimate(model: model, usage: usage)
 
         return SessionRecord(
             tool: "codex",
@@ -495,49 +673,164 @@ enum SessionIndex {
             startedAt: startedAt,
             modified: modified,
             lastUser: lastUser,
-            model: info.model,
-            usage: info.usage,
+            model: model,
+            usage: usage,
             costUSD: cost,
-            costIsEstimate: cost == nil ? nil : true
+            costIsEstimate: cost == nil ? nil : true,
+            firstUser: firstUser,
+            touchedFiles: touchedFiles,
+            lastError: lastError,
+            endedWithError: endedWithError,
+            turnCount: userTurnCount > 0 ? userTurnCount : nil,
+            durationMinutes: durationMinutes
         )
     }
 
     private static func parseClaude(_ file: URL, directoryName: String) -> SessionRecord? {
         guard let modified = FileTools.modificationDate(file) else { return nil }
         var cwd: String?
+        var startedAt: Date?
+        var lastTimestamp: Date?
+        var firstUser: String?
         var lastUser: String?
+        var userTurnCount = 0
+        var rawTouchedFiles: [String] = []
+        var lastError: String?
+        var endedWithError = false
 
-        FileTools.scanLinesFromEnd(in: file, maxBytes: scanBytes) { line in
+        var cost: Double?
+        var costModel: String?
+        var costUsage: TokenUsage?
+        var messageUsage: TokenUsage?
+        var messageModel: String?
+
+        FileTools.scanLines(in: file, maxBytes: scanBytes) { line in
             guard let data = line.data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { return false }
-            if cwd == nil, let value = object["cwd"] as? String { cwd = value }
-            if lastUser == nil,
-               object["type"] as? String == "user",
-               let message = object["message"] as? [String: Any],
-               message["role"] as? String == "user" {
-                let cleaned = cleanUserText(text(from: message["content"]))
-                if !cleaned.isEmpty { lastUser = cleaned }
+
+            if cwd == nil, let value = object["cwd"] as? String, !value.isEmpty {
+                cwd = value
             }
-            return cwd != nil && lastUser != nil
+
+            if let ts = (object["timestamp"] as? String).flatMap(Format.isoDate) {
+                if startedAt == nil || ts < startedAt! { startedAt = ts }
+                if lastTimestamp == nil || ts > lastTimestamp! { lastTimestamp = ts }
+            }
+
+            let topType = object["type"] as? String
+            if topType == "user", let message = object["message"] as? [String: Any] {
+                if let items = message["content"] as? [[String: Any]] {
+                    for item in items where item["type"] as? String == "tool_result" {
+                        if item["is_error"] as? Bool == true {
+                            let errText = text(from: item["content"])
+                            lastError = meaningfulErrorSnippet(from: errText) ?? "工具调用失败"
+                            endedWithError = true
+                        } else {
+                            endedWithError = false
+                        }
+                    }
+                }
+                if message["role"] as? String == "user" {
+                    let cleaned = cleanUserText(text(from: message["content"]))
+                    if !cleaned.isEmpty {
+                        if firstUser == nil { firstUser = cleaned }
+                        lastUser = cleaned
+                        userTurnCount += 1
+                        endedWithError = false
+                    }
+                }
+            } else if topType == "assistant", let message = object["message"] as? [String: Any] {
+                if let items = message["content"] as? [[String: Any]] {
+                    for item in items where item["type"] as? String == "tool_use" {
+                        if let name = item["name"] as? String,
+                           ["Edit", "Write", "MultiEdit", "NotebookEdit"].contains(name),
+                           let input = item["input"] as? [String: Any] {
+                            let candidate = (input["file_path"] as? String)
+                                ?? (input["path"] as? String)
+                                ?? (input["notebook_path"] as? String)
+                            if let candidate, !candidate.isEmpty {
+                                rawTouchedFiles.append(candidate)
+                            }
+                        }
+                    }
+                }
+                if let values = message["usage"] as? [String: Any] {
+                    let input = int(values["input_tokens"])
+                    let output = int(values["output_tokens"])
+                    let cacheRead = int(values["cache_read_input_tokens"])
+                    let cacheWrite = int(values["cache_creation_input_tokens"])
+                    messageUsage = TokenUsage(
+                        inputTokens: input,
+                        cachedInputTokens: cacheRead,
+                        cacheWriteInputTokens: cacheWrite,
+                        outputTokens: output,
+                        reasoningOutputTokens: int((values["output_tokens_details"] as? [String: Any])?["thinking_tokens"]),
+                        totalTokens: input + output + cacheRead + cacheWrite
+                    )
+                    messageModel = message["model"] as? String
+                }
+            } else if topType == "cost-state" {
+                if object["hasUnknownModelCost"] as? Bool != true,
+                   let total = (object["totalCostUSD"] as? NSNumber)?.doubleValue,
+                   total > 0 {
+                    cost = total
+                }
+                if let models = object["modelUsage"] as? [String: Any] {
+                    var aggregate = TokenUsage.zero
+                    var parsedModel: String?
+                    for (name, raw) in models {
+                        guard let values = raw as? [String: Any] else { continue }
+                        if parsedModel == nil { parsedModel = name }
+                        aggregate.inputTokens += int(values["inputTokens"])
+                        aggregate.outputTokens += int(values["outputTokens"])
+                        aggregate.reasoningOutputTokens += int(values["thinkingTokens"])
+                        aggregate.cachedInputTokens += int(values["cacheReadInputTokens"])
+                        aggregate.cacheWriteInputTokens += int(values["cacheCreationInputTokens"])
+                    }
+                    aggregate.totalTokens = aggregate.inputTokens
+                        + aggregate.outputTokens
+                        + aggregate.cachedInputTokens
+                        + aggregate.cacheWriteInputTokens
+                    costModel = parsedModel
+                    costUsage = aggregate
+                }
+            }
+
+            return false
         }
 
         let fallbackCwd = directoryName.hasPrefix("-")
             ? directoryName.replacingOccurrences(of: "-", with: "/")
             : nil
-        let info = claudeUsageInfo(in: file)
-        let cost = info.cost ?? PricingCatalog.estimate(model: info.model, usage: info.usage)
+        let resolvedCwd = cwd ?? fallbackCwd
+        let touchedFiles = normalizeTouchedFiles(rawTouchedFiles, cwd: resolvedCwd)
+        let durationMinutes = computeDurationMinutes(
+            startedAt: startedAt,
+            endedAt: lastTimestamp ?? modified
+        )
+
+        let finalModel = cost != nil ? costModel : messageModel
+        let finalUsage = cost != nil ? costUsage : messageUsage
+        let finalCost = cost ?? PricingCatalog.estimate(model: finalModel, usage: finalUsage)
+
         return SessionRecord(
             tool: "claude",
             id: file.deletingPathExtension().lastPathComponent,
-            cwd: cwd ?? fallbackCwd,
-            startedAt: nil,
+            cwd: resolvedCwd,
+            startedAt: startedAt,
             modified: modified,
             lastUser: lastUser,
-            model: info.model,
-            usage: info.usage,
-            costUSD: cost,
-            costIsEstimate: cost == nil ? nil : info.cost == nil
+            model: finalModel,
+            usage: finalUsage,
+            costUSD: finalCost,
+            costIsEstimate: finalCost == nil ? nil : cost == nil,
+            firstUser: firstUser,
+            touchedFiles: touchedFiles,
+            lastError: lastError,
+            endedWithError: endedWithError,
+            turnCount: userTurnCount > 0 ? userTurnCount : nil,
+            durationMinutes: durationMinutes
         )
     }
 
@@ -884,108 +1177,6 @@ enum SessionIndex {
             .map { String($0.prefix(400)) }
     }
 
-    private static func codexUsageInfo(in file: URL) -> (model: String?, usage: TokenUsage?) {
-        var model: String?
-        var usage: TokenUsage?
-        FileTools.scanLinesFromEnd(in: file, maxBytes: 2 * 1024 * 1024) { line in
-            guard let data = line.data(using: .utf8),
-                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { return false }
-            guard let payload = object["payload"] as? [String: Any] else { return false }
-
-            if usage == nil,
-               payload["type"] as? String == "token_count",
-               let info = payload["info"] as? [String: Any],
-               let total = info["total_token_usage"] as? [String: Any] {
-                let input = int(total["input_tokens"])
-                let output = int(total["output_tokens"])
-                usage = TokenUsage(
-                    inputTokens: input,
-                    cachedInputTokens: int(total["cached_input_tokens"]),
-                    cacheWriteInputTokens: int(total["cache_write_input_tokens"]),
-                    outputTokens: output,
-                    reasoningOutputTokens: int(total["reasoning_output_tokens"]),
-                    totalTokens: int(total["total_tokens"]) == 0 ? input + output : int(total["total_tokens"])
-                )
-            }
-            if model == nil,
-               object["type"] as? String == "turn_context" {
-                model = payload["model"] as? String
-            }
-            return usage != nil && model != nil
-        }
-        return (model, usage)
-    }
-
-    private static func claudeUsageInfo(
-        in file: URL
-    ) -> (model: String?, usage: TokenUsage?, cost: Double?) {
-        var cost: Double?
-        var model: String?
-        var usage: TokenUsage?
-        var messageUsage: TokenUsage?
-        var messageModel: String?
-
-        FileTools.scanLinesFromEnd(in: file, maxBytes: 2 * 1024 * 1024) { line in
-            guard let data = line.data(using: .utf8),
-                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { return false }
-
-            if cost == nil, object["type"] as? String == "cost-state" {
-                if object["hasUnknownModelCost"] as? Bool != true,
-                   let total = (object["totalCostUSD"] as? NSNumber)?.doubleValue,
-                   total > 0 {
-                    cost = total
-                }
-                if let models = object["modelUsage"] as? [String: Any] {
-                    var aggregate = TokenUsage.zero
-                    for (name, raw) in models {
-                        guard let values = raw as? [String: Any] else { continue }
-                        if model == nil { model = name }
-                        aggregate.inputTokens += int(values["inputTokens"])
-                        aggregate.outputTokens += int(values["outputTokens"])
-                        aggregate.reasoningOutputTokens += int(values["thinkingTokens"])
-                        aggregate.cachedInputTokens += int(values["cacheReadInputTokens"])
-                        aggregate.cacheWriteInputTokens += int(values["cacheCreationInputTokens"])
-                    }
-                    aggregate.totalTokens = aggregate.inputTokens
-                        + aggregate.outputTokens
-                        + aggregate.cachedInputTokens
-                        + aggregate.cacheWriteInputTokens
-                    usage = aggregate
-                }
-            }
-
-            if messageUsage == nil,
-               let message = object["message"] as? [String: Any],
-               let values = message["usage"] as? [String: Any] {
-                let input = int(values["input_tokens"])
-                let output = int(values["output_tokens"])
-                let cacheRead = int(values["cache_read_input_tokens"])
-                let cacheWrite = int(values["cache_creation_input_tokens"])
-                messageUsage = TokenUsage(
-                    inputTokens: input,
-                    cachedInputTokens: cacheRead,
-                    cacheWriteInputTokens: cacheWrite,
-                    outputTokens: output,
-                    reasoningOutputTokens: int((values["output_tokens_details"] as? [String: Any])?["thinking_tokens"]),
-                    totalTokens: input + output + cacheRead + cacheWrite
-                )
-                messageModel = message["model"] as? String
-            }
-
-            return cost != nil && usage != nil
-        }
-
-        if cost != nil {
-            return (model, usage, cost)
-        }
-        if let messageUsage {
-            return (messageModel, messageUsage, nil)
-        }
-        return (nil, nil, nil)
-    }
-
     private static func grokUsageInfo(
         updates: URL,
         events: URL
@@ -1048,16 +1239,6 @@ enum SessionIndex {
         (value as? NSNumber)?.intValue ?? 0
     }
 
-    private static func codexLastUserMessage(in file: URL) -> String? {
-        var lastUser: String?
-        FileTools.scanLinesFromEnd(in: file, maxBytes: scanBytes) { line in
-            guard let message = codexUserMessage(in: line) else { return false }
-            lastUser = message
-            return true
-        }
-        return lastUser
-    }
-
     private static func codexUserMessage(in line: String) -> String? {
         guard line.contains("\"UserMessage\"") || line.contains("\"user\"") else {
             return nil
@@ -1100,6 +1281,142 @@ enum SessionIndex {
         SessionSummaryText.clean(value)
     }
 
+    private static func computeDurationMinutes(startedAt: Date?, endedAt: Date?) -> Int? {
+        guard let startedAt, let endedAt else { return nil }
+        let span = max(0, endedAt.timeIntervalSince(startedAt))
+        return span >= 10 ? max(1, Int((span / 60.0).rounded())) : 0
+    }
+
+    private static func normalizeTouchedFiles(_ rawPaths: [String], cwd: String?) -> [String] {
+        let normalizedCwd = cwd.map(PathTools.normalize)
+        var seen = Set<String>()
+        var result: [String] = []
+
+        for raw in rawPaths {
+            var trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            if trimmed.hasPrefix("./") {
+                trimmed = String(trimmed.dropFirst(2))
+            }
+            if let normalizedCwd, !normalizedCwd.isEmpty {
+                let normalizedFile = trimmed.hasPrefix("/") ? PathTools.normalize(trimmed) : trimmed
+                let prefix = normalizedCwd.hasSuffix("/") ? normalizedCwd : normalizedCwd + "/"
+                if normalizedFile.hasPrefix(prefix) {
+                    trimmed = String(normalizedFile.dropFirst(prefix.count))
+                }
+            }
+            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { continue }
+            result.append(trimmed)
+            if result.count >= maxTouchedFiles { break }
+        }
+        return result
+    }
+
+    private static func extractApplyPatchPaths(from patch: String) -> [String] {
+        let markers = [
+            "*** Update File: ",
+            "*** Add File: ",
+            "*** Delete File: ",
+            "*** Move to: ",
+        ]
+        var paths: [String] = []
+        for rawLine in patch.split(separator: "\n", omittingEmptySubsequences: true) {
+            let line = String(rawLine)
+            for marker in markers where line.hasPrefix(marker) {
+                let path = String(line.dropFirst(marker.count)).trimmingCharacters(in: .whitespaces)
+                if !path.isEmpty { paths.append(path) }
+                break
+            }
+        }
+        return paths
+    }
+
+    private static func extractCodexFunctionCallPaths(from argumentsJSON: String) -> [String] {
+        guard let data = argumentsJSON.data(using: .utf8),
+              let args = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [] }
+
+        var paths: [String] = []
+        for key in ["path", "file_path", "target_file"] {
+            if let value = args[key] as? String, !value.isEmpty {
+                paths.append(value)
+            }
+        }
+        for key in ["input", "patch"] {
+            if let patch = args[key] as? String {
+                paths.append(contentsOf: extractApplyPatchPaths(from: patch))
+            }
+        }
+        return paths
+    }
+
+    private static func extractCodexToolOutput(_ raw: Any?) -> (text: String, exitCode: Int?) {
+        if let dict = raw as? [String: Any] {
+            let outputText = dict["output"] as? String ?? ""
+            let meta = dict["metadata"] as? [String: Any]
+            let exitCode = (meta?["exit_code"] as? NSNumber)?.intValue
+            return (outputText, exitCode)
+        }
+        guard let str = raw as? String else { return ("", nil) }
+        let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("{"),
+           let data = trimmed.data(using: .utf8),
+           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let outputText = dict["output"] as? String ?? str
+            let meta = dict["metadata"] as? [String: Any]
+            let exitCode = (meta?["exit_code"] as? NSNumber)?.intValue
+            return (outputText, exitCode)
+        }
+        return (str, parseExitCode(in: str))
+    }
+
+    private static func parseExitCode(in text: String) -> Int? {
+        let patterns = [
+            #"(?i)Exit code:\s*(-?\d+)"#,
+            #"(?i)Process exited with code\s+(-?\d+)"#,
+        ]
+        let nsText = text as NSString
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: nsText.length)),
+                  match.numberOfRanges > 1
+            else { continue }
+            let numStr = nsText.substring(with: match.range(at: 1))
+            if let code = Int(numStr) {
+                return code
+            }
+        }
+        return nil
+    }
+
+    private static func containsErrorMarker(_ text: String) -> Bool {
+        let prefixes = ["Error:", "error:", "Exception:", "FAILED", "fatal:", "Command failed"]
+        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: true) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if prefixes.contains(where: { line.hasPrefix($0) || line.contains(" \($0)") }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func meaningfulErrorSnippet(from text: String) -> String? {
+        let lines = text
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !lines.isEmpty else { return nil }
+
+        let priorityMarkers = ["Error:", "error:", "Exception:", "FAILED", "fatal:", "Command failed"]
+        let chosen = lines.first(where: { line in
+            priorityMarkers.contains(where: { line.contains($0) })
+        }) ?? lines.first ?? ""
+        guard !chosen.isEmpty else { return nil }
+
+        let redacted = SecretRedactor.redact(chosen).text
+        return String(redacted.prefix(maxErrorCharacters))
+    }
+
     // MARK: - DeepSeek Harness (.dsh)
 
     private static func lightweightDeepSeekCwd(in file: URL) -> String? {
@@ -1133,6 +1450,8 @@ enum SessionIndex {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
         let lastUser = rawTitle.map { cleanUserText($0) }.flatMap { $0.isEmpty ? nil : $0 }
+        let firstUser = firstInputText.map { cleanUserText($0) }.flatMap { $0.isEmpty ? nil : $0 }
+        let turnCount = turns.flatMap { $0.isEmpty ? nil : $0.count }
 
         let modelVal = (rows?["modelSelection"] as? [String: Any])?["val"] as? [String: Any]
         let lastUsedModel = (modelVal?["lastUsed"] as? [String: Any])?["model"] as? String
@@ -1174,7 +1493,9 @@ enum SessionIndex {
             model: model,
             usage: usage,
             costUSD: cost,
-            costIsEstimate: cost != nil ? true : nil
+            costIsEstimate: cost != nil ? true : nil,
+            firstUser: firstUser,
+            turnCount: turnCount
         )
     }
 

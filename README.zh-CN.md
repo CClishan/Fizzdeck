@@ -1,42 +1,98 @@
 # FizzDeck
 
-**本地优先的 macOS 项目看板。** 扫描指定目录、识别工程、查看 Git 与磁盘状态、恢复 AI 编程会话，并从一个界面启动开发服务。
+**给 Vibe Coder 的本地优先 macOS 项目工作台。**
 
-线上 landing：[koroo.top/fizzdeck](https://koroo.top/fizzdeck)
+用 AI 写项目，最怕三件事：上次做到哪忘了、改坏了回不去、原本能跑的环境又跑不起来。FizzDeck 把散落在本机的项目、AI 对话和运行环境收进一个原生窗口，用大白话帮你接着做。
 
-下载：[FizzDeck 0.5.0 macOS 版](https://github.com/CClishan/Fizzdeck/releases/latest)，Apple Silicon、macOS 26+，ad-hoc 签名，未公证。
+线上主页：[koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
-不需要账号，不上传遥测，也没有托管后端。FizzDeck 只读取本机项目元数据，状态保存在本机。
+下载：[FizzDeck 0.7.4 macOS 版](https://github.com/CClishan/Fizzdeck/releases/download/v0.7.4/FizzDeck-0.7.4-arm64.dmg)，Apple Silicon、macOS 26+。
+
+不需要账号，不上传遥测，也没有 FizzDeck 托管后端。项目元数据、会话索引和设置都留在本机。
 
 [English](README.md)
 
-## 原生优先
+## 先解决三个问题
 
-FizzDeck 有两个入口，共用同一份本地状态：
+### 记得住
 
-| 界面 | 说明 |
+- **人话模式默认开启**：把 Commit、Stash、Pull 等 Git 术语换成「存个版本」「先把改动收起来」「拿回云端的新内容」；熟悉 Git 后可切回专业术语。
+- **跨项目「对话」时间线**：按天串起 Codex、Claude 等 AI 会话，直接看到每次想做什么、改了哪些文件、是否报错结束、花了多少。
+- **中文可用的本地搜索**：SQLite FTS5 覆盖跨项目对话，1–2 个字会用短词回退；搜索框和 `⌘K` 都能直达对应对话节点。
+- **纯剪贴板的「接力卡」**：把项目状态和最近对话整理成 Markdown，复制给任意 Agent 接手；不写项目文件，复制前统一脱敏。
+
+### 回得去
+
+- **AI 对话前自动留标记**：用临时 Git 对象记下当时的工作区，不移动分支、不写提交记录，也不会出现在 `git log` 里。
+- **看改了什么，随时还原**：对比对话前后的差异，按文件恢复或整体回到对话前；对话后新建的文件默认只列出、不自动删除。
+- **内联「存个版本」**：改完直接存成真正的 Git 版本，提交信息可按规则生成，也可用可选 AI 润色。
+- **推送前密钥拦截**：检查 `.env` 是否被忽略，以及已跟踪文件里是否出现常见密钥格式；发现风险先拦下，再用大白话解释。
+
+### 跑得起
+
+- **侧栏「体检 Doctor」**：关注项目会自动盯运行状态、依赖、端口、密钥和版本保护；每个问题都尽量给一个能点的下一步。
+- **闲置项目整理**：识别依赖、缓存和构建产物占用的空间，默认移到系统废纸篓，需要时还能放回或重新生成。
+- **本机环境与 Git 身份**：内联检查 Node、Git、Agent CLI 状态；Git 用户名或邮箱没配，也能在应用里补上。
+- **运行页先体检**：进入「运行」页先看阻碍启动的问题；缺依赖、端口冲突、`.env` 缺失等都能就地处理。
+- **日志报错求助**：把报错解释成大白话，或生成可直接粘贴给 Agent 的求助 prompt，不必自己读懂整段堆栈。
+
+### 可选 AI 总结（默认关闭）
+
+- 支持 **Agent CLI（免 Key）**、**OpenAI 兼容 API（Key 存 macOS 钥匙串）**和**本地模型（Ollama / LM Studio）**。
+- 只发送项目名、文件名、变动计数和脱敏后的一句话意图，不发送完整对话或源码。
+- 用 Agent CLI 总结时会隔离工作目录，避免 FizzDeck 自己产生的会话污染项目列表。
+- 超时、未登录或断网时静默回退到规则摘要，不影响基础功能。
+
+## 详情页只有 4 个页签
+
+| 页签 | 用来做什么 |
 |---|---|
-| **macOS 原生版**（`macos/`） | 主入口。纯 SwiftUI，不依赖 Node.js 或 HTTP 服务。 |
-| **本地网页版** | 单 Node.js 进程 + React/Vite SPA，适合浏览器操作和带保护机制的删除流程。 |
+| **进度** | 「做到哪了」、按天对话时间线、对话标记、改动文件与还原入口；可切换查看全部原始会话。 |
+| **运行** | 体检问题、运行/停止服务、脚本与测试、实时日志；报错可解释或复制求助 prompt。 |
+| **版本** | 当前分支、改动、Diff、暂存、内联「存个版本」、推送与分支操作；进阶 Git 操作收在同页。 |
+| **项目信息** | 项目简介、备注、技术栈、占用空间、清理入口，以及 README / AGENTS / HANDOFF 等精简文档列表与预览。 |
 
-网页版仍是快速方案；日常浏览、检查和启动项目，优先使用原生版。
+## 安装
 
-## 环境要求
+### 默认安装包：ad-hoc 签名
 
-### 原生版
+仓库默认打包使用 ad-hoc 签名，没有 Apple 公证。首次打开需要手动放行：
 
-- macOS 26 或更高版本
-- Xcode 26 或更高版本，Swift 6 工具链
+1. 打开 `FizzDeck-0.7.4-arm64.dmg`，把 FizzDeck 拖进「应用程序」。
+2. 在「应用程序」里按住 Control 点击 FizzDeck，选择「打开」，再确认一次。
+3. 如果系统仍提示无法验证，可在确认来源可信后执行：
 
-### 网页版
+```sh
+xattr -dr com.apple.quarantine /Applications/FizzDeck.app
+```
 
-- 较新的 Node.js（建议 Node.js 22+）
+这一步只影响当前 App；默认 ad-hoc 打包命令不会报错中断。
+
+### 自己打 Developer ID + 公证包
+
+签名身份和公证凭据都从环境变量或命令行注入，仓库不包含任何证书、Apple ID 或 App 专用密码。
+
+```sh
+export DEVELOPER_ID_APP="Developer ID Application: <你的名称> (<TEAMID>)"
+export NOTARY_PROFILE="<notarytool 凭据配置名>"
+./macos/script/package_dmg.sh --notarize
+```
+
+也可以把签名身份作为参数传入：
+
+```sh
+./macos/script/package_dmg.sh \
+  --sign-identity "$DEVELOPER_ID_APP" \
+  --notarize
+```
+
+`--notarize` 会使用 `xcrun notarytool submit --keychain-profile "$NOTARY_PROFILE" --wait` 提交 DMG，成功后执行 `stapler staple`、`stapler validate` 和 `spctl` 校验。完整参数与凭据配置方式见 [macos/README.md](macos/README.md)。
 
 ## 快速开始
 
-### 原生 macOS 版
+### 构建原生版
 
-首次在这台机器上构建 Xcode 项目时，先同意许可：
+首次在这台机器构建时，先接受 Xcode 许可：
 
 ```sh
 sudo xcodebuild -license accept
@@ -48,36 +104,38 @@ sudo xcodebuild -license accept
 ./macos/script/build_and_run.sh --verify
 ```
 
-运行 Swift 测试基线：
+默认版本为 `0.7.4`、Build `12`，也可以在构建时覆盖：
+
+```sh
+VERSION=0.7.4 BUILD_NUM=12 ./macos/script/build_and_run.sh --sign-local
+```
+
+产物在 `macos/dist/FizzDeck.app`。用 Xcode 调试时直接打开 `macos/Package.swift`。
+
+运行测试：
 
 ```sh
 swift test --package-path macos
 ```
 
-本地测试通知时，使用 ad-hoc 签名启动：
+### 打包 DMG
 
 ```sh
-./macos/script/build_and_run.sh --sign-local
+./macos/script/package_dmg.sh
 ```
 
-产物位于 `macos/dist/FizzDeck.app`。需要用 Xcode 调试时，直接打开 `macos/Package.swift`。
-
-首次使用时，点击「添加项目目录」选择要管理的文件夹。
+默认输出 `macos/dist/FizzDeck-0.7.4-arm64.dmg`，同时生成同名的 `FizzDeck-0.7.4-arm64.dmg.sha256`。校验文件是标准 `shasum -a 256` 格式，供应用内更新与 GitHub Release 使用。
 
 ### 本地网页版
+
+FizzDeck 仍保留轻量网页版，和原生版共用 `~/.repodeck`：
 
 ```sh
 npm install
 node start.mjs
 ```
 
-浏览器会打开 `http://127.0.0.1:4770`。服务已运行时重复执行 `start.mjs` 只会打开页面。更换端口：
-
-```sh
-PORT=4800 node start.mjs
-```
-
-修改 `src/` 后重新构建网页资源：
+浏览器会打开 `http://127.0.0.1:4770`。修改 `src/` 后重新构建：
 
 ```sh
 npm run build
@@ -89,83 +147,45 @@ npm run build
 ./stop.sh
 ```
 
-首次使用时，在侧栏点击「扫描文件夹」发现并添加项目。
-
-## 核心能力
-
-| 模块 | 能力 |
-|---|---|
-| 项目发现 | 原生文件夹面板列出已加入目录，扫描所选父目录下的嵌套项目，识别 `.git`、`package.json`、`CLAUDE.md`、`AGENTS.md`、Xcode、Gradle、Cargo、Go、Python 等工程标记；跳过生成目录，并避免重复或父子项目重叠添加。 |
-| 总览首页 | 原生总览支持收藏、有改动、正在运行、可折叠项目组，以及卡片、列表两种布局；待处理卡片半宽显示，四项汇总卡片并排在右侧。 |
-| 项目分组 | 默认按路径关键词自动分类；右键项目可移动到已有分组或新建分组，也可随时恢复自动分类。 |
-| 批量操作 | 可按项目分组筛选，在卡片或列表中多选项目，仅重扫所选目录或一次复制合并后的清理命令；批量操作不会删除文件。 |
-| 待处理队列 | 首页汇总测试失败、落后远端、未推送提交、未提交文件与可回收空间，按紧急程度排序；行内可直接推送、fast-forward 拉取、重跑测试或复制清理命令；右键行可稍后或忽略该项目的此类提醒，标题栏可恢复。 |
-| 菜单栏 | 常驻显示待处理数量，可快速打开总览或最近项目；开发服务就绪或测试失败时发送本地通知。 |
-| 快速打开 | `⌘K` 搜索项目、分支、远程地址与动作；最近项优先，支持模糊匹配与置顶命令，键盘即可执行项目命令和全局操作。 |
-| 项目快捷动作 | 在 Finder、默认终端（Terminal、iTerm2、Ghostty 或 Warp）或已安装的编辑器中打开项目（Cursor、VS Code、Zed、Antigravity、JetBrains 系列；支持顶层和嵌套 Xcode 工程），也可复制路径。`⌘⇧T` 在当前项目中打开默认终端。 |
-| AI 会话 | 列出匹配项目的 Codex 与 Claude Code 会话，支持按工具过滤、查看最后一条需求、复制 `codex resume` / `claude --resume` 命令；确认后可结束精确匹配的 CLI 进程，不会终止 Codex Desktop 的共享 app-server。 |
-| Git | 展示当前分支、领先/落后远端状态、未提交文件、最近提交与 `origin` 地址；支持在浏览器打开或复制远程地址、切换分支，以及带确认的 fetch、fast-forward 拉取与推送，结果就地回显，脏工作区有保护。 |
-| 开发服务 | 识别常见 dev 脚本与端口；底部 Liquid Glass 悬浮操作区提供运行、测试、日志、预览和复制命令。 |
-| 磁盘占用 | 拆解项目体积与可清理空间，覆盖依赖、构建缓存、构建产物、临时文件和 AI 会话历史。 |
-| 清理建议 | 只生成并复制清理命令，不自动执行破坏性操作。 |
-| 文档 | 自动发现并阅读 `README`、`PRODUCT`、`HANDOFF`、`AGENTS` 等文档。 |
-| 测试 | 识别 `test`、`check`、`typecheck`、`mvn test`、`go test`，后台执行并回显输出与耗时。 |
-| 项目组织 | 星标、颜色标签、备注、展示别名、分组技术栈标记，以及自动或手动项目分组。 |
-| 安全移除 | 原生版和网页版都支持仅移出看板；移到废纸篓或永久删除会先备份到 `~/.repodeck/trash`，拦截过浅路径与运行中的服务/测试，并要求输入目录名。 |
-
-## 本地数据与隐私
+## 本机数据与隐私
 
 FizzDeck 不上传项目数据，也不连接 FizzDeck 托管服务。由 FizzDeck 启动的开发命令仍可能自行访问网络。
 
-共享数据目录是 `~/.repodeck`，沿用旧路径以兼容已有安装。
+共享数据目录继续使用 `~/.repodeck`，兼容已有安装：
 
 ```text
 ~/.repodeck/
-├── roots.json        # 受管目录与展示别名
-├── state.json        # 星标、标签、分组、备注与界面状态
-├── roots-cache.json  # 扫描缓存
-└── logs/             # 开发服务日志
+├── roots.json          # 受管目录与展示别名
+├── state.json          # 星标、标签、分组、备注与界面状态
+├── scan-cache.json     # 扫描缓存
+├── marks.json          # AI 对话前的标记
+├── session-search.sqlite # 跨项目对话 FTS5 索引
+├── summaries/          # 可选 AI 总结缓存
+└── logs/               # 开发服务日志
 ```
 
-### 网页版安全边界
-
-- 只监听 `127.0.0.1`。
-- 拒绝非本机 Origin。
-- 启停操作只对受管目录生效。
-- 清理命令只复制，不执行。
-- 不把源码内容加载进看板。
-- 永久删除会拦截过浅路径、测试运行中禁止删除、先备份到 `~/.repodeck/trash`，并要求输入目录名确认。
-
-### 原生版边界
-
-原生版刻意**不开启 App Sandbox**。它需要访问任意的用户自选项目目录，并执行项目脚本。请把它当作本地开发者工具：只加入可信目录，运行命令前先确认项目来源。
-
-删除项目只接受受管目录，拒绝过浅或受保护路径；开发服务或测试运行中会直接拦截，并要求输入目录名。永久删除会先把项目复制到 `~/.repodeck/trash`。
+原生版刻意不开启 App Sandbox，因为它需要访问用户自选的项目目录并执行项目脚本。请只加入可信目录，运行命令前先确认项目来源。
 
 ## 项目结构
 
 ```text
-macos/                  SwiftUI 原生应用
-server.mjs              扫描、Git、体积、会话、进程控制与 HTTP 接口
+macos/                  SwiftUI 原生应用、资源、脚本与测试
+server.mjs              网页版扫描、Git、进程控制与 HTTP 接口
 src/                    网页版源码
-src/components/ui/      内联 coss UI 组件
-public/                 server.mjs 直接托管的 Vite 构建产物
+src/landing/            官网落地页源码
+public/                 前端构建产物，由 server.mjs 托管
 start.mjs               网页版启动器
 stop.sh                 网页版停止脚本
-scan-clean.mjs          命令行版体积报告
 ```
 
-## 当前限制
+## 当前边界
 
-- 原生版要求 macOS 26+ 与 Apple Silicon；已提供 DMG，但使用 ad-hoc 签名，未公证。
-- 原生版专注浏览与日常项目操作；支持批量重扫、复制清理命令，以及带备份和确认的删除。
-- 原生界面支持浅色与低饱和炭黑暗色双模式，可跟随系统或手动切换。
-- 提供轻量后台监听，只增量刷新 Git 与 AI 会话状态，不触发全量重扫。
-- 本地通知需要系统授权。`--sign-local` 的 ad-hoc 签名足以在本地注册通知中心；正式分发仍需要 Developer ID 签名与公证。
-- AI 会话支持 Codex、Claude Code 与 Grok；只能结束命令行中明确包含当前会话 ID 的 CLI 进程，Codex Desktop 的共享 app-server 需要在客户端内处理。
-- 端口识别是启发式的；特殊开发环境可在 `server.mjs` 中补充映射。
-- 首次扫描需要统计目录体积，大目录通常耗时数秒；之后读取缓存，重新扫描时再更新。
+- 原生版面向 Apple Silicon，要求 macOS 26+；公开安装包默认使用 ad-hoc 签名，除非发布时明确提供 Developer ID 公证版。
+- 「对话标记」依赖 Git 对象，默认保留约 14 天；可固定的标记会保留更久，非 Git 项目只能记录纯标记。
+- 还原会覆盖或删除你勾选的已跟踪改动；对话后新建的文件默认保留，删除需要单独确认。
+- 可选 AI 总结默认关闭，失败时只影响润色结果，不阻塞规则摘要和日常操作。
+- 网页版是轻量补充，不承担菜单栏、系统通知、默认终端选择和 Developer ID 公证等原生系统能力。
 
 ## 状态
 
-FizzDeck 是自用的源码优先 macOS 工具。原生版与网页版共用数据目录，切换客户端不需要导出或迁移。
+FizzDeck 是源码优先的个人工具，当前源码版本为 `0.7.4`（Build `12`）。原生版是主入口，网页版和双语官网保留为补充入口。

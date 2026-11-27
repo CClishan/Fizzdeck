@@ -12,6 +12,12 @@ enum AppPaths {
     static let logsDir = stateDir.appendingPathComponent("logs", isDirectory: true)
     static let launchersDir = stateDir.appendingPathComponent("launchers", isDirectory: true)
     static let coversDir = stateDir.appendingPathComponent("covers", isDirectory: true)
+    static let marksFile = stateDir.appendingPathComponent("marks.json")
+    static let tmpDir = stateDir.appendingPathComponent("tmp", isDirectory: true)
+    static let summariesDir = stateDir.appendingPathComponent("summaries", isDirectory: true)
+    static let llmWorkdir = stateDir.appendingPathComponent("llm-workdir", isDirectory: true)
+    static let selfUsageFile = stateDir.appendingPathComponent("self-usage.json")
+    static let sessionSearchDBFile = stateDir.appendingPathComponent("session-search.sqlite")
 
     static let docCandidates = [
         "README.md",

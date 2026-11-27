@@ -2,17 +2,26 @@ import SwiftUI
 
 struct AICostBreakdownCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     let projects: [RepoProject]
     let kpi: DashboardKPISummary
 
     @State private var mode: CostBreakdownMode = .byTool
 
+    private var weeklySelfUsage: SelfUsageTotals {
+        SelfUsageLedger.weeklyTotals()
+    }
+
     private var segments: [CostSegment] {
-        DashboardMetrics.costBreakdown(projects: projects, mode: mode)
+        DashboardMetrics.costBreakdown(projects: projects, mode: mode, selfUsage: weeklySelfUsage)
     }
 
     private var hasData: Bool {
-        !segments.isEmpty && (kpi.weeklyCostUSD != nil || kpi.weeklyTokens > 0)
+        !segments.isEmpty
+            && (kpi.weeklyCostUSD != nil
+                || kpi.weeklyTokens > 0
+                || weeklySelfUsage.totalTokens > 0
+                || weeklySelfUsage.estimatedCostUSD > 0)
     }
 
     private var centerPrimary: String {
@@ -35,7 +44,9 @@ struct AICostBreakdownCard: View {
                 HStack(spacing: 8) {
                     FizzIcon(symbol: "sparkles", size: 13)
                         .foregroundStyle(FizzTheme.accent)
-                    Text(kpi.weeklyCostUSD != nil ? "费用构成" : "用量构成")
+                    Text(copyMode == .plain
+                        ? FizzCopy.costTitle(.plain)
+                        : (kpi.weeklyCostUSD != nil ? "费用构成" : "用量构成"))
                         .font(.system(size: 13, weight: .semibold))
                         .accessibilityAddTraits(.isHeader)
 
@@ -147,6 +158,9 @@ struct AICostBreakdownCard: View {
     }
 
     private func segmentColor(_ segment: CostSegment, index: Int) -> Color {
+        if segment.id == "fizzdeck-self" {
+            return .teal
+        }
         if mode == .byTool, let detected = DetectedTool(rawValue: segment.tintKey) {
             return detected.tint
         }

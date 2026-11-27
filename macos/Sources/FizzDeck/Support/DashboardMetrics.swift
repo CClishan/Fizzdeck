@@ -63,6 +63,7 @@ struct DashboardKPISummary: Equatable, Sendable {
     let costIsEstimate: Bool
     let weeklyTokens: Int
     let weekOverWeekCostDeltaPercent: Double?
+    var weeklyTouchedFiles: Int = 0
 }
 
 enum CostBreakdownMode: String, CaseIterable, Identifiable, Sendable {
@@ -95,6 +96,10 @@ struct ContinueWorkItem: Identifiable, Sendable {
     let toolTitle: String
     let summary: String
     let modified: Date
+    var touchedFileCount: Int = 0
+    var durationMinutes: Int? = nil
+    var endedWithError: Bool = false
+    var lastError: String? = nil
 }
 
 struct TimelineBlock: Identifiable, Equatable, Sendable {
@@ -223,6 +228,91 @@ enum DashboardMetrics {
         )
     }
 
+    /// Builds an AI activity heatmap for plain-language mode by aggregating conversation sessions
+    /// and touched files per day. In the returned `HeatmapSummary`, `totalCommits` stores total
+    /// activity units across the range and `weekCommits` stores the trailing 7-day activity units.
+    static func buildAIActivityHeatmap(
+        projects: [RepoProject],
+        range: HeatmapRange,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> HeatmapSummary {
+        let today = calendar.startOfDay(for: now)
+        let currentWeekMonday = startOfISOWeek(for: today, calendar: calendar)
+        let weekCount = range.weekCount
+        let gridStart = calendar.date(byAdding: .day, value: -(weekCount - 1) * 7, to: currentWeekMonday) ?? today
+
+        let perDayProjects = aggregateDailyAIActivity(projects: projects, calendar: calendar)
+
+        var allCountsInRange: [Int] = []
+        var totalActivity = 0
+        var columns: [[HeatmapDayCell]] = []
+        columns.reserveCapacity(weekCount)
+
+        for weekIndex in 0..<weekCount {
+            var weekCells: [HeatmapDayCell] = []
+            weekCells.reserveCapacity(7)
+            for dayOffset in 0..<7 {
+                let offset = weekIndex * 7 + dayOffset
+                let date = calendar.date(byAdding: .day, value: offset, to: gridStart) ?? today
+                let key = WorkbenchMetrics.dayKey(date, calendar: calendar)
+                let isFuture = date > today
+                let projectCounts = isFuture ? [] : (perDayProjects[key] ?? [])
+                let count = projectCounts.reduce(0) { $0 + $1.count }
+                if !isFuture {
+                    allCountsInRange.append(count)
+                    totalActivity += count
+                }
+                weekCells.append(HeatmapDayCell(
+                    id: key,
+                    date: date,
+                    count: count,
+                    level: 0,
+                    isFuture: isFuture,
+                    projects: projectCounts
+                ))
+            }
+            columns.append(weekCells)
+        }
+
+        let thresholds = intensityThresholds(for: allCountsInRange)
+        columns = columns.map { week in
+            week.map { cell in
+                HeatmapDayCell(
+                    id: cell.id,
+                    date: cell.date,
+                    count: cell.count,
+                    level: cell.isFuture ? 0 : intensityLevel(for: cell.count, thresholds: thresholds),
+                    isFuture: cell.isFuture,
+                    projects: cell.projects
+                )
+            }
+        }
+
+        let (currentStreak, longestStreak) = computeStreaks(
+            perDayProjects: perDayProjects,
+            from: gridStart,
+            through: today,
+            calendar: calendar
+        )
+
+        let sevenDayStart = calendar.date(byAdding: .day, value: -6, to: today) ?? today
+        var weekActivity = 0
+        for offset in 0..<7 {
+            let date = calendar.date(byAdding: .day, value: offset, to: sevenDayStart) ?? today
+            let key = WorkbenchMetrics.dayKey(date, calendar: calendar)
+            weekActivity += (perDayProjects[key] ?? []).reduce(0) { $0 + $1.count }
+        }
+
+        return HeatmapSummary(
+            columns: columns,
+            totalCommits: totalActivity,
+            currentStreak: currentStreak,
+            longestStreak: longestStreak,
+            weekCommits: weekActivity
+        )
+    }
+
     static func projectPathsCommitted(
         onDayKey dayKey: String,
         snapshot: CommitActivitySnapshot,
@@ -316,11 +406,15 @@ enum DashboardMetrics {
         var hasMonthlyCost = false
         var costIsEstimate = false
 
+        var touchedPairs = Set<String>()
         for project in projects {
             for session in project.sessions.recentSessions {
                 if session.modified >= weekStart {
                     weeklySessions += 1
                     weeklyTokens += max(0, session.usage?.totalTokens ?? 0)
+                    for file in session.touchedFiles where !file.isEmpty {
+                        touchedPairs.insert("\(project.path)::\(file)")
+                    }
                     if let cost = session.costUSD {
                         weeklyCost += max(0, cost)
                         hasWeeklyCost = true
@@ -357,13 +451,15 @@ enum DashboardMetrics {
             monthlyCostUSD: hasMonthlyCost ? monthlyCost : nil,
             costIsEstimate: costIsEstimate,
             weeklyTokens: weeklyTokens,
-            weekOverWeekCostDeltaPercent: delta
+            weekOverWeekCostDeltaPercent: delta,
+            weeklyTouchedFiles: touchedPairs.count
         )
     }
 
     static func costBreakdown(
         projects: [RepoProject],
         mode: CostBreakdownMode,
+        selfUsage: SelfUsageTotals? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [CostSegment] {
@@ -395,6 +491,15 @@ enum DashboardMetrics {
                 entry.tokens += tokens
                 buckets[key] = entry
             }
+        }
+
+        if mode == .byTool,
+           let selfUsage,
+           (selfUsage.estimatedCostUSD > 0 || selfUsage.totalTokens > 0) {
+            var entry = buckets["fizzdeck-self"] ?? ("FizzDeck 自身", 0, 0, "fizzdeck-self")
+            entry.cost += max(0, selfUsage.estimatedCostUSD)
+            entry.tokens += max(0, selfUsage.totalTokens)
+            buckets["fizzdeck-self"] = entry
         }
 
         guard !buckets.isEmpty else { return [] }
@@ -460,7 +565,7 @@ enum DashboardMetrics {
             }
             guard let latest = resumable.max(by: { $0.modified < $1.modified }) else { continue }
             let toolTitle = HomeDashboardModel.toolTitle(latest.tool)
-            let cleaned = SessionSummaryText.clean(latest.lastUser ?? "")
+            let cleaned = SessionSummaryText.clean(latest.primaryIntent ?? "")
             let summary = cleaned.isEmpty ? "\(toolTitle) 会话" : cleaned
             candidates.append(ContinueWorkItem(
                 id: "\(project.path)::\(latest.stableID)",
@@ -468,7 +573,11 @@ enum DashboardMetrics {
                 session: latest,
                 toolTitle: toolTitle,
                 summary: summary,
-                modified: latest.modified
+                modified: latest.modified,
+                touchedFileCount: latest.touchedFiles.count,
+                durationMinutes: latest.durationMinutes,
+                endedWithError: latest.endedWithError,
+                lastError: latest.lastError
             ))
         }
 
@@ -644,7 +753,7 @@ enum DashboardMetrics {
 
     // MARK: - Private Helpers
 
-    private static func sevenDayWindowStart(now: Date, calendar: Calendar) -> Date {
+    static func sevenDayWindowStart(now: Date, calendar: Calendar) -> Date {
         let today = calendar.startOfDay(for: now)
         return calendar.date(byAdding: .day, value: -6, to: today) ?? today
     }
@@ -688,6 +797,34 @@ enum DashboardMetrics {
                     projectMap[project.path] = (project.displayName, current + count)
                     perDayPerProject[dayKey] = projectMap
                 }
+            }
+        }
+
+        return perDayPerProject.mapValues { map in
+            map.map { path, entry in
+                HeatmapProjectCount(name: entry.name, path: path, count: entry.count)
+            }
+            .sorted { left, right in
+                if left.count != right.count { return left.count > right.count }
+                return left.name < right.name
+            }
+        }
+    }
+
+    private static func aggregateDailyAIActivity(
+        projects: [RepoProject],
+        calendar: Calendar
+    ) -> [String: [HeatmapProjectCount]] {
+        var perDayPerProject: [String: [String: (name: String, count: Int)]] = [:]
+
+        for project in projects {
+            for session in project.sessions.recentSessions where session.kind == .conversation {
+                let key = WorkbenchMetrics.dayKey(session.modified, calendar: calendar)
+                let units = max(1, session.touchedFiles.count)
+                var projectMap = perDayPerProject[key] ?? [:]
+                let current = projectMap[project.path]?.count ?? 0
+                projectMap[project.path] = (project.displayName, current + units)
+                perDayPerProject[key] = projectMap
             }
         }
 

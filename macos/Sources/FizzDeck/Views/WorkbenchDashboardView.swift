@@ -4,14 +4,37 @@ struct WorkbenchDashboardView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
+    @AppStorage(CopyModePreferences.onboardingSeenKey) private var onboardingSeen = false
 
     @State private var freeDiskBytes: Int64?
     @State private var scrolledPastTop = false
+    @State private var onboardingStep = 0
+
+    private var focusPartition: FocusPartition {
+        ProjectFocusPolicy.partition(projects: store.projects)
+    }
 
     private var attentionItems: [ProjectAttentionItem] {
         let now = Date()
-        return ProjectAttentionQueue.items(projects: store.projects, testRuns: actions.testRuns)
-            .filter { !store.isAttentionSuppressed(for: $0.project, kind: $0.kind, at: now) }
+        return ProjectAttentionQueue.items(
+            projects: store.projects,
+            testRuns: actions.testRuns,
+            focusedPaths: copyMode == .plain ? focusPartition.focusedPaths : nil,
+            copyMode: copyMode,
+            doctorReports: store.doctorReports
+        )
+        .filter { !store.isAttentionSuppressed(for: $0.project, kind: $0.kind, at: now) }
+    }
+
+    private var brokenFocusedCount: Int {
+        focusPartition.focused.filter { entry in
+            ProjectFocusPolicy.statusDot(
+                for: entry.project,
+                testRuns: actions.testRuns,
+                activeAIProjectPaths: store.activeAIProjectPaths
+            ) == .broken
+        }.count
     }
 
     private var kpi: DashboardKPISummary {
@@ -22,7 +45,10 @@ struct WorkbenchDashboardView: View {
     }
 
     private var continueItems: [ContinueWorkItem] {
-        DashboardMetrics.continueWorkItems(projects: store.projects, limit: 4)
+        DashboardMetrics.continueWorkItems(
+            projects: store.projects,
+            limit: copyMode == .plain ? 3 : 4
+        )
     }
 
     private var runningProjects: [RepoProject] {
@@ -46,6 +72,7 @@ struct WorkbenchDashboardView: View {
         continueItems.isEmpty
             && attentionItems.isEmpty
             && runningProjects.isEmpty
+            && (copyMode == .pro || store.activeAIProjectPaths.isEmpty)
             && healthAlerts.isEmpty
             && !store.projects.isEmpty
     }
@@ -105,33 +132,65 @@ struct WorkbenchDashboardView: View {
 
     private var headerDateBlock: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(formattedToday)
+            if copyMode == .plain {
+                Text("\(FizzCopy.greeting()) · \(formattedToday)")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.secondary)
+                Text(
+                    FizzCopy.dashboardStatusLine(
+                        activeCount: focusPartition.focused.count,
+                        brokenCount: brokenFocusedCount,
+                        attentionCount: attentionItems.count,
+                        mode: .plain
+                    )
+                )
                 .font(.system(size: 25, weight: .semibold))
                 .accessibilityAddTraits(.isHeader)
-            Text(headerSubtitle)
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            } else {
+                Text(formattedToday)
+                    .font(.system(size: 25, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
+                Text(headerSubtitle)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
         }
         .layoutPriority(1)
     }
 
     private func headerKPIs(alignment: HorizontalAlignment) -> some View {
         HStack(spacing: 24) {
-            kpiNumber(
-                value: "\(kpi.weeklyCommits)",
-                label: "本周提交",
-                alignment: alignment
-            )
-            kpiNumber(
-                value: "\(kpi.weeklySessions)",
-                label: "AI 会话",
-                alignment: alignment
-            )
+            if copyMode == .plain {
+                kpiNumber(
+                    value: "\(kpi.weeklySessions)",
+                    label: "本周对话",
+                    alignment: alignment
+                )
+                kpiNumber(
+                    value: "\(kpi.weeklyTouchedFiles)",
+                    label: FizzCopy.weeklyOutputLabel(.plain),
+                    alignment: alignment
+                )
+            } else {
+                kpiNumber(
+                    value: "\(kpi.weeklyCommits)",
+                    label: FizzCopy.weeklyOutputLabel(.pro),
+                    alignment: alignment
+                )
+                kpiNumber(
+                    value: "\(kpi.weeklySessions)",
+                    label: "AI 会话",
+                    alignment: alignment
+                )
+            }
+
             if let cost = Format.cost(kpi.weeklyCostUSD, estimated: kpi.costIsEstimate) {
                 kpiNumber(
                     value: cost,
-                    label: kpi.costIsEstimate ? "本周费用(估)" : "本周费用",
+                    label: copyMode == .plain
+                        ? "本周花费"
+                        : (kpi.costIsEstimate ? "本周费用(估)" : "本周费用"),
                     alignment: alignment
                 )
                 .help(costTooltip)
@@ -218,14 +277,20 @@ struct WorkbenchDashboardView: View {
 
     private var leftColumn: some View {
         VStack(alignment: .leading, spacing: FizzSpacing.grid) {
+            if copyMode == .plain && !onboardingSeen && !store.projects.isEmpty {
+                onboardingCard
+            }
             if isAllClear {
                 allClearCard
             }
             ContinueWorkSection(items: continueItems)
-            AttentionQueueView(showsTabs: true)
-            WeeklyTimelineCard(columns: timelineColumns) { path in
+            AttentionQueueView(
+                showsTabs: copyMode == .pro,
+                focusedOnly: copyMode == .plain
+            )
+            WeeklyTimelineCard(columns: timelineColumns, copyMode: copyMode) { path in
                 if let project = store.projects.first(where: { $0.path == path }) {
-                    store.openProject(project)
+                    store.openProject(project, tab: .progress)
                 }
             }
         }
@@ -233,23 +298,96 @@ struct WorkbenchDashboardView: View {
 
     private var rightColumn: some View {
         VStack(alignment: .leading, spacing: FizzSpacing.grid) {
-            CommitHeatmapCard(
-                snapshot: store.commitActivity,
-                projects: store.projects
-            ) { dayKey in
-                store.openLibrary(LibraryQuery(commitDayKey: dayKey))
+            if copyMode == .plain {
+                WorkbenchStatusCard(
+                    runningProjects: runningProjects,
+                    healthAlerts: healthAlerts
+                )
+
+                AICostBreakdownCard(
+                    projects: store.projects,
+                    kpi: kpi
+                )
+
+                CommitHeatmapCard(
+                    snapshot: store.commitActivity,
+                    projects: store.projects
+                ) { _ in
+                    store.openConversations()
+                }
+            } else {
+                CommitHeatmapCard(
+                    snapshot: store.commitActivity,
+                    projects: store.projects
+                ) { dayKey in
+                    store.openLibrary(LibraryQuery(commitDayKey: dayKey))
+                }
+
+                AICostBreakdownCard(
+                    projects: store.projects,
+                    kpi: kpi
+                )
+
+                WorkbenchStatusCard(
+                    runningProjects: runningProjects,
+                    healthAlerts: healthAlerts
+                )
+            }
+        }
+    }
+
+    private var onboardingCard: some View {
+        let steps: [(title: String, body: String)] = [
+            ("1/3 认识侧栏状态点", "绿点脉冲 = AI 正在干活，红点 = 跑不起来或上次对话报错，橙点 = 有改动还没存版本。只有你关注的项目才会亮灯。"),
+            ("2/3 从「接着做」回到上次进度", "不用翻终端或记住命令，点一下「继续对话」直接回到上次聊到的地方。"),
+            ("3/3 用「接力卡」跨工具交接", "换了别的 AI 或对话太长时，点「复制接力卡」一键把最近进度贴给新对话（自动打码密钥）。"),
+        ]
+        let clamped = min(steps.count - 1, max(0, onboardingStep))
+        let current = steps[clamped]
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                FizzIcon(symbol: "sparkles", size: 13)
+                    .foregroundStyle(FizzTheme.accent)
+                Text(current.title)
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer(minLength: 8)
+                Button("跳过") {
+                    onboardingSeen = true
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
-            AICostBreakdownCard(
-                projects: store.projects,
-                kpi: kpi
-            )
+            Text(current.body)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            WorkbenchStatusCard(
-                runningProjects: runningProjects,
-                healthAlerts: healthAlerts
-            )
+            HStack {
+                HStack(spacing: 5) {
+                    ForEach(steps.indices, id: \.self) { index in
+                        Circle()
+                            .fill(index == clamped ? FizzTheme.accent : FizzTheme.hairline)
+                            .frame(width: 6, height: 6)
+                    }
+                }
+                Spacer()
+                Button(clamped < steps.count - 1 ? "下一步" : "知道了") {
+                    if clamped < steps.count - 1 {
+                        onboardingStep += 1
+                    } else {
+                        onboardingSeen = true
+                    }
+                }
+                .buttonStyle(.glassProminent)
+                .tint(FizzTheme.accent)
+                .controlSize(.small)
+            }
         }
+        .padding(14)
+        .fizzCard(radius: FizzRadius.panel)
     }
 
     private var allClearCard: some View {
@@ -260,9 +398,9 @@ struct WorkbenchDashboardView: View {
                 FizzIcon(symbol: "checkmark.circle", size: 15)
                     .foregroundStyle(.green)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("一切就绪")
+                    Text(FizzCopy.allClearTitle(copyMode))
                         .font(.system(size: 14, weight: .semibold))
-                    Text("没有待处理项、陈旧改动或运行中的服务")
+                    Text(copyMode == .plain ? "没有待处理问题，也没有运行中的服务" : "没有待处理项、陈旧改动或运行中的服务")
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }

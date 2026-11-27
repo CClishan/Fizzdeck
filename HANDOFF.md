@@ -1,10 +1,12 @@
 # FizzDeck 交接文档
 
-- 更新时间：2026-11-26
+- 更新时间：2026-11-27
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
-- 当前分支：`main`（PR #2 已合并；`v0.3.0` 已发布）
-- 基线 HEAD：`4f1cea6 Release FizzDeck 0.3.0`
-- 状态：`v0.3.0`（build 6）已发布到 GitHub Releases；本轮包含首次启动发现、快扫/补全拆分、缓存、一键回到现场、Grok / Gemini CLI / IDE 工作区会话适配与 token/费用估算、多终端适配、轻量后台文件监听、阶段 4 性能基线/可访问性收口、UI 2.0 浅/暗双主题与总览工作台、Round 2（Batch C1–C4）设计 Token / 原生 Liquid Glass 控件层 / 双主题透明 SVG Logo 与浅色纯色背景；代码已通过 142 例单测、干净严格并发构建 0 warning、`codesign --verify --deep --strict` 与 `hdiutil verify`。`koroo.top/fizzdeck` landing 尚未同步更新。
+- 当前分支：`main`（准备发布 `v0.7.4`）
+- 线上公开版本：`v0.5.3`（Build 11）
+- 当前源码版本：`0.7.4`（Build 12）
+- 状态：`v0.6.0–v0.7.3` 能力已落地；双语 README、官网、能力矩阵、签名/公证脚本与发布 Checklist 已同步。默认 ad-hoc DMG 候选已通过版本、签名、镜像和 SHA-256 校验，待提交、推送和创建 GitHub Release。
+- 发布候选：`macos/dist/FizzDeck-0.7.4-arm64.dmg`，SHA-256 `bf91a21fefc4524b59af1c437e687a5251d1aef08cc487142825c61f5b077931`。
 
 ## 新对话开场提示
 
@@ -13,7 +15,7 @@
 ```text
 继续 FizzDeck 原生 macOS 项目，仓库在 /Users/a003/dsh-workspace/repo-dashboard。
 
-先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git log / git status。当前 `main` 已合并 PR #2 并发布 `v0.3.0`（build 6）；首次启动、缓存、Grok/token、运行中检测、结束会话、UI 2.0 四步与 Round 2（Batch C1–C4）均已完成隔离环境浅/暗截图与真实测试验收。下一步可按需更新外部 `koroo.top/fizzdeck` landing、补真实终端启动/菜单栏/通知直测，或推进 Developer ID 签名与公证。删除项目只能用临时目录验证，不要对用户真实项目点击确认。
+先读 HANDOFF.md、AGENTS.md 和 macos/README.md，再执行 git log / git status。当前 `main` 准备发布 `v0.7.4`（Build 12），已包含人话模式、跨项目对话时间线、中文 FTS5 搜索、对话前隐形标记、还原/存版本、推送前密钥拦截、Doctor、运行页体检与可选 AI 总结。删除项目只能用临时目录验证，不要对用户真实项目点击确认。
 
 不要在没有明确确认时再发版、签名、公证或部署。不要回滚网页版、landing、stageshow 的已发布内容；需要改时先确认范围。
 
@@ -26,13 +28,50 @@
 
 | 项目 | 当前状态 |
 |---|---|
-| 原生 app | P0 完成，P1 功能完成，P2 5/5；`swift build`、`swift test` 通过（142 例，0 warning）；AI 会话列表/过滤/恢复/结束 CLI 可用，新增 Grok、Gemini CLI、IDE 工作区摘要、token/费用估算、多终端适配、后台增量监听、浅/暗双主题、双态悬浮侧栏与品牌微图标、紧凑项目 Header、微柱 KPI / Services / Logs 工作台、设计 Token、原生 Liquid Glass 控件层、双主题透明矢量 SVG Logo 与浅色纯色背景；已随 `v0.3.0` 合入 `main` |
-| 原生分发 | `v0.3.0` arm64 DMG 已发布，ad-hoc 签名；未做 Developer ID、公证和自动更新 |
-| Web UI | 保留在 `src/` + `server.mjs`，不是当前主入口 |
-| Landing | `https://koroo.top/fizzdeck` 仍显示 `v0.2.3` 下载（本次未修改外部 landing 仓库）；旧 `https://fizzdeck.pages.dev` 仍返回 200 |
-| 仓库 | PR #2 已合并到 `main`（`d9610c9`）；`v0.3.0` tag 与 GitHub Release 已发布 |
-| 验证基线 | Swift test 142 例、干净构建 0 warning（含 `-strict-concurrency=complete`）、`git diff --check`、`codesign --verify --deep --strict`、`hdiutil verify` 全部通过；DMG SHA-256 与 GitHub Release digest 一致 |
-| 任务进度 | P0 5/5；P1 6/6（终端适配已补，真实终端启动未直测）；P2 5/5；P2-A 会话适配、P2-B 后台监听、阶段 4 性能/可访问性、UI-1 双主题、UI-2 双态侧栏、UI-3 紧凑 Header、UI-4 总览工作台、Round 2 · Batch C1-C4 已合并发布 `v0.3.0`；发布与交付 1/3；质量与性能 3/4（Instruments 长列表实测未做） |
+| 原生 app | `v0.6.0–v0.7.3` 能力已落地；详情页固定「进度 / 运行 / 版本 / 项目信息」四页签；`swift build` 与 252 例 `swift test` 通过 |
+| 原生分发 | `v0.7.4` ad-hoc DMG 候选已打包；Developer ID 与公证参数可通过脚本注入，当前环境未提供凭据 |
+| Web UI | `src/`、`server.mjs` 与 `public/` 已同步当前官网与工作台；`npm run build` 通过 |
+| Landing | `src/landing/i18n.js` 与静态 `landing.html` 已对齐 `v0.7.4`，公开部署仍需单独执行 |
+| 仓库 | 工作区改动待提交；GitHub 线上最新 Release 仍为 `v0.5.3` |
+| 验证基线 | Swift test 252/252、`swift build` 0 warning、`bash -n`、`git diff --check`、`codesign --verify --deep --strict`、`hdiutil verify` 全部通过；DMG SHA-256 与 `.sha256` 一致 |
+| 发布阻塞 | `gh` API 凭据失效；真实 Developer ID 公证与 `v0.5.3 / v0.7.3 → v0.7.4` 应用内更新尚未实测 |
+
+## 网页版对齐 macOS（2026-11-26，本地未提交）
+
+### 视觉
+
+- 建立与原生一致的浅色 / 低饱和炭黑 / 跟随系统三态外观，统一页面、侧栏、卡片、描边、选中填充和玻璃控件 Token；外观保存到浏览器并在刷新后保持。
+- 侧栏改为 236px 悬浮卡片与 58px 图标栏双态，星标、分组、运行中状态、磁盘余量和设置入口保持；折叠状态刷新后保持。
+- 工作台对齐原生总览：顶部 KPI、继续工作、待处理队列与分类过滤、本周活动时间线、提交热力图、费用构成、运行与健康；待处理项可直达项目页签。
+- 项目页对齐紧凑 Header、六页签、项目封面/介绍/技术栈、四项微柱 KPI、服务、日志、最近活动和备注；项目库提供卡片/表格、筛选、闲置折叠、批量工具条；可清理页按项目汇总目录与复制命令。
+- 弹窗统一为 macOS 风格：添加项目（根目录、手动路径、系统选文件夹、1–4 层扫描、候选批量加入、移除根目录但保留文件）、命令面板、设置、Toast；移除多余说明和视觉噪声。
+- 已验证修复：添加项目根目录文字重叠、详情四项指标被压成 3+1、表格选择态全部行同时选中、命令面板 420px 高度截断、日志 ANSI 控制字符、`favicon.ico` 404、单面板活动区占满整行。
+
+### 能力
+
+- 状态每 20 秒刷新，页面重新可见时立即刷新；端口运行状态每次读取重新探测，避免旧缓存。
+- 项目启动/停止轮询、测试运行/轮询、AI 会话继续/结束、星标/分组/重扫/Finder/移除项目、批量星标/分组/同步远程/复制清理命令。
+- 命令面板支持项目名、路径、分支、技术栈、分组和动作搜索；`⌘K`、`⌘1/2/3/0`、`⌘R`、`⌃⌘S`、`⌘,` 快捷键。
+- 详情页支持 Git 状态/远程/分支/拉取、文档读取、会话过滤与恢复命令、dev/test 日志、测试输出、清理目录；项目封面自动发现并通过 `/api/artwork` 展示。
+- 主要文件：`src/App.jsx`、`src/index.css`、`src/components/{Sidebar,Fizz,Dialogs}.jsx`、`src/views/`、`src/lib/`、`server.mjs`、`index.html`、`public/`。
+
+### 本轮验证
+
+- `node --check server.mjs`：通过；`npm run build`：Vite 8.3.8 构建通过，产物写入 `public/`。
+- Playwright CLI：`1320×900` 与 `720×700`；浏览器控制台 0 error / 0 warning；`720px` 下 `scrollWidth == clientWidth`，无横向溢出。
+- 外观：设置中切换 `浅色 / 暗色 / 跟随系统` 均即时生效；`light`、`dark` 刷新后保持；`system` 在媒体模拟 light/dark 时正确切换；侧栏 `236 ↔ 58` 且刷新后保持。
+- 命令面板：输入 `pixloading` 得到单条项目结果，`Enter` 打开项目详情。
+- 详情：四项指标同一 `top=408` 一排展示；日志读取到真实 dev 日志，ANSI `ESC` 计数为 `0`。
+- 添加项目：扫描 `/Users/a003/dsh-workspace` 发现 1 个 `repo-dashboard`，正确标记「已在看板」，未执行加入或移除。
+- 项目库：表格 16 行；选择模式点击首行后只有该行复选框选中，批量工具条显示「已选 1」；可清理页显示 10 个项目、35 个目录、7.11 GB。
+- 截图：`/tmp/fizz-qa/workbench-light-final.png`、`workbench-dark-final.png`、`detail-light-final.png`、`detail-dark-final.png`、`add-scan-dark-final.png`、`cleanup-dark-final.png`、`settings-light-final.png`、`palette-search-final.png`、`table-one-selected-final.png`、`workbench-720-dark-final.png`。
+
+### 边界
+
+- 本地验证服务：`http://127.0.0.1:4770`；旧验证服务 `4780` 与用户自己的 `5173` 未改动。
+- 未执行真实启动/停止、测试运行、会话继续/结束、星标/分组/同步远程/删除、实际加入根目录或系统文件夹选择器；只验证了对应 UI、扫描与只读状态。
+- 未验证低于 720px 的布局；网页不承担 macOS 菜单栏、系统通知、登录时启动、默认终端/编辑器选择和 Developer ID/公证等系统级能力。
+- 本轮未 commit、未 push、未部署，也未改动已发布 landing。
 
 ## 已发布改造（`v0.3.0`，2026-11-25/26）
 
@@ -703,6 +742,10 @@ CUA 实测：
 
 ## 发布记录
 
+- v0.7.4：待 GitHub Release；源码版本 `0.7.4`（Build 12）
+- v0.7.4 安装包：`FizzDeck-0.7.4-arm64.dmg`，Apple Silicon，ad-hoc 签名，未公证
+- v0.7.4 SHA-256：`bf91a21fefc4524b59af1c437e687a5251d1aef08cc487142825c61f5b077931`
+- v0.7.4 校验：`swift test` 252/252、`swift build` 0 warning、`codesign --verify --deep --strict`、`hdiutil verify` 通过
 - v0.3.0：`https://github.com/CClishan/Fizzdeck/releases/tag/v0.3.0`（Release ID `459028876`，DMG asset ID `794574637`，Latest）
 - v0.3.0 安装包：`FizzDeck-0.3.0-arm64.dmg`，3,143,502 bytes，Apple Silicon，ad-hoc 签名，未公证
 - v0.3.0 SHA-256：`6db40472c6cbf16844d11af1ec1a5af564a854560eab66f68f8156b6567d7eb6`
@@ -744,21 +787,22 @@ CUA 实测：
 
 ## 工作区现状（重要）
 
-- 当前发布分支是 `main`；PR #2 已合并（`d9610c9`），`v0.3.0` tag 与 GitHub Release 已创建并推送，本地工作区干净。
+- 当前发布分支是 `main`；`v0.7.4` 改动待提交，GitHub 线上最新 Release 仍为 `v0.5.3`。
 - `~/.repodeck` 的 `roots.json`、`state.json` 未因打包或 GUI 验收改动。
 - 当前运行中或本机安装目录 `/Applications/FizzDeck.app` 未在本次发版中被改动，仍可能为旧版本。
-- 最新可分发安装包是 `macos/dist/FizzDeck-0.3.0-arm64.dmg`；`.app` 已按 ad-hoc 方式签名并通过校验（本机钥匙串无 Developer ID 证书，未公证）。
-- `https://koroo.top/fizzdeck` landing 仍指向 `v0.2.3` 页面文案，本次未改动外部 `koroo` 仓库；`releases/latest` 已自动指向 `v0.3.0`。
+- 最新可分发包是 `macos/dist/FizzDeck-0.7.4-arm64.dmg`；`.app` 已按 ad-hoc 方式签名并通过校验（本机钥匙串无 Developer ID 证书，未公证）。
+- `src/landing/i18n.js` 与静态官网已指向 `v0.7.4`；外部部署和 `releases/latest` 更新需在 Release 后复核。
 - 不要回滚 `server.mjs`、`vite.config.js`、`public/`、`landing.html`、`src/landing/`、`src/stageshow/` 的已发布内容；需要修改时单独开任务。
 
 ## 待增加能力（移交清单）
 
 ### 发布与交付
 
-- [x] 原生安装包：`v0.3.0` arm64 DMG 已发布到 GitHub Releases（Latest）；校验 SHA-256、镜像和 ad-hoc 签名均通过；`koroo.top/fizzdeck` 页面文案待单独同步更新。
-- [ ] 正式签名与公证：补 Developer ID、公证、自动更新和干净 Mac 安装验收。相关文件：`macos/script/build_and_run.sh`、`macos/Package.swift`、两份 README。验收：`spctl --assess` 通过、公证成功，并在干净 Mac 上安装运行。
+- [ ] `v0.7.4` GitHub Release：提交并推送 `main`，创建 tag，上传 DMG 与 `.sha256`，复核 `releases/latest`。
+- [ ] 应用内更新：分别从 `v0.5.3` 和 `v0.7.3` 实机更新到 `v0.7.4`，核对版本、Build、SHA-256、项目状态与重启行为。
+- [ ] 正式签名与公证：提供 Developer ID 与 `NOTARY_PROFILE` 后运行 `./macos/script/package_dmg.sh --notarize`，并在干净 Mac 上安装验收。
 - [ ] 旧域名收敛：把 `https://fizzdeck.pages.dev` 301 到 `https://koroo.top/fizzdeck`，保留 Cloudflare Pages 项目作为回滚。验收：旧路径 301、canonical/OG 不重复、静态资源不丢。
-- [x] 文档同步：README、`README.zh-CN.md`、`macos/README.md` 与 `HANDOFF.md` 已补充 `v0.3.0` 版本、签名限制和发布记录。
+- [x] 文档同步：README、`README.zh-CN.md`、`macos/README.md`、官网与发布 Checklist 已对齐 `v0.7.4`。
 
 ### P1（收尾）
 

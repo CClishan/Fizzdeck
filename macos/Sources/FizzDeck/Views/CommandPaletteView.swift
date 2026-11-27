@@ -6,10 +6,12 @@ struct CommandPaletteView: View {
     @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
 
     @State private var query = ""
     @State private var selection = 0
     @State private var returnMonitor: Any?
+    @State private var sessionSearchResults: [SessionSearchResult] = []
     @Namespace private var selectionNamespace
     @FocusState private var searchFocused: Bool
 
@@ -62,6 +64,11 @@ struct CommandPaletteView: View {
             groups.append(PaletteGroup(id: "projects", title: "项目", entries: matchedProjects))
         }
 
+        let matchedSessions = sessionEntries
+        if !matchedSessions.isEmpty {
+            groups.append(PaletteGroup(id: "sessions", title: "对话", entries: matchedSessions))
+        }
+
         let matchedCommands = sortedMatches(commands, query: trimmed)
         if !matchedCommands.isEmpty {
             groups.append(PaletteGroup(id: "commands", title: "命令", entries: matchedCommands))
@@ -82,6 +89,90 @@ struct CommandPaletteView: View {
     private var quickActionEntries: [PaletteEntry] {
         guard let project = store.selectedProject else { return [] }
         var result: [PaletteEntry] = []
+
+        result.append(
+            PaletteEntry(
+                id: "action.handoff.\(project.path)",
+                group: "快捷操作",
+                title: "复制接力卡",
+                subtitle: project.displayName,
+                symbol: "doc.on.clipboard",
+                tint: FizzTheme.accent,
+                shortcut: nil,
+                keywords: "接力卡 handoff copy 交接 \(project.displayName)"
+            ) {
+                let card = HandoffCardBuilder.build(project: project, copyMode: copyMode)
+                SystemActions.copy(card.markdown)
+                ToastCenter.shared.show(
+                    "接力卡已复制",
+                    symbol: "doc.on.clipboard.fill",
+                    tint: FizzTheme.accent,
+                    subtitle: "\(card.characterCount) 字"
+                )
+            }
+        )
+
+        if let resumable = resumableSession(for: project) {
+            result.append(
+                PaletteEntry(
+                    id: "action.continue.\(project.path)",
+                    group: "快捷操作",
+                    title: "接着做",
+                    subtitle: "\(project.displayName) · \(HomeDashboardModel.toolTitle(resumable.tool))",
+                    symbol: "play.fill",
+                    tint: .green,
+                    shortcut: nil,
+                    keywords: "接着做 继续 continue resume \(project.displayName)"
+                ) {
+                    Task {
+                        let res = await SessionResumeService.resume(session: resumable, projectPath: project.path)
+                        if !res.success {
+                            if let fallback = res.fallbackCommand { SystemActions.copy(fallback) }
+                            ToastCenter.shared.show(
+                                res.message,
+                                symbol: "exclamationmark.triangle.fill",
+                                tint: .orange,
+                                subtitle: res.fallbackCommand != nil ? "已复制命令到剪贴板" : nil
+                            )
+                        }
+                    }
+                }
+            )
+        }
+
+        if let latestMark = store.marks(for: project.path).first(where: { $0.kind == .gitSnapshot }) {
+            result.append(
+                PaletteEntry(
+                    id: "action.diff.\(project.path)",
+                    group: "快捷操作",
+                    title: "看改了什么",
+                    subtitle: project.displayName,
+                    symbol: "doc.text.magnifyingglass",
+                    tint: .teal,
+                    shortcut: nil,
+                    keywords: "看改了什么 diff 还原 对比 标记 \(project.displayName)"
+                ) {
+                    store.openProjectDiff(project: project, markID: latestMark.id)
+                }
+            )
+        }
+
+        if project.dirtyCount > 0 {
+            result.append(
+                PaletteEntry(
+                    id: "action.saveVersion.\(project.path)",
+                    group: "快捷操作",
+                    title: "存个版本",
+                    subtitle: "\(project.displayName) · \(project.dirtyCount) 个未保存改动",
+                    symbol: "bookmark.circle",
+                    tint: FizzTheme.accent,
+                    shortcut: nil,
+                    keywords: "存个版本 提交 commit save \(project.displayName)"
+                ) {
+                    store.openProjectSaveVersion(project: project)
+                }
+            )
+        }
 
         result.append(
             PaletteEntry(
@@ -314,6 +405,18 @@ struct CommandPaletteView: View {
                 Task { await store.scan() }
             },
             PaletteEntry(
+                id: "command.conversations",
+                group: "命令",
+                title: "打开对话",
+                subtitle: "跨项目 AI 对话时间线",
+                symbol: "bubble.left.and.bubble.right",
+                tint: FizzTheme.accent,
+                shortcut: nil,
+                keywords: "对话 会话 conversations sessions"
+            ) {
+                store.openConversations()
+            },
+            PaletteEntry(
                 id: "command.add",
                 group: "命令",
                 title: "管理项目文件夹",
@@ -328,23 +431,89 @@ struct CommandPaletteView: View {
         ]
 
         if let project = store.selectedProject {
+            let starTitle = copyMode == .plain
+                ? (project.starred ? "取消关注当前项目" : "关注当前项目")
+                : (project.starred ? "取消当前项目星标" : "收藏当前项目")
             result.append(
                 PaletteEntry(
                     id: "command.star.\(project.path)",
                     group: "命令",
-                    title: project.starred ? "取消当前项目星标" : "收藏当前项目",
+                    title: starTitle,
                     subtitle: project.displayName,
                     symbol: project.starred ? "star.slash" : "star",
                     tint: .yellow,
                     shortcut: nil,
-                    keywords: "星标 收藏 star"
+                    keywords: "星标 收藏 关注 star focus"
                 ) {
                     store.toggleStar(project)
                 }
             )
         }
 
+        let focused = ProjectFocusPolicy.partition(projects: store.projects).focused
+        for entry in focused {
+            let project = entry.project
+            result.append(
+                PaletteEntry(
+                    id: "command.handoff.\(project.path)",
+                    group: "命令",
+                    title: "复制接力卡 · \(project.displayName)",
+                    subtitle: PathTools.displayPath(project.path),
+                    symbol: "doc.on.clipboard",
+                    tint: FizzTheme.accent,
+                    shortcut: nil,
+                    keywords: "接力卡 handoff copy \(project.displayName)"
+                ) {
+                    let card = HandoffCardBuilder.build(project: project, copyMode: copyMode)
+                    SystemActions.copy(card.markdown)
+                    ToastCenter.shared.show(
+                        "接力卡已复制",
+                        symbol: "doc.on.clipboard.fill",
+                        tint: FizzTheme.accent,
+                        subtitle: "\(project.displayName) · \(card.characterCount) 字"
+                    )
+                }
+            )
+            if let resumable = resumableSession(for: project) {
+                result.append(
+                    PaletteEntry(
+                        id: "command.continue.\(project.path)",
+                        group: "命令",
+                        title: "接着做 · \(project.displayName)",
+                        subtitle: HomeDashboardModel.toolTitle(resumable.tool),
+                        symbol: "play.fill",
+                        tint: .green,
+                        shortcut: nil,
+                        keywords: "接着做 继续 continue resume \(project.displayName)"
+                    ) {
+                        Task {
+                            let res = await SessionResumeService.resume(session: resumable, projectPath: project.path)
+                            if !res.success {
+                                if let fallback = res.fallbackCommand { SystemActions.copy(fallback) }
+                                ToastCenter.shared.show(
+                                    res.message,
+                                    symbol: "exclamationmark.triangle.fill",
+                                    tint: .orange,
+                                    subtitle: res.fallbackCommand != nil ? "已复制命令到剪贴板" : nil
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
         return result
+    }
+
+    private func resumableSession(for project: RepoProject) -> SessionRecord? {
+        project.sessions.recentSessions
+            .filter {
+                $0.kind == .conversation
+                    && $0.resumeCommand != nil
+                    && DetectedTool(rawValue: $0.tool)?.supportsResume == true
+            }
+            .max { $0.modified < $1.modified }
     }
 
     var body: some View {
@@ -426,6 +595,45 @@ struct CommandPaletteView: View {
         .task {
             await store.loadRemotes(for: store.projects)
         }
+        .task(id: query) {
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                sessionSearchResults = []
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(90))
+            guard !Task.isCancelled else { return }
+            sessionSearchResults = await store.searchSessions(query: trimmed, limit: 8)
+        }
+    }
+
+    private var sessionEntries: [PaletteEntry] {
+        sessionSearchResults.compactMap { result in
+            guard let project = store.projects.first(where: { $0.path == result.projectPath }) else {
+                return nil
+            }
+            let toolTitle = HomeDashboardModel.toolTitle(result.tool)
+            var subtitleParts = [
+                result.projectName,
+                toolTitle,
+                Format.relative(result.modified),
+            ]
+            if let snippet = result.matchedSnippet, !snippet.isEmpty {
+                subtitleParts.append(snippet)
+            }
+            return PaletteEntry(
+                id: "session.\(result.id)",
+                group: "对话",
+                title: "「\(result.primaryIntent)」",
+                subtitle: subtitleParts.joined(separator: " · "),
+                symbol: result.endedWithError ? "exclamationmark.triangle" : "bubble.left.and.bubble.right",
+                tint: result.endedWithError ? .orange : FizzTheme.accent,
+                shortcut: nil,
+                keywords: "\(result.projectName) \(result.primaryIntent) \(result.touchedFilesText)"
+            ) {
+                store.openProject(project, tab: .progress, sessionID: result.sessionID)
+            }
+        }
     }
 
     private var searchField: some View {
@@ -433,7 +641,7 @@ struct CommandPaletteView: View {
             FizzIcon(symbol: "magnifyingglass", size: 15)
                 .foregroundStyle(.secondary)
 
-            TextField("搜索项目、分支、远程或动作", text: $query)
+            TextField("搜索项目、对话、分支或快捷操作", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15))
                 .focused($searchFocused)
