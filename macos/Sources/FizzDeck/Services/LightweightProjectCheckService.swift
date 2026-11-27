@@ -43,6 +43,34 @@ enum LightweightProjectCheckService {
         return issues
     }
 
+    // L0 checks repository ignore rules, not the Git index. Authoritative tracked-secret checks remain in L1.
+    static func staticIssues(in directory: URL, copyMode: CopyMode) -> [LightweightProjectIssue] {
+        var issues = [checkNodeDependencies(in: directory, copyMode: copyMode)].compactMap { $0 }
+        guard GitService.hasGit(directory) else { return issues }
+        let candidates = DoctorInputs.envNames(in: directory).filter {
+            DoctorInputs.isPrivateEnv($0) && FileTools.exists(directory.appendingPathComponent($0))
+        }
+        guard !candidates.isEmpty else { return issues }
+        let rules = [".git/info/exclude", ".gitignore"].flatMap {
+            DoctorInputs.text(directory.appendingPathComponent($0), limit: 128 * 1024)
+                .split(whereSeparator: \.isNewline).map(String.init)
+        }
+        if let name = candidates.sorted().first(where: { name in
+            var ignored = false
+            for line in rules where !line.hasPrefix("#") {
+                let negate = line.hasPrefix("!")
+                var pattern = negate ? String(line.dropFirst()) : line
+                if pattern.hasPrefix("/") { pattern.removeFirst() }
+                if fnmatch(pattern, name, FNM_PATHNAME) == 0 { ignored = !negate }
+            }
+            return !ignored
+        }) {
+            issues.append(LightweightProjectIssue(kind: .unignoredEnvFile,
+                title: "\(name) 没有仓库忽略规则", detail: "建议加入 .gitignore，避免配置随代码上传"))
+        }
+        return issues
+    }
+
     @discardableResult
     static func addEnvFilesToGitignore(in directory: URL) -> Bool {
         let gitignore = directory.appendingPathComponent(".gitignore")
@@ -52,7 +80,12 @@ enum LightweightProjectCheckService {
                 .split(whereSeparator: \.isNewline)
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         )
-        let missing = envCandidates.filter { !existingLines.contains($0) }
+        let variants = DoctorInputs.envNames(in: directory).filter {
+            DoctorInputs.isPrivateEnv($0) && FileTools.exists(directory.appendingPathComponent($0))
+        }
+        // Ignore literal names only; never turn a crafted filename into another rule.
+        let safeVariants = variants.filter { $0.range(of: #"^[.A-Za-z0-9_-]+$"#, options: .regularExpression) != nil }
+        let missing = Set(envCandidates).union(safeVariants).sorted().filter { !existingLines.contains($0) }
         guard !missing.isEmpty else { return true }
         var updated = existing
         if !updated.isEmpty && !updated.hasSuffix("\n") {

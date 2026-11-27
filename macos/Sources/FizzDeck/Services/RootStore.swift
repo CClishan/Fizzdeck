@@ -37,8 +37,25 @@ enum OnboardingStore {
 }
 
 enum MetaStore {
-    static func load() -> [String: ProjectMeta] {
-        guard let data = try? Data(contentsOf: AppPaths.metaFile),
+    private static func readState(_ file: URL) throws -> [String: [String: Any]] {
+        guard FileTools.exists(file) else { return [:] }
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: [String: Any]]
+        else { throw CocoaError(.fileReadCorruptFile) }
+        return object
+    }
+
+    static func saveDoctorExemptions(_ kinds: Set<DoctorIssueKind>, for path: String, to file: URL = AppPaths.metaFile) throws {
+        var object = try readState(file)
+        let key = PathTools.normalize(path)
+        var raw = object[key] ?? [:]
+        let values = kinds.filter(\.canExempt).map(\.rawValue).sorted()
+        raw["doctorExemptions"] = values.isEmpty ? nil : values
+        object[key] = raw
+        try FileTools.writeJSON(object, to: file)
+    }
+
+    static func load(from file: URL = AppPaths.metaFile) -> [String: ProjectMeta] {
+        guard let data = try? Data(contentsOf: file),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]]
         else { return [:] }
 
@@ -55,17 +72,25 @@ enum MetaStore {
                 meta.group = trimmed.isEmpty ? nil : trimmed
             }
             meta.attention = parseAttention(raw["attention"])
+            meta.customArtwork = raw["customArtwork"] as? String
+            meta.doctorExemptions = Set((raw["doctorExemptions"] as? [String] ?? [])
+                .compactMap(DoctorIssueKind.init(rawValue:)).filter(\.canExempt))
             result[PathTools.normalize(path)] = meta
         }
         return result
     }
 
-    static func save(_ metadata: [String: ProjectMeta]) throws {
+    static func save(_ metadata: [String: ProjectMeta], to file: URL = AppPaths.metaFile) throws {
+        // Preserve keys written by the web client or a newer version. Never replace malformed state.
+        let existing = try readState(file)
         let object: [String: [String: Any]] = metadata.reduce(into: [:]) { result, entry in
-            var raw: [String: Any] = [
-                "starred": entry.value.starred,
-                "note": entry.value.note,
-            ]
+            var raw = existing[entry.key] ?? [:]
+            raw["starred"] = entry.value.starred
+            raw["note"] = entry.value.note
+            for key in ["color", "group", "attention", "customArtwork", "doctorExemptions"] { raw.removeValue(forKey: key) }
+            raw["customArtwork"] = entry.value.customArtwork
+            let exemptions = entry.value.doctorExemptions.filter(\.canExempt).map(\.rawValue).sorted()
+            if !exemptions.isEmpty { raw["doctorExemptions"] = exemptions }
             if let color = entry.value.color {
                 raw["color"] = color.rawValue
             }
@@ -83,7 +108,7 @@ enum MetaStore {
             }
             result[entry.key] = raw
         }
-        try FileTools.writeJSON(object, to: AppPaths.metaFile)
+        try FileTools.writeJSON(object, to: file)
     }
 
     private static func parseAttention(_ raw: Any?) -> [String: AttentionPreference] {

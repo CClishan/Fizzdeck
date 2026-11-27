@@ -6,11 +6,15 @@
 
 线上主页：[koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
-下载：[FizzDeck 0.7.4 macOS 版](https://github.com/CClishan/Fizzdeck/releases/download/v0.7.4/FizzDeck-0.7.4-arm64.dmg)，Apple Silicon、macOS 26+。
+下载：[最新公开版](https://github.com/CClishan/Fizzdeck/releases/latest)，Apple Silicon、macOS 26+。
 
 不需要账号，不上传遥测，也没有 FizzDeck 托管后端。项目元数据、会话索引和设置都留在本机。
 
 [English](README.md)
+
+**v0.8.0（Build 16）。** 关注项目的依赖或环境配置变化后，Doctor 会重新体检。可以查看开发端口由谁占用，手动试跑构建或测试，并回顾单个项目近 14 或 30 天的 AI 估算费用与提交。
+
+下载按钮指向最新公开 DMG。默认临时签名包没有 Apple Team ID，不能依赖系统「快捷指令」执行动作；在 FizzDeck 内仍可打开项目、复制接力卡和查看体检。详见[签名与验收](docs/SYSTEM_INTEGRATION.md)。
 
 ## 先解决三个问题
 
@@ -58,15 +62,9 @@
 
 仓库默认打包使用 ad-hoc 签名，没有 Apple 公证。首次打开需要手动放行：
 
-1. 打开 `FizzDeck-0.7.4-arm64.dmg`，把 FizzDeck 拖进「应用程序」。
-2. 在「应用程序」里按住 Control 点击 FizzDeck，选择「打开」，再确认一次。
-3. 如果系统仍提示无法验证，可在确认来源可信后执行：
-
-```sh
-xattr -dr com.apple.quarantine /Applications/FizzDeck.app
-```
-
-这一步只影响当前 App；默认 ad-hoc 打包命令不会报错中断。
+1. 从同一个 GitHub Release 下载 DMG 和同名 `.sha256` 文件。在下载目录运行 `shasum -a 256 -c FizzDeck-0.8.0-arm64.dmg.sha256`，确认输出 `OK`。
+2. 打开 DMG，把 FizzDeck 拖进「应用程序」，尝试打开一次。
+3. 如果 macOS 提示无法验证，且你信任本次下载，可在「系统设置 → 隐私与安全性」中为 FizzDeck 选择「仍要打开」。
 
 ### 自己打 Developer ID + 公证包
 
@@ -104,10 +102,10 @@ sudo xcodebuild -license accept
 ./macos/script/build_and_run.sh --verify
 ```
 
-默认版本为 `0.7.4`、Build `12`，也可以在构建时覆盖：
+默认版本为 `0.8.0`、Build `16`，也可以在构建时覆盖：
 
 ```sh
-VERSION=0.7.4 BUILD_NUM=12 ./macos/script/build_and_run.sh --sign-local
+VERSION=0.8.0 BUILD_NUM=16 ./macos/script/build_and_run.sh --sign-local
 ```
 
 产物在 `macos/dist/FizzDeck.app`。用 Xcode 调试时直接打开 `macos/Package.swift`。
@@ -124,7 +122,7 @@ swift test --package-path macos
 ./macos/script/package_dmg.sh
 ```
 
-默认输出 `macos/dist/FizzDeck-0.7.4-arm64.dmg`，同时生成同名的 `FizzDeck-0.7.4-arm64.dmg.sha256`。校验文件是标准 `shasum -a 256` 格式，供应用内更新与 GitHub Release 使用。
+默认输出 `macos/dist/FizzDeck-0.8.0-arm64.dmg`，同时生成同名的 `FizzDeck-0.8.0-arm64.dmg.sha256`。校验文件是标准 `shasum -a 256` 格式，供应用内更新与 GitHub Release 使用。
 
 ### 本地网页版
 
@@ -152,6 +150,8 @@ npm run build
 FizzDeck 不上传项目数据，也不连接 FizzDeck 托管服务。由 FizzDeck 启动的开发命令仍可能自行访问网络。
 
 共享数据目录继续使用 `~/.repodeck`，兼容已有安装：
+
+后续开发版会对关注项目的已配置上游做 24 小时限频检查；仅联系 Git 托管方，不推送、不改工作树。项目脚本仍由用户点击运行。
 
 ```text
 ~/.repodeck/
@@ -188,4 +188,6 @@ stop.sh                 网页版停止脚本
 
 ## 状态
 
-FizzDeck 是源码优先的个人工具，当前源码版本为 `0.7.4`（Build `12`）。原生版是主入口，网页版和双语官网保留为补充入口。
+FizzDeck 是源码优先的个人工具，当前源码版本为 `0.8.0`（Build `16`）。原生版是主入口，网页版和双语官网保留为补充入口。
+
+许可：[LICENSE](LICENSE)。可免费下载、构建和在本机使用；第三方素材保留各自许可。

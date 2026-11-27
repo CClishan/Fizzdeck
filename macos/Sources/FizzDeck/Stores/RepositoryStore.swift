@@ -94,6 +94,22 @@ final class RepositoryStore {
     private var sizeEnrichmentTask: Task<Void, Never>?
     private var commitActivityTask: Task<Void, Never>?
     private var workspaceWatcher: WorkspaceWatcher?
+    @ObservationIgnored private var quietFetchTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingQuietFetch: ArraySlice<String> = []
+    @ObservationIgnored private var activeQuietFetch: String?
+    @ObservationIgnored private var nextQuietFetch: [String: Date] = [:]
+    private let quietFetchAttempts: QuietGitFetch.AttemptWindow
+    private let quietFetchNow: () -> Date
+    private let preferences: UserDefaults
+    private let checkRemote: @Sendable (URL) async -> QuietGitFetch.Result?
+    @ObservationIgnored private var pendingL0Paths: Set<String> = []
+    @ObservationIgnored private var l0Task: Task<Void, Never>?
+    @ObservationIgnored private var l0Revision: [String: Int] = [:]
+    @ObservationIgnored private var rawDoctorReports: [String: DoctorProjectReport] = [:]
+    @ObservationIgnored private var fullDoctorDates: [String: Date] = [:]
+    @ObservationIgnored private var lastFullDoctorPageCheck: Date?
+    @ObservationIgnored private var lastFullDoctorScope: [String: DoctorCheckScope] = [:]
+    @ObservationIgnored private var checkingProjects: Set<String> = []
     private var isRefreshingSessions = false
     private var refreshSessionsAfterScan = false
     private var scheduledSessionRefresh: Task<Void, Never>?
@@ -104,9 +120,15 @@ final class RepositoryStore {
     private var hasSeededActiveAISessions = false
     private var lastSessionFinishToastByProject: [String: Date] = [:]
 
-    init() {
-        recentProjectPaths = UserDefaults.standard.stringArray(forKey: Self.recentProjectsKey) ?? []
-        recentActionIDs = (UserDefaults.standard.stringArray(forKey: Self.recentActionsKey) ?? [])
+    init(preferences: UserDefaults = .standard, quietFetchAttempts: QuietGitFetch.AttemptWindow = .shared,
+         quietFetchNow: @escaping () -> Date = Date.init,
+         checkRemote: @escaping @Sendable (URL) async -> QuietGitFetch.Result? = { await QuietGitFetch.check(in: $0) }) {
+        self.preferences = preferences
+        self.quietFetchAttempts = quietFetchAttempts
+        self.quietFetchNow = quietFetchNow
+        self.checkRemote = checkRemote
+        recentProjectPaths = preferences.stringArray(forKey: Self.recentProjectsKey) ?? []
+        recentActionIDs = (preferences.stringArray(forKey: Self.recentActionsKey) ?? [])
             .filter { !$0.hasPrefix("project.") }
     }
 
@@ -169,11 +191,6 @@ final class RepositoryStore {
         commitActivity = CommitActivityService.loadCache()
         await scan()
         startWorkspaceWatcher()
-        if machineEnv == nil {
-            Task { @MainActor [weak self] in
-                await self?.refreshMachineEnvironment()
-            }
-        }
     }
 
     func presentFirstRunScan() {
@@ -221,6 +238,7 @@ final class RepositoryStore {
         guard !roots.isEmpty else {
             projects = []
             scannedAt = Date()
+            syncFocusedChecks()
             scanDuration = 0
             phase = .ready
             flushDeferredSessionRefresh()
@@ -292,7 +310,7 @@ final class RepositoryStore {
         flushDeferredSessionRefresh()
         scheduleSessionSearchRebuild()
         Task { await refreshActiveAISessions() }
-        Task { await refreshDoctorForFocused() }
+        syncFocusedChecks()
     }
 
     func rescanProjects(_ projects: [RepoProject]) async {
@@ -324,6 +342,7 @@ final class RepositoryStore {
         startSizeEnrichment(for: paths)
         startCommitActivityRefresh(for: self.projects)
         scheduleSessionSearchRebuild()
+        syncFocusedChecks()
     }
 
     func addRoot() async {
@@ -379,6 +398,7 @@ final class RepositoryStore {
                 )
                 projects = projects.map { map[$0.path] ?? $0 }
                 scannedAt = Date()
+                syncFocusedChecks()
                 ScanCacheStore.save(projects)
                 startSizeEnrichment(for: addedPaths)
                 if !hadProjectsBefore {
@@ -399,6 +419,8 @@ final class RepositoryStore {
         try? RootStore.save(roots)
         self.roots = roots
         projects.removeAll { $0.path == project.path }
+        forgetDoctorReport(project.path)
+        syncFocusedChecks()
         ScanCacheStore.save(projects)
         if destination.projectPath == project.path {
             destination = .dashboard
@@ -498,12 +520,14 @@ final class RepositoryStore {
         try? MetaStore.save(metadata)
 
         projects.removeAll { $0.path == project.path }
+        forgetDoctorReport(project.path)
+        syncFocusedChecks()
         remotes.removeValue(forKey: project.path)
         missingRemotes.remove(project.path)
         remoteTasks[project.path]?.cancel()
         remoteTasks[project.path] = nil
         recentProjectPaths.removeAll { $0 == project.path }
-        UserDefaults.standard.set(recentProjectPaths, forKey: Self.recentProjectsKey)
+        preferences.set(recentProjectPaths, forKey: Self.recentProjectsKey)
 
         if destination.projectPath == project.path {
             destination = .dashboard
@@ -618,7 +642,7 @@ final class RepositoryStore {
         let next = Array(list.prefix(8))
         guard next != recentProjectPaths else { return }
         recentProjectPaths = next
-        UserDefaults.standard.set(next, forKey: Self.recentProjectsKey)
+        preferences.set(next, forKey: Self.recentProjectsKey)
     }
 
     func recordPaletteAction(_ id: String) {
@@ -628,7 +652,7 @@ final class RepositoryStore {
         let next = Array(list.prefix(6))
         guard next != recentActionIDs else { return }
         recentActionIDs = next
-        UserDefaults.standard.set(next, forKey: Self.recentActionsKey)
+        preferences.set(next, forKey: Self.recentActionsKey)
     }
 
     func cachedRemote(for path: String) -> GitRemote? {
@@ -723,6 +747,7 @@ final class RepositoryStore {
         meta.starred = projects[index].starred
         metadata[project.path] = meta
         try? MetaStore.save(metadata)
+        syncFocusedChecks()
     }
 
     func setStarred(_ starred: Bool, for targets: [RepoProject]) {
@@ -738,6 +763,7 @@ final class RepositoryStore {
         }
         if changed {
             try? MetaStore.save(metadata)
+            syncFocusedChecks()
         }
     }
 
@@ -834,8 +860,9 @@ final class RepositoryStore {
     }
 
     func setPort(_ state: PortState, for path: String) {
-        guard let index = projects.firstIndex(where: { $0.path == path }) else { return }
+        guard let index = projects.firstIndex(where: { $0.path == path }), projects[index].port != state else { return }
         projects[index].port = state
+        syncFocusedChecks()
     }
 
     static func selection(for filter: HomeFilter) -> String {
@@ -862,6 +889,7 @@ final class RepositoryStore {
         guard let git = await GitService.summary(directory) else { return }
         guard let index = projects.firstIndex(where: { $0.path == path }) else { return }
 
+        let headChanged = projects[index].lastCommit?.hash != git.lastCommit?.hash
         projects[index].branch = git.branch
         projects[index].lastCommit = git.lastCommit
         projects[index].dirtyCount = git.changes.total
@@ -872,7 +900,11 @@ final class RepositoryStore {
             git.lastCommit?.date,
             projects[index].sessions.lastSessionAt,
         ].compactMap { $0 }.max()
-        startCommitActivityRefresh(for: projects)
+        updateCloudReport(for: projects[index])
+        if headChanged {
+            syncFocusedChecks()
+            startCommitActivityRefresh(for: projects)
+        }
     }
 
     func startWatchingGit(for path: String) {
@@ -915,6 +947,7 @@ final class RepositoryStore {
             updated[position].sessionLoadState = .ready
         }
         projects = updated
+        syncFocusedChecks()
         ScanCacheStore.save(projects)
         pruneRemotes(for: projects)
         scheduleSessionSearchRebuild()
@@ -962,6 +995,64 @@ final class RepositoryStore {
         )
     }
 
+    func relatedSessions(
+        forFile file: String,
+        in project: RepoProject,
+        limit: Int = 30
+    ) async -> [SessionSearchResult] {
+        if hasIndexedSessionSearch {
+            let indexed = await SessionSearchIndex.shared.sessions(
+                touchingFile: file,
+                projectPath: project.path,
+                limit: limit
+            )
+            if !indexed.isEmpty {
+                return indexed
+            }
+        }
+
+        scheduleSessionSearchRebuild()
+        let headlines = SummaryEngine.shared.sessionSummaries.mapValues(\.headline)
+        return SessionSearchIndex.inMemorySessions(
+            touchingFile: file,
+            projectPath: project.path,
+            projects: projects,
+            aiHeadlines: headlines,
+            limit: limit
+        )
+    }
+
+    func preferredMark(for session: SessionRecord, in project: RepoProject) -> SessionMark? {
+        preferredMark(
+            sessionStableID: session.stableID,
+            sessionID: session.id,
+            startedAt: session.startedAt,
+            modified: session.modified,
+            projectPath: project.path
+        )
+    }
+
+    func preferredMark(
+        sessionStableID: String,
+        sessionID: String,
+        startedAt: Date?,
+        modified: Date,
+        projectPath: String
+    ) -> SessionMark? {
+        let projectMarks = marks(for: projectPath)
+        if let exact = projectMarks.first(where: {
+            $0.sessionStableID == sessionStableID || $0.sessionID == sessionID
+        }) {
+            return exact
+        }
+
+        let anchor = startedAt ?? modified
+        return projectMarks.first { mark in
+            let delta = anchor.timeIntervalSince(mark.createdAt)
+            return delta >= -120 && delta <= 900
+        }
+    }
+
     var focusedDoctorIssueCount: Int {
         let focused = ProjectFocusPolicy.partition(projects: projects).focused
         return focused.reduce(0) { sum, entry in
@@ -969,44 +1060,159 @@ final class RepositoryStore {
         }
     }
 
-    func refreshDoctorForFocused(includeIdle: Bool = false) async {
-        guard !isRunningDoctor else { return }
+    func refreshDoctorForFocused(includeIdle: Bool = false, force: Bool = true) async {
+        guard !isRunningDoctor, !projects.isEmpty,
+              force || Date().timeIntervalSince(lastFullDoctorPageCheck ?? .distantPast) >= 300 else { return }
         isRunningDoctor = true
         defer { isRunningDoctor = false }
-
-        let copyMode = CopyModePreferences.mode()
         let partition = ProjectFocusPolicy.partition(projects: projects)
-        let focusedProjects = partition.focused.map(\.project)
-        let idleProjects = includeIdle ? partition.idle : []
-
-        var freshReports: [String: DoctorProjectReport] = doctorReports
-        await withTaskGroup(of: DoctorProjectReport.self) { group in
-            for project in focusedProjects {
-                group.addTask {
-                    await DoctorService.inspectProject(project, scope: .focused, copyMode: copyMode)
-                }
-            }
-            for project in idleProjects {
-                group.addTask {
-                    await DoctorService.inspectProject(project, scope: .idle, copyMode: copyMode)
-                }
-            }
-            for await report in group {
-                freshReports[report.projectPath] = report
+        // Bound expensive page checks, but give unexamined projects the next turn in both groups.
+        func batch(_ candidates: [RepoProject]) -> ArraySlice<RepoProject> {
+            candidates.sorted { (fullDoctorDates[$0.path] ?? .distantPast) < (fullDoctorDates[$1.path] ?? .distantPast) }
+                .prefix(ProjectFocusPolicy.defaultMaxFocused)
+        }
+        for project in batch(partition.focused.map(\.project)) {
+            guard !Task.isCancelled else { return }
+            await refreshDoctor(for: project, scope: .focused, force: force)
+        }
+        if includeIdle {
+            for project in batch(partition.idle) {
+                guard !Task.isCancelled else { return }
+                await refreshDoctor(for: project, scope: .idle, force: force)
             }
         }
-        doctorReports = freshReports
-        lastDoctorCheckAt = Date()
+        if !Task.isCancelled { lastFullDoctorPageCheck = Date() }
     }
 
-    func refreshDoctor(for project: RepoProject, scope: DoctorCheckScope = .focused) async {
-        let copyMode = CopyModePreferences.mode()
-        let report = await DoctorService.inspectProject(project, scope: scope, copyMode: copyMode)
-        doctorReports[project.path] = report
-        lastDoctorCheckAt = Date()
+    func refreshDoctor(for project: RepoProject, scope: DoctorCheckScope = .focused, force: Bool = true) async {
+        let path = project.path
+        guard projects.contains(where: { $0.path == path }), !Task.isCancelled,
+              force || lastFullDoctorScope[path] != scope || Date().timeIntervalSince(fullDoctorDates[path] ?? .distantPast) >= 300,
+              checkingProjects.insert(path).inserted else { return }
+        defer { checkingProjects.remove(path) }
+        let revision = l0Revision[path]
+        let report = await DoctorService.inspectProject(project, scope: scope, copyMode: CopyModePreferences.mode())
+        guard !Task.isCancelled, let current = projects.first(where: { $0.path == path }) else { return }
+        let issues: [DoctorIssue]
+        if revision != l0Revision[path], let newer = rawDoctorReports[path] {
+            issues = report.issues.filter { !DoctorService.l0Kinds.contains($0.kind) } + newer.issues.filter { DoctorService.l0Kinds.contains($0.kind) }
+        } else { issues = report.issues }
+        fullDoctorDates[path] = report.checkedAt
+        lastFullDoctorScope[path] = scope
+        publishDoctor(issues, for: current)
     }
 
-    func refreshMachineEnvironment() async {
+    private func publishDoctor(_ issues: [DoctorIssue], for project: RepoProject) {
+        var issues = issues.filter { $0.kind != .cloudBehind }
+        if let cloud = DoctorService.cloudIssue(for: project) { issues.append(cloud) }
+        let report = DoctorService.report(for: project.path, issues: issues)
+        rawDoctorReports[project.path] = report
+        doctorReports[project.path] = report.applying(doctorExemptions(for: project))
+        lastDoctorCheckAt = report.checkedAt
+    }
+
+    private func updateCloudReport(for project: RepoProject) {
+        guard let report = rawDoctorReports[project.path] else {
+            if project.behind > 0 { publishDoctor([], for: project) }
+            return
+        }
+        let previous = report.issues.first { $0.kind == .cloudBehind }
+        if previous != DoctorService.cloudIssue(for: project) { publishDoctor(report.issues, for: project) }
+    }
+
+    func doctorExemptions(for project: RepoProject) -> Set<DoctorIssueKind> {
+        metadata[project.path]?.doctorExemptions ?? []
+    }
+
+    func exemptibleIssues(for project: RepoProject) -> [DoctorIssueKind] {
+        let kinds = rawDoctorReports[project.path]?.issues.compactMap { $0.severity != .critical && $0.kind.canExempt ? $0.kind : nil } ?? []
+        return Set(kinds).union(doctorExemptions(for: project)).sorted { $0.rawValue < $1.rawValue }
+    }
+
+    func setDoctorExemption(_ kind: DoctorIssueKind, exempt: Bool, for project: RepoProject) {
+        guard kind.canExempt, projects.contains(where: { $0.path == project.path }) else { return }
+        var meta = metadata[project.path] ?? ProjectMeta()
+        if exempt { meta.doctorExemptions.insert(kind) } else { meta.doctorExemptions.remove(kind) }
+        do { try MetaStore.saveDoctorExemptions(meta.doctorExemptions, for: project.path) } catch {
+            ToastCenter.shared.show("未能保存体检豁免", symbol: "exclamationmark.triangle", tint: .orange)
+            return
+        }
+        metadata[project.path] = meta
+        doctorReports[project.path] = rawDoctorReports[project.path]?.applying(meta.doctorExemptions)
+    }
+
+    private func forgetDoctorReport(_ path: String) {
+        rawDoctorReports[path] = nil
+        doctorReports[path] = nil
+        fullDoctorDates[path] = nil
+        lastFullDoctorScope[path] = nil
+        l0Revision[path] = nil
+        pendingL0Paths.remove(path)
+    }
+
+    private func syncFocusedChecks() {
+        let focused = ProjectFocusPolicy.partition(projects: projects).focused
+        if let watcher = workspaceWatcher {
+            watcher.setFocusedPaths(focused.map(\.id)) // Only the file watcher caps persistent subscriptions.
+            pendingL0Paths.formIntersection(watcher.focusedPaths)
+        }
+        guard scannedAt != nil else { return }
+        let candidates = focused.compactMap { entry -> String? in
+            let project = entry.project
+            guard project.gitLoadState == .ready else { return nil }
+            updateCloudReport(for: project)
+            guard let branch = project.branch, branch != "HEAD", project.lastCommit != nil else { return nil }
+            return project.path
+        }
+        scheduleQuietFetch(for: candidates)
+    }
+
+    private func enqueueL0(_ path: String) {
+        guard workspaceWatcher?.focusedPaths.contains(path) == true else { return }
+        pendingL0Paths.insert(path)
+        guard l0Task == nil else { return }
+        l0Task = Task(priority: .utility) { [weak self] in
+            guard let self else { return }
+            defer { l0Task = nil }
+            while let path = pendingL0Paths.popFirst() {
+                guard let project = projects.first(where: { $0.path == path }), workspaceWatcher?.isPaused == false else { continue }
+                let fresh = await DoctorService.inspectL0(project, copyMode: CopyModePreferences.mode())
+                guard workspaceWatcher?.focusedPaths.contains(path) == true, let current = projects.first(where: { $0.path == path }) else { continue }
+                let other = rawDoctorReports[path]?.issues.filter { !DoctorService.l0Kinds.contains($0.kind) } ?? []
+                l0Revision[path, default: 0] += 1
+                publishDoctor(other + fresh.issues, for: current)
+            }
+        }
+    }
+
+    private func scheduleQuietFetch(for paths: [String]) {
+        let targets = Set(paths), now = quietFetchNow()
+        nextQuietFetch = nextQuietFetch.filter { targets.contains($0.key) }
+        pendingQuietFetch = pendingQuietFetch.filter(targets.contains)[...]
+        var queued = Set(pendingQuietFetch)
+        for path in paths where path != activeQuietFetch && now >= (nextQuietFetch[path] ?? .distantPast) && queued.insert(path).inserted {
+            pendingQuietFetch.append(path)
+        }
+        guard quietFetchTask == nil, !pendingQuietFetch.isEmpty else { return }
+        quietFetchTask = Task(priority: .utility) { [weak self] in
+            guard let self else { return }
+            defer { quietFetchTask = nil; activeQuietFetch = nil; pendingQuietFetch = [] }
+            while let path = pendingQuietFetch.popFirst() {
+                activeQuietFetch = path
+                let attempt = await quietFetchAttempts.reserve(path: path, now: quietFetchNow())
+                nextQuietFetch[path] = attempt.next
+                guard attempt.allowed, let result = await checkRemote(URL(fileURLWithPath: path)),
+                      let i = projects.firstIndex(where: { $0.path == path }), projects[i].branch == result.branch,
+                      let abbreviated = projects[i].lastCommit?.hash, abbreviated.count >= 7, result.head.hasPrefix(abbreviated) else { continue }
+                projects[i].behind = result.counts.behind
+                projects[i].ahead = result.counts.ahead
+                updateCloudReport(for: projects[i])
+            }
+        }
+    }
+
+    func refreshMachineEnvironment(force: Bool = true) async {
+        guard force || machineEnv == nil else { return }
         machineEnv = await DoctorService.inspectMachineEnvironment()
     }
 
@@ -1151,9 +1357,11 @@ final class RepositoryStore {
 
     private func startWorkspaceWatcher() {
         guard workspaceWatcher == nil else { return }
-        let watcher = WorkspaceWatcher { [weak self] change in
+        let watcher = WorkspaceWatcher(onActivation: { [weak self] in self?.syncFocusedChecks() }) { [weak self] change in
             guard let self else { return }
             switch change {
+            case .manifest(let path):
+                self.enqueueL0(path)
             case .sessions:
                 Task { @MainActor [weak self] in
                     await self?.refreshSessions()
@@ -1165,8 +1373,10 @@ final class RepositoryStore {
                 }
             }
         }
+        watcher.setGitPath(selectedProject?.path)
         watcher.start()
         workspaceWatcher = watcher
+        syncFocusedChecks()
     }
 
     func isAttentionSuppressed(
@@ -1174,7 +1384,8 @@ final class RepositoryStore {
         kind: ProjectAttentionKind,
         at date: Date = Date()
     ) -> Bool {
-        attentionPreference(for: project, kind: kind)?.suppresses(at: date) ?? false
+        (kind == .behind && doctorExemptions(for: project).contains(.cloudBehind))
+            || (attentionPreference(for: project, kind: kind)?.suppresses(at: date) ?? false)
     }
 
     func attentionPreference(

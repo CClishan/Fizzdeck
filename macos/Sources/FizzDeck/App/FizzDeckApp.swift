@@ -16,12 +16,15 @@ struct FizzDeckApp: App {
                 .environment(store)
                 .environment(actions)
                 .preferredColorScheme(appearance.colorScheme)
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
                 .frame(minWidth: 1000, minHeight: 660)
                 .background(WindowFrameGuard())
                 .task {
+                    ShortcutProjectData.liveStore = store
                     await store.prepare()
                 }
         }
+        .handlesExternalEvents(matching: ["*"])
         .defaultSize(width: 1320, height: 860)
         .commands {
             CommandGroup(replacing: .sidebar) {
@@ -49,7 +52,7 @@ struct FizzDeckApp: App {
                 }
                 .keyboardShortcut("2", modifiers: [.command])
 
-                Button("可清理") {
+                Button("体检") {
                     store.openCleanup()
                 }
                 .keyboardShortcut("3", modifiers: [.command])

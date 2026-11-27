@@ -4,20 +4,26 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="FizzDeck"
 BUNDLE_ID="com.a003.fizzdeck"
+case "$MODE" in
+  run|--build-only|--sign-local|sign-local|--debug|debug|--logs|logs|--telemetry|telemetry|--verify|verify) ;;
+  *) echo "usage: [VERSION=0.8.0 BUILD_NUM=16] $0 [run|--build-only|--sign-local|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
+esac
 MIN_SYSTEM_VERSION="26.0"
-VERSION="${VERSION:-0.7.4}"
-BUILD_NUM="${BUILD_NUM:-12}"
+VERSION="${VERSION:-0.8.0}"
+BUILD_NUM="${BUILD_NUM:-16}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DIST_DIR="$ROOT_DIR/dist"
+DIST_DIR="${FIZZDECK_DIST_DIR:-$ROOT_DIR/dist}"
+mkdir -p "$DIST_DIR"
+DIST_DIR="$(cd "$DIST_DIR" && pwd -P)"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
-APP_CONTENTS="$APP_BUNDLE/Contents"
+STAGE_DIR="$(mktemp -d "$DIST_DIR/.build-XXXXXX")"
+trap 'rm -rf "$STAGE_DIR"' EXIT
+APP_CONTENTS="$STAGE_DIR/$APP_NAME.app/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
-
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
 if ! swift build --package-path "$ROOT_DIR"; then
   echo "构建失败。如果提示 Xcode license，请先运行：sudo xcodebuild -license accept" >&2
@@ -25,7 +31,6 @@ if ! swift build --package-path "$ROOT_DIR"; then
 fi
 BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --show-bin-path)/$APP_NAME"
 
-rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
@@ -34,6 +39,7 @@ cp "$ROOT_DIR/Resources/FizzDeck_logo_light.svg" "$APP_RESOURCES/FizzDeck_logo_l
 cp "$ROOT_DIR/Resources/FizzDeck_logo_dark.svg" "$APP_RESOURCES/FizzDeck_logo_dark.svg"
 cp "$ROOT_DIR/Resources/FizzDeck.icns" "$APP_RESOURCES/FizzDeck.icns"
 cp -R "$ROOT_DIR/Resources/Icons" "$APP_RESOURCES/Icons"
+"$ROOT_DIR/script/bundle_intents.sh" "$APP_RESOURCES"
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -56,6 +62,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$VERSION</string>
   <key>CFBundleVersion</key>
   <string>$BUILD_NUM</string>
+  <key>CFBundleURLTypes</key>
+  <array><dict><key>CFBundleURLName</key><string>$BUNDLE_ID.project</string><key>CFBundleURLSchemes</key><array><string>fizzdeck</string></array></dict></array>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
@@ -70,6 +78,27 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
+# Only replace a complete bundle. Never quit an independently installed copy.
+bundle_pids() {
+  ps -ax -o pid=,comm= | awk -v exe="$APP_BUNDLE/Contents/MacOS/$APP_NAME" '{p=$1; sub(/^ *[0-9]+ +/, ""); if ($0 == exe) print p}'
+}
+if [[ "$MODE" == "--build-only" && -n "$(bundle_pids)" ]]; then
+  echo "FizzDeck is running from $APP_BUNDLE; choose another FIZZDECK_DIST_DIR." >&2
+  exit 1
+fi
+if [[ "$MODE" != "--build-only" ]]; then
+  pid=$(bundle_pids)
+  if [[ -n "$pid" ]]; then
+    while IFS= read -r running_pid; do kill -TERM "$running_pid" 2>/dev/null || true; done <<< "$pid"
+  fi
+fi
+if [[ -e "$APP_BUNDLE" ]]; then mv "$APP_BUNDLE" "$STAGE_DIR/previous.app"; fi
+if ! mv "$STAGE_DIR/$APP_NAME.app" "$APP_BUNDLE"; then
+  [[ ! -e "$STAGE_DIR/previous.app" ]] || mv "$STAGE_DIR/previous.app" "$APP_BUNDLE"
+  exit 1
+fi
+APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"
 }
@@ -79,6 +108,7 @@ sign_local() {
 }
 
 case "$MODE" in
+  --build-only) ;;
   run)
     open_app
     ;;
@@ -100,10 +130,6 @@ case "$MODE" in
   --verify|verify)
     open_app
     sleep 2
-    pgrep -x "$APP_NAME" >/dev/null
-    ;;
-  *)
-    echo "usage: [VERSION=0.7.4 BUILD_NUM=12] $0 [run|--sign-local|--debug|--logs|--telemetry|--verify]" >&2
-    exit 2
+    [[ -n "$(bundle_pids)" ]]
     ;;
 esac

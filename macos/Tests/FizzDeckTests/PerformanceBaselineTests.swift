@@ -1,3 +1,7 @@
+import AppKit
+import QuartzCore
+import ScreenCaptureKit
+import SwiftUI
 import XCTest
 @testable import FizzDeck
 
@@ -291,5 +295,104 @@ final class PerformanceBaselineTests: XCTestCase {
             note: "",
             port: .stopped
         )
+    }
+}
+
+// Opt in with FIZZDECK_SCALE_TEST=1 on a Mac with an unlocked desktop. The
+// search numbers and WindowServer frames refer to this temporary fixture only.
+extension PerformanceBaselineTests {
+    @MainActor func testThousandProjectWindowAndTenThousandConversations() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["FIZZDECK_SCALE_TEST"] == "1", "interactive scale benchmark")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let now = Date(), before = peakMemoryMiB()
+        var projects: [RepoProject] = []
+        for i in 0..<1_000 {
+            var p = makeProject(path: dir.appendingPathComponent("project-\(i)").path, name: "Project \(i)", recent: now.addingTimeInterval(Double(-i)), size: Int64(i * 1_024), tool: "codex")
+            p.sessions.recentSessions = (0..<10).map { j in
+                SessionRecord(tool: "codex", id: "sample-\(i)-\(j)", cwd: p.path, startedAt: now, modified: now, lastUser: nil, firstUser: "更新颜色索引 samplecode\(i)entry\(j)end")
+            }
+            p.sessions.sessionCount = p.sessions.recentSessions.count
+            projects.append(p)
+        }
+        let index = SessionSearchIndex(databaseURL: dir.appendingPathComponent("fts.sqlite"))
+        let begin = CACurrentMediaTime()
+        await index.rebuild(from: projects)
+        let indexed = CACurrentMediaTime() - begin
+        var times: [Double] = []
+        for i in 0..<40 {
+            let start = CACurrentMediaTime(), n = (i * 241) % 1000
+            let hits = await index.search(query: "samplecode\(n)entry4end")
+            times.append((CACurrentMediaTime() - start) * 1_000)
+            XCTAssertEqual(hits.map(\.sessionID), ["sample-\(n)-4"])
+        }
+        times.sort()
+        let shortStart = CACurrentMediaTime(), shortHits = await index.search(query: "颜色")
+        XCTAssertEqual(shortHits.count, 40)
+        print(String(format: "[scale] 1000 projects / 10000 sessions: index %.2fs, FTS query p50 %.2fms p95 %.2fms, short LIKE %.2fms, peak RSS %.1f MiB (baseline %.1f)", indexed, times[19], times[37], (CACurrentMediaTime() - shortStart) * 1000, peakMemoryMiB(), before))
+
+        let host = NSHostingView(rootView: LibraryTableView(projects: projects, selectedPaths: .constant([])).environment(RepositoryStore()))
+        let window = NSWindow(contentRect: NSRect(x: 50, y: 50, width: 1100, height: 580), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.title = "FizzDeck · scale fixture"
+        window.contentView = host
+        window.orderFrontRegardless()
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(500))
+        func table(in v: NSView) -> NSTableView? {
+            if let v = v as? NSTableView { return v }
+            return v.subviews.lazy.compactMap { table(in: $0) }.first
+        }
+        let table = try XCTUnwrap(table(in: host))
+        XCTAssertEqual(table.numberOfRows, 1_000)
+        let scroll = try XCTUnwrap(table.enclosingScrollView)
+        let driver = TableFrameDriver(scroll: scroll)
+        let link = host.displayLink(target: driver, selector: #selector(TableFrameDriver.advance))
+        link.add(to: .main, forMode: .common)
+        defer { link.invalidate() }
+        try XCTSkipUnless(CGPreflightScreenCaptureAccess(), "WindowServer frame measurement needs screen recording permission")
+        let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+        let target = try XCTUnwrap(content.windows.first { Int($0.windowID) == window.windowNumber })
+        let config = SCStreamConfiguration()
+        config.width = 550; config.height = 290; config.showsCursor = false
+        config.minimumFrameInterval = CMTime(value: 1, timescale: 120)
+        let stream = SCStream(filter: SCContentFilter(desktopIndependentWindow: target), configuration: config, delegate: nil)
+        let frames = TablePresentedFrames(), queue = DispatchQueue(label: "FizzDeck.scale.frames")
+        try stream.addStreamOutput(frames, type: .screen, sampleHandlerQueue: queue)
+        try await stream.startCapture()
+        try await Task.sleep(for: .milliseconds(400))
+        let start = CACurrentMediaTime(), initial = queue.sync { frames.count }
+        try await Task.sleep(for: .seconds(3))
+        let seconds = CACurrentMediaTime() - start, drawn = queue.sync { frames.count } - initial
+        try await stream.stopCapture()
+        XCTAssertGreaterThan(scroll.contentView.bounds.minY, 0)
+        XCTAssertGreaterThan(drawn, 0)
+        print(String(format: "[scale] native table 1000 rows, WindowServer complete frames %d / %.2fs = %.1f FPS, display max %d Hz, process peak RSS %.1f MiB", drawn, seconds, Double(drawn) / seconds, window.screen?.maximumFramesPerSecond ?? 0, peakMemoryMiB()))
+    }
+
+    private func peakMemoryMiB() -> Double {
+        var usage = rusage(); getrusage(RUSAGE_SELF, &usage)
+        return Double(usage.ru_maxrss) / 1_048_576
+    }
+}
+
+@MainActor private final class TableFrameDriver: NSObject {
+    let scroll: NSScrollView
+    init(scroll: NSScrollView) { self.scroll = scroll }
+    @objc func advance() {
+        let clip = scroll.contentView
+        clip.scroll(to: NSPoint(x: 0, y: clip.bounds.minY + 12))
+        scroll.reflectScrolledClipView(clip)
+    }
+}
+
+private final class TablePresentedFrames: NSObject, SCStreamOutput {
+    // Accessed only on the sample queue, including reads from the benchmark.
+    var count = 0
+    func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        guard let entries = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
+              let status = entries.first?[.status] as? Int, status == SCFrameStatus.complete.rawValue else { return }
+        count += 1
     }
 }

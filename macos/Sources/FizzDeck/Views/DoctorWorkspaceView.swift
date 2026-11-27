@@ -19,12 +19,12 @@ struct DoctorWorkspaceView: View {
 
     private var focusedHealthyCount: Int {
         partition.focused.filter { entry in
-            (store.doctorReports[entry.project.path]?.severity ?? .healthy) == .healthy
+            store.doctorReports[entry.project.path]?.severity == .healthy
         }.count
     }
 
     private var focusedAttentionCount: Int {
-        partition.focused.count - focusedHealthyCount
+        partition.focused.filter { (store.doctorReports[$0.id]?.actionableCount ?? 0) > 0 }.count
     }
 
     private var cleanableProjects: [RepoProject] {
@@ -52,6 +52,7 @@ struct DoctorWorkspaceView: View {
             VStack(alignment: .leading, spacing: FizzSpacing.section) {
                 header
                 focusedSection
+                DeveloperPortsPanel()
                 idleCleanupSection
                 machineEnvironmentSection
             }
@@ -63,7 +64,7 @@ struct DoctorWorkspaceView: View {
         }
         .onPreferenceChange(FizzScrollPastTopKey.self) { scrolledPastTop = $0 }
         .task {
-            await refreshAll()
+            await refreshAll(force: false)
         }
         .alert(
             "首次联网安装依赖确认",
@@ -187,7 +188,7 @@ struct DoctorWorkspaceView: View {
 
     private func focusedProjectRow(_ project: RepoProject) -> some View {
         let report = store.doctorReports[project.path]
-        let topIssue = report?.issues.first
+        let topIssue = report?.issues.first { $0.kind != .cloudBehind }
         let severity = report?.severity ?? .healthy
 
         return HStack(spacing: 12) {
@@ -206,7 +207,7 @@ struct DoctorWorkspaceView: View {
                         .foregroundStyle(severityColor(topIssue.severity))
                         .lineLimit(1)
                 } else {
-                    Text("一切正常 · \(Format.relative(project.recent ?? project.sessions.lastSessionAt))")
+                    Text(report == nil ? "尚未检查" : project.behind > 0 && !store.doctorExemptions(for: project).contains(.cloudBehind) ? "云端有新提交" : "未发现问题")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -218,6 +219,14 @@ struct DoctorWorkspaceView: View {
             if let topIssue, let fix = topIssue.fixAction {
                 issueQuickButton(fix: fix, for: project)
             }
+
+            if project.behind > 0, !store.doctorExemptions(for: project).contains(.cloudBehind) {
+                Button("云端领先 \(project.behind)") { store.openProject(project, tab: .version) }
+                    .buttonStyle(.glass).controlSize(.small)
+                    .accessibilityLabel("云端领先 \(project.behind) 个提交，查看版本")
+            }
+            DoctorTrialMenu(project: project)
+            DoctorExemptionMenu(project: project)
 
             Button {
                 store.openProject(project, tab: .run)
@@ -274,16 +283,7 @@ struct DoctorWorkspaceView: View {
             .buttonStyle(.glass)
             .controlSize(.small)
         case .initGitRepository:
-            Button("开启版本保护") {
-                Task {
-                    let res = await DoctorService.initGitRepository(in: URL(fileURLWithPath: project.path))
-                    ToastCenter.shared.show(res.message, symbol: "checkmark.shield", tint: res.succeeded ? .green : .orange)
-                    await store.refreshGit(for: project.path)
-                    await store.refreshDoctor(for: project, scope: .focused)
-                }
-            }
-            .buttonStyle(.glass)
-            .controlSize(.small)
+            EnableVersionProtectionButton(project: project).buttonStyle(.glass)
         case .resolvePortConflict:
             Button("去处理") {
                 store.openProject(project, tab: .run)
@@ -296,6 +296,17 @@ struct DoctorWorkspaceView: View {
             }
             .buttonStyle(.glass)
             .controlSize(.small)
+        case .copyShellCommand(let command):
+            Button("复制切换命令") {
+                SystemActions.copy(
+                    command,
+                    feedback: "运行版本切换命令已复制",
+                    microViz: .compact(state: .done)
+                )
+            }
+            .buttonStyle(.glass)
+            .controlSize(.small)
+            .accessibilityLabel("复制运行时版本切换命令")
         }
     }
 
@@ -409,6 +420,11 @@ struct DoctorWorkspaceView: View {
                             tint: env.nodeVersion != nil ? .green : .secondary,
                             compact: true
                         )
+                        TagChip(
+                            text: env.pythonVersion.map { "✓ Python \($0)" } ?? "○ 未检测到 Python",
+                            tint: env.pythonVersion != nil ? .green : .secondary,
+                            compact: true
+                        )
                         ForEach(env.cliTools) { tool in
                             TagChip(
                                 text: tool.available ? "✓ \(tool.title)" : "○ \(tool.title) 未安装",
@@ -490,9 +506,9 @@ struct DoctorWorkspaceView: View {
         }
     }
 
-    private func refreshAll() async {
-        await store.refreshDoctorForFocused(includeIdle: true)
-        await store.refreshMachineEnvironment()
+    private func refreshAll(force: Bool = true) async {
+        await store.refreshMachineEnvironment(force: force)
+        await store.refreshDoctorForFocused(includeIdle: true, force: force)
     }
 
     private func trashCleanup(for project: RepoProject) async {
@@ -509,7 +525,7 @@ struct DoctorWorkspaceView: View {
             )
         }
         await store.rescanProjects([project])
-        await store.refreshDoctorForFocused(includeIdle: true)
+        await store.refreshDoctor(for: project, scope: .idle)
     }
 
     private func severityColor(_ severity: DoctorSeverity) -> Color {
@@ -517,6 +533,27 @@ struct DoctorWorkspaceView: View {
         case .critical: .red
         case .warning: .orange
         case .healthy: .green
+        }
+    }
+}
+
+struct DoctorExemptionMenu: View {
+    @Environment(RepositoryStore.self) private var store
+    let project: RepoProject
+
+    var body: some View {
+        let kinds = store.exemptibleIssues(for: project)
+        if !kinds.isEmpty {
+            Menu {
+                ForEach(kinds, id: \.self) { kind in
+                    let exempt = store.doctorExemptions(for: project).contains(kind)
+                    Button("\(exempt ? "恢复" : "忽略")：\(kind.exemptionTitle)") {
+                        store.setDoctorExemption(kind, exempt: !exempt, for: project)
+                    }
+                }
+            } label: { Image(systemName: "ellipsis.circle") }
+            .menuStyle(.button).buttonStyle(.glass).controlSize(.small)
+            .help("此项目的体检豁免").accessibilityLabel("\(project.displayName)的体检豁免")
         }
     }
 }

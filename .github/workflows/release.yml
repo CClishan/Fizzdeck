@@ -1,0 +1,51 @@
+name: Package release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+  dmg:
+    needs: ci
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate tag and architecture
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$(uname -m)" == arm64 ]]
+          grep -Fq 'VERSION="${VERSION:-'"${GITHUB_REF_NAME#v}"'}"' macos/script/package_dmg.sh
+      - name: Build and verify distribution image
+        env:
+          DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
+          CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: ./macos/script/ci_package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FizzDeck-${{ github.ref_name }}-arm64
+          path: |
+            macos/dist/*.dmg
+            macos/dist/*.sha256
+          if-no-files-found: error
+  draft:
+    needs: dmg
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: FizzDeck-${{ github.ref_name }}-arm64
+      - name: Verify and upload both assets to a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          file="FizzDeck-${GITHUB_REF_NAME#v}-arm64.dmg"
+          sha256sum -c "$file.sha256"
+          gh release create "$GITHUB_REF_NAME" "$file" "$file.sha256" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --generate-notes

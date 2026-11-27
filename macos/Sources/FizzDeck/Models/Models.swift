@@ -300,6 +300,7 @@ struct ProjectMeta: Codable, Sendable {
     var note = ""
     var customArtwork: String? = nil
     var attention: [String: AttentionPreference] = [:]
+    var doctorExemptions: Set<DoctorIssueKind> = []
 }
 
 struct AttentionPreference: Codable, Hashable, Sendable {

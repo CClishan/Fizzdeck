@@ -1,9 +1,23 @@
 # FizzDeck 现有能力全量梳理与后续演进路线
 
-> **源码基线**：macOS 原生端 `v0.7.4`（Build `12`，已发布）｜ 线上公开版本 [`v0.7.4`](https://github.com/CClishan/Fizzdeck/releases/tag/v0.7.4)（Build `12`）｜ 官网 [`https://koroo.top/fizzdeck`](https://koroo.top/fizzdeck)
-> **工程规模**：macOS 原生源码 **110** 个 Swift 文件（`App` 1 / `Models` 4 / `Stores` 1 / `Services` 38 / `Support` 24 / `Views` 42），**46** 个测试文件；配套本地 Web UI 与双语官网。
+> **源码基线**：macOS 原生端 `v0.8.0`（Build `16`）｜ [公开下载](https://github.com/CClishan/Fizzdeck/releases/latest) ｜ [官网](https://koroo.top/fizzdeck)
+> Build 13 保留独立源码和安装包；Build 16 汇总三个后续阶段，见[发行说明](releases/v0.8.0.md)。发布前最后核实的公开版为 [`v0.7.4`](https://github.com/CClishan/Fizzdeck/releases/tag/v0.7.4)（Build `12`）。
 
 ---
+
+## 本轮版本与验证边界（2026-11-27）
+
+| 版本 | 原生能力 | 分发状态 |
+|---|---|---|
+| v0.7.4 / 12 | 原生四页签、Doctor、还原与接力卡 | 最近一次读取 GitHub API 时为 Latest |
+| v0.7.5 / 13 | 规则版「本周回顾」、文件反查相关对话、标记过期提示、菜单栏待处理、Node/Python 版本检查 | 独立源码快照、264 项测试、真机点击和本地 ad-hoc DMG；未作为新版发布 |
+| v0.7.6 阶段 | 关注项目 manifest / lock / `.env*` 事件、单项目 L0、限频云端检查、可停 L2、端口图、语言探测、非致命问题豁免 | 随 Build 16 打包；不包含在 Build 13 |
+| v0.7.7 阶段 | 项目 14/30 天费用与提交趋势、可选 AI 周报、按栈生成忽略规则并创建首次保护基线 | 随 Build 16 打包；不包含在 Build 13 |
+| v0.8.0 阶段 | 受管项目深链、三个 App Intents、CI、tag 打包、许可、规模压测 | 深链及键盘主路径真机通过；使用 Apple Development 签名后，三个动作均从系统快捷指令执行成功。托管 CI、VoiceOver、公证分发待验 |
+
+**性能与验收口径：** L0 按既有设计持续监听前 8 个关注项目，事件合并后只重检命中的项目；L1 打开工作台后按关注名单串行检查，含第 9 个及之后手动关注的 Git 项目。不拉取工作树，单项目至少间隔 24 小时；L2 必须点击。官网样机版首屏图片共 116,414 字节（机身 53,770，工作台 62,644），其余三张图延迟加载。部署状态、详细测试数字和升级验收见 [HANDOFF](../HANDOFF.md)。
+
+**伴生 Web：** 本轮保留原有六页签与已有操作，未把有写操作的旧网页称为只读。后续是否减为四页签、或移除写操作，另行决定。
 
 ## 一、产品定位与三端形态
 
@@ -23,7 +37,7 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 
 ---
 
-## 二、现有能力矩阵（`v0.7.4`，已包含 `v0.6.0–v0.7.3`）
+## 二、已公开的能力基线（截至 `v0.7.4`）
 
 ### 1. 本地发现、缓存与增量监听
 
@@ -84,7 +98,7 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 ### 8. 分发、应用内更新与打包
 
 - **应用内下载与原子更新**（[AppUpdateService.swift](file:///Users/a003/dsh-workspace/repo-dashboard/macos/Sources/FizzDeck/Services/AppUpdateService.swift)）：GitHub Releases 检查、DMG 下载、`.sha256` 校验、挂载验证 Bundle ID 与签名、同卷暂存替换、自动重启。
-- **版本注入**（[build_and_run.sh](file:///Users/a003/dsh-workspace/repo-dashboard/macos/script/build_and_run.sh)）：默认 `0.7.4` / Build `12`，支持 `VERSION`、`BUILD_NUM` 环境变量覆盖。
+- **版本注入**（[build_and_run.sh](file:///Users/a003/dsh-workspace/repo-dashboard/macos/script/build_and_run.sh)）：默认 `0.8.0` / Build `16`，支持 `VERSION`、`BUILD_NUM` 环境变量覆盖。
 - **DMG 打包**（[package_dmg.sh](file:///Users/a003/dsh-workspace/repo-dashboard/macos/script/package_dmg.sh)）：默认 ad-hoc；支持 `--sign-identity` / `DEVELOPER_ID_APP`、Hardened Runtime、DMG 签名、`--notarize` + `NOTARY_PROFILE`、staple 与 `spctl` 校验。
 - **校验文件**：打包结束自动生成同名 `.sha256`，格式为 `shasum -a 256` 仅含文件名，供应用内更新和 GitHub Release 上传。
 
@@ -94,35 +108,20 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 
 | 类别 | 现状 | 下一步 |
 | :--- | :--- | :--- |
-| **公开安装包签名** | 默认 ad-hoc，首次打开仍需 Control-click 放行；Developer ID + 公证流程已在脚本实现，但需要发布时注入凭据 | 用真实 Developer ID 凭据打一次公证包，并在 Release Notes 明确标注 |
-| **应用内更新实机验证** | 原子更新、SHA-256、挂载校验和替换回滚均有实现与测试，但 `v0.5.3 / v0.7.3 → v0.7.4` 的真实更新仍需按 Checklist 跑 | 发布前分别从两个旧版本实机验证一次 |
+| **公开安装包签名** | 默认 ad-hoc、未公证；macOS 可能在首次打开时拦截，允许信任的应用需在「隐私与安全性」内操作。Developer ID 公证须提供分发凭据 | 用真实 Developer ID 凭据打一次公证包，并在 Release Notes 明确标注 |
+| **应用内更新实机验证** | 原子更新、SHA-256、挂载校验和替换回滚均有实现与测试；两个旧版本到 v0.8.0 的真实更新尚待验证 | 在新版进入 Latest 后，分别从 v0.5.3 与 v0.7.4 按[实机清单](../macos/README.md)验证状态保留 |
 | **对话标记** | 依赖临时 Git 对象，通常保留约 14 天；非 Git 项目只能纯标记 | 可在后续版本增加更明显的过期提示与固定入口 |
-| **长期性能与无障碍** | 基础构建、单测与扫描性能基线存在；千级项目长列表、VoiceOver 与纯键盘焦点链未做全面实测 | 纳入正式发布后的稳定性专项目 |
+| **长期性能与无障碍** | 千项目原生表格 60.1 FPS、万会话 FTS P95 0.96 ms。干净/有改动项目的版本页键盘往返、四页签与全局快捷键已真机验证；最终页签标题已核对 | 补 VoiceOver 朗读与其他页面的焦点链，见[系统验收](SYSTEM_INTEGRATION.md) |
 | **Worktree 与 Web UI** | Worktree 偏展示/只读；Web UI 是轻量补充，不承担原生菜单栏、通知和公证分发 | 按实际需求决定是否继续对齐 |
 
 ---
 
-## 四、后续演进方向
+## 四、现在能做什么，还有什么待验
 
-### 方向 1：把「记得住」做成真正的个人开发记忆
-
-- 已完成：跨项目时间线、中文搜索、接力卡、可选 AI 总结。
-- 可继续：周回顾、按文件反查历史对话、项目级成本与改动趋势。
-
-### 方向 2：把「回得去」做得更可控
-
-- 已完成：隐形标记、对话 Diff、按文件/整体还原、内联存版本、推送前密钥拦截。
-- 可继续：标记固定与过期提示、还原预览的批量选择、更多非 Git 项目的安全引导。
-
-### 方向 3：把「跑得起」扩成本机开发环境管家
-
-- 已完成：Doctor、关注/闲置分层、依赖/端口/.env/密钥检查、本机环境与 Git 身份。
-- 可继续：全局端口拓扑、更多语言版本探测、按项目自定义体检规则。
-
-### 方向 4：分发与系统集成
-
-- 已完成：Developer ID / 公证脚本、版本注入、DMG 签名与 SHA-256。
-- 可继续：CI 自动签名/公证、URL Scheme、Shortcuts / AppIntents、主页与更新日志自动发布。
+- **记得住**：Build 13 已有规则周回顾、文件反查；后续工作树增加逐项目 14/30 天提交与 AI 费用趋势、只发数字摘要的可选 AI 周报。有会话但无价格的日子不能记成零花费。
+- **回得去**：非 Git 项目可手动开启版本保护；开发版在发布 `.git` 前先准备基线，保留既有 `.gitignore` 的优先级，并跳过不宜纳入快照的文件。
+- **跑得起**：L0 因关注项目根目录的配置变动而触发；L1 独立限频、不改工作树；L2 只能手动启动并可停止。外部端口需要确认 PID，拒绝用端口号批量停止。
+- **分发与系统集成**：源码提供 URL Scheme、三个 Shortcuts 动作及 CI / 草稿 Release 工作流。Apple 公证与两条原地升级路径仍需单独实测。见[系统集成说明](SYSTEM_INTEGRATION.md)。
 
 ---
 
@@ -136,10 +135,14 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 | `v0.7.2` | 找得回：中文 FTS5、短词回退、⌘K 对话直达 | 已落地 |
 | `v0.7.3` | 跑得起：Doctor、闲置整理、运行页体检、报错求助 | 已落地 |
 | `v0.7.4` | 正式分发：版本统一、签名/公证脚本、双语新手文档、官网同步 | 已发布（ad-hoc，未公证） |
+| `v0.7.5` | 周回顾、文件反查、菜单栏与运行时体检 | 独立 Build 13 候选已验，未替换 Latest |
+| `v0.7.6` / `v0.7.7` / `v0.8.0` | 事件体检、项目记忆、系统集成 | 同一 Build 16，见顶部逐项状态 |
 
 ---
 
-## 六、`v0.7.4` 发布验证清单
+## 六、独立 `v0.7.5` 候选的历史验收清单
+
+以下命令仅适用于冻结的 Build 13 源码；当前工作树默认生成 `0.8.0 / 16`。
 
 ### 1. 本地脚本与构建
 
@@ -159,23 +162,23 @@ npm run build
 
 ```sh
 ./macos/script/package_dmg.sh
-hdiutil verify macos/dist/FizzDeck-0.7.4-arm64.dmg
+hdiutil verify macos/dist/FizzDeck-0.7.5-arm64.dmg
 mkdir -p /tmp/fizzdeck-verify
-hdiutil attach -nobrowse -readonly -mountpoint /tmp/fizzdeck-verify macos/dist/FizzDeck-0.7.4-arm64.dmg
+hdiutil attach -nobrowse -readonly -mountpoint /tmp/fizzdeck-verify macos/dist/FizzDeck-0.7.5-arm64.dmg
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /tmp/fizzdeck-verify/FizzDeck.app/Contents/Info.plist
 /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' /tmp/fizzdeck-verify/FizzDeck.app/Contents/Info.plist
 codesign --verify --deep --strict /tmp/fizzdeck-verify/FizzDeck.app
 hdiutil detach /tmp/fizzdeck-verify
-cd macos/dist && shasum -a 256 -c FizzDeck-0.7.4-arm64.dmg.sha256
+cd macos/dist && shasum -a 256 -c FizzDeck-0.7.5-arm64.dmg.sha256
 ```
 
-期望版本 `0.7.4`、Build `12`；上面的 `codesign --verify --deep --strict` 检查的是 DMG 内实际会被安装的 App。
+期望版本 `0.7.5`、Build `13`；上面的 `codesign --verify --deep --strict` 检查的是 DMG 内实际会被安装的 App。
 
-### 3. `v0.5.3 / v0.7.3 → v0.7.4` 真实应用内更新
+### 3. `v0.5.3 / v0.7.4 → v0.7.5` 真实应用内更新
 
 1. 在测试 Mac 的 `/Applications` 安装旧版，保留现有 `~/.repodeck` 状态。
-2. 将 v0.7.4 的 DMG 与 `.sha256` 发布到测试 Release 或正式 Release。
-3. 启动旧版，进入「设置 → 关于 → 检查更新」，确认能发现 `v0.7.4`。
+2. 将 v0.7.5 的 DMG 与 `.sha256` 发布到测试 Release 或正式 Release。
+3. 启动旧版，进入「设置 → 关于 → 检查更新」，确认能发现 `v0.7.5`。
 4. 开始下载，确认 DMG 和校验文件都下载成功。
 5. 确认应用校验 SHA-256、挂载 DMG、检查 Bundle ID 与签名、原子替换并自动重启。
 6. 确认重启后的版本与 Build：
@@ -187,7 +190,7 @@ cd macos/dist && shasum -a 256 -c FizzDeck-0.7.4-arm64.dmg.sha256
 
 7. 检查项目、星标、备注、关注状态和设置是否保留。
 8. 再次从 Finder 打开，确认没有空白窗口或重复更新提示。
-9. 分别从 `v0.5.3` 和 `v0.7.3` 各跑一次；任一次失败都不能标记为可发布。
+9. 分别从 `v0.5.3` 和 `v0.7.4` 各跑一次；任一次失败都不能标记为可发布。
 
 ### 4. Developer ID + 公证包
 
@@ -195,8 +198,8 @@ cd macos/dist && shasum -a 256 -c FizzDeck-0.7.4-arm64.dmg.sha256
 export DEVELOPER_ID_APP="Developer ID Application: <name> (<TEAMID>)"
 export NOTARY_PROFILE="<notarytool profile>"
 ./macos/script/package_dmg.sh --notarize
-xcrun stapler validate macos/dist/FizzDeck-0.7.4-arm64.dmg
-spctl -a -vvv -t open --context context:primary-signature macos/dist/FizzDeck-0.7.4-arm64.dmg
+xcrun stapler validate macos/dist/FizzDeck-0.7.5-arm64.dmg
+spctl -a -vvv -t open --context context:primary-signature macos/dist/FizzDeck-0.7.5-arm64.dmg
 ```
 
 安装后检查：
@@ -208,4 +211,4 @@ codesign --display --verbose=4 /Applications/FizzDeck.app
 
 ### 5. Release 资产
 
-上传 `FizzDeck-0.7.4-arm64.dmg` 与 `FizzDeck-0.7.4-arm64.dmg.sha256`。发布后再次确认 tag、文件名、校验值、`releases/latest` 指向和下载页版本号一致。
+上传 `FizzDeck-0.7.5-arm64.dmg` 与 `FizzDeck-0.7.5-arm64.dmg.sha256`。发布后再次确认 tag、文件名、校验值、`releases/latest` 指向和下载页版本号一致。

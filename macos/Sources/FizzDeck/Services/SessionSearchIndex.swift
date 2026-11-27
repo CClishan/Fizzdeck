@@ -43,11 +43,9 @@ struct SessionSearchDocument: Sendable, Equatable {
         let cleanLastUser = SecretRedactor.redact(String((session.lastUser ?? "").prefix(400))).text
         let cleanAI = SecretRedactor.redact(String((aiSummaryHeadline ?? "").prefix(300))).text
         let cleanError = SecretRedactor.redact(String((session.lastError ?? "").prefix(300))).text
-        let cleanFiles = session.touchedFiles.prefix(40).map {
-            let name = URL(fileURLWithPath: $0).lastPathComponent
-            let redacted = SecretRedactor.redact($0).text
-            return name == redacted ? name : "\(name) \(redacted)"
-        }.joined(separator: " ")
+        let cleanFiles = session.touchedFiles.prefix(40)
+            .map { SecretRedactor.redact(normalizedTouchedFilePath($0)).text }
+            .joined(separator: "\n")
 
         let toolTitle = HomeDashboardModel.toolTitle(session.tool)
 
@@ -78,6 +76,22 @@ struct SessionSearchDocument: Sendable, Equatable {
         self.modifiedTimestamp = session.modified.timeIntervalSince1970
         self.endedWithError = session.endedWithError
     }
+}
+
+private func normalizedTouchedFilePath(_ raw: String) -> String {
+    var value = raw
+        .replacingOccurrences(of: "\\", with: "/")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    if value.hasPrefix("/") {
+        return PathTools.normalize(value)
+    }
+    while value.hasPrefix("./") {
+        value.removeFirst(2)
+    }
+    while value.hasSuffix("/") {
+        value.removeLast()
+    }
+    return value
 }
 
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -234,6 +248,51 @@ actor SessionSearchIndex {
         )
     }
 
+    func sessions(
+        touchingFile file: String,
+        projectPath: String,
+        limit: Int = 30
+    ) -> [SessionSearchResult] {
+        guard let target = Self.relativeTargetPath(file, projectPath: projectPath),
+              !target.isEmpty,
+              let db = openDatabase()
+        else { return [] }
+        defer { sqlite3_close(db) }
+        guard ensureSchema(db: db) else { return [] }
+
+        let sql = """
+        SELECT
+            doc_key, project_path, project_name, session_id, session_stable_id,
+            tool, primary_intent, last_user, ai_summary, last_error,
+            touched_files, modified, ended_with_error
+        FROM sessions_meta
+        WHERE project_path = ? COLLATE NOCASE
+        ORDER BY modified DESC;
+        """
+
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK,
+              let stmt
+        else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, index: 1, value: projectPath)
+
+        return collectResults(stmt: stmt, queryTerms: [])
+            .filter { result in
+                result.touchedFilesText
+                    .split(whereSeparator: \.isNewline)
+                    .contains { touched in
+                        Self.touchedPathMatches(
+                            String(touched),
+                            target: target,
+                            projectPath: projectPath
+                        )
+                    }
+            }
+            .prefix(max(1, limit))
+            .map { $0 }
+    }
+
     static func inMemorySearch(
         projects: [RepoProject],
         query: String,
@@ -296,6 +355,71 @@ actor SessionSearchIndex {
             .map { $0 }
     }
 
+    static func inMemorySessions(
+        touchingFile file: String,
+        projectPath: String,
+        projects: [RepoProject],
+        aiHeadlines: [String: String] = [:],
+        limit: Int = 30
+    ) -> [SessionSearchResult] {
+        guard let project = projects.first(where: {
+            PathTools.normalize($0.path) == PathTools.normalize(projectPath)
+        }),
+        let target = relativeTargetPath(file, projectPath: project.path)
+        else { return [] }
+
+        return project.sessions.recentSessions
+            .filter { session in
+                session.kind == .conversation
+                    && session.touchedFiles.contains {
+                        touchedPathMatches($0, target: target, projectPath: project.path)
+                    }
+            }
+            .sorted { $0.modified > $1.modified }
+            .prefix(max(1, limit))
+            .map { session in
+                let doc = SessionSearchDocument(
+                    project: project,
+                    session: session,
+                    aiSummaryHeadline: aiHeadlines[session.stableID]
+                )
+                return SessionSearchResult(
+                    id: doc.docKey,
+                    projectPath: doc.projectPath,
+                    projectName: doc.projectName,
+                    sessionID: doc.sessionID,
+                    sessionStableID: doc.sessionStableID,
+                    tool: doc.tool,
+                    primaryIntent: doc.primaryIntent,
+                    lastUser: doc.lastUser.isEmpty ? nil : doc.lastUser,
+                    lastError: doc.lastError.isEmpty ? nil : doc.lastError,
+                    touchedFilesText: doc.touchedFilesText,
+                    modified: Date(timeIntervalSince1970: doc.modifiedTimestamp),
+                    endedWithError: doc.endedWithError,
+                    matchedSnippet: nil
+                )
+            }
+    }
+
+    static func touchedPathMatches(
+        _ touchedPath: String,
+        target: String,
+        projectPath: String
+    ) -> Bool {
+        guard let candidate = relativeTargetPath(touchedPath, projectPath: projectPath),
+            !candidate.isEmpty
+        else { return false }
+
+        let normalizedTarget = normalizedRelativePath(target) ?? ""
+        guard !normalizedTarget.isEmpty else { return false }
+        let lowerCandidate = candidate.lowercased()
+        let lowerTarget = normalizedTarget.lowercased()
+        if lowerCandidate == lowerTarget {
+            return true
+        }
+        return lowerCandidate.hasSuffix("/" + lowerTarget)
+    }
+
     static func tokenizeQuery(_ raw: String) -> [String] {
         raw.trimmingCharacters(in: .whitespacesAndNewlines)
             .split(whereSeparator: \.isWhitespace)
@@ -319,9 +443,10 @@ actor SessionSearchIndex {
             return "✦ \(String(aiSummary.prefix(70)))"
         }
         if !touchedFiles.isEmpty, lowerTerms.contains(where: { touchedFiles.lowercased().contains($0) }) {
-            let fileTokens = touchedFiles
-                .split(separator: " ")
+            let lines = touchedFiles
+                .split(whereSeparator: \.isNewline)
                 .map(String.init)
+            let fileTokens = (lines.count > 1 ? lines : touchedFiles.split(separator: " ").map(String.init))
                 .filter { token in lowerTerms.contains { token.lowercased().contains($0) } }
             if let first = fileTokens.first {
                 return "命中文件：\(URL(fileURLWithPath: first).lastPathComponent)"
@@ -488,6 +613,43 @@ actor SessionSearchIndex {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "%", with: "\\%")
             .replacingOccurrences(of: "_", with: "\\_")
+    }
+
+    private static func relativeTargetPath(_ path: String, projectPath: String) -> String? {
+        let normalizedProject = normalizedAbsolutePath(projectPath)
+        let raw = path.replacingOccurrences(of: "\\", with: "/")
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("/") {
+            let normalized = normalizedAbsolutePath(trimmed)
+            if normalized == normalizedProject {
+                return nil
+            }
+            let prefix = normalizedProject.hasSuffix("/") ? normalizedProject : normalizedProject + "/"
+            guard normalized.hasPrefix(prefix) else { return nil }
+            return normalizedRelativePath(String(normalized.dropFirst(prefix.count)))
+        }
+        return normalizedRelativePath(raw)
+    }
+
+    private static func normalizedAbsolutePath(_ path: String) -> String {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        return PathTools.normalize(trimmed)
+    }
+
+    private static func normalizedRelativePath(_ path: String) -> String? {
+        var value = path.replacingOccurrences(of: "\\", with: "/")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        while value.hasPrefix("./") {
+            value.removeFirst(2)
+        }
+        while value.hasPrefix("/") {
+            value.removeFirst()
+        }
+        while value.hasSuffix("/") {
+            value.removeLast()
+        }
+        return value.isEmpty ? nil : value
     }
 
     private func openDatabase() -> OpaquePointer? {

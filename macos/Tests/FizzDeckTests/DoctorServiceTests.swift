@@ -166,7 +166,7 @@ final class DoctorServiceTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent(".env"), encoding: .utf8), "PORT=4000\n")
 
         // initGitRepository
-        let gitInit = await DoctorService.initGitRepository(in: dir)
+        let gitInit = await DoctorService.initGitRepository(in: dir, marksFile: outsideDir.appendingPathComponent("marks.json"), tmpDir: outsideDir)
         XCTAssertTrue(gitInit.succeeded)
         XCTAssertTrue(GitService.hasGit(dir))
         let gitignoreContent = try String(contentsOf: dir.appendingPathComponent(".gitignore"), encoding: .utf8)
@@ -228,6 +228,109 @@ final class DoctorServiceTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Login.tsx"))
         XCTAssertTrue(prompt.contains("Cannot find module"))
         XCTAssertFalse(prompt.contains("sk-live-secret1234567890abcd"))
+    }
+
+    func testRuntimeVersionMismatchIsFocusedOnlyAndCarriesCopyCommand() async throws {
+        let dir = try makeTempDirectory(name: "runtime")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try ">=999\n".write(
+            to: dir.appendingPathComponent(".nvmrc"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "999\n".write(
+            to: dir.appendingPathComponent(".python-version"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let project = makeProject(path: dir.path)
+        let runtimeEnvironment = RuntimeVersionEnvironment(node: "22.0.0", python: "3.12.0")
+
+        let focused = await DoctorService.inspectProject(
+            project,
+            scope: .focused,
+            copyMode: .plain,
+            runtimeEnvironment: runtimeEnvironment
+        )
+        let issues = focused.issues.filter { $0.kind == .runtimeVersionMismatch }
+        XCTAssertEqual(issues.count, 2)
+        XCTAssertEqual(Set(issues.map(\.id)).count, 2)
+        XCTAssertTrue(issues.allSatisfy { $0.severity == .warning })
+        XCTAssertTrue(issues.contains {
+            $0.title.contains("Node")
+                && $0.fixAction == .copyShellCommand(command: "nvm use")
+        })
+        XCTAssertTrue(issues.contains {
+            $0.title.contains("Python")
+                && $0.fixAction == .copyShellCommand(
+                    command: "pyenv install 999 && pyenv local 999"
+                )
+        })
+
+        let idle = await DoctorService.inspectProject(
+            project,
+            scope: .idle,
+            copyMode: .plain,
+            runtimeEnvironment: runtimeEnvironment
+        )
+        XCTAssertFalse(idle.issues.contains { $0.kind == .runtimeVersionMismatch })
+    }
+
+    func testL0ReadsOnlyStaticInputsAndCriticalIssuesCannotBeExempted() async throws {
+        let root = try makeTempDirectory(name: "l0")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root.appendingPathComponent(".git"), withIntermediateDirectories: false)
+        for (name, text) in [("package.json", "{}"), (".env.example", ""), (".env.staging", ""),
+                             (".gitignore", ".env.*\n!.env.staging\n"), (".nvmrc", ">=999")] {
+            try text.write(to: root.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        }
+        let project = makeProject(path: root.path)
+        let raw = await DoctorService.inspectL0(project)
+        XCTAssertEqual(Set(raw.issues.map(\.kind)), [.missingDependencies, .missingEnvFile, .unignoredEnvFile])
+        let filtered = await DoctorService.inspectL0(project, exemptions: [.missingEnvFile, .missingDependencies, .unignoredEnvFile])
+        XCTAssertEqual(Set(filtered.issues.map(\.kind)), [.missingDependencies, .unignoredEnvFile])
+        XCTAssertEqual(filtered.severity, .critical)
+        XCTAssertFalse(FileTools.exists(root.appendingPathComponent(".env")))
+    }
+
+    func testStateRoundTripKeepsExemptionsLocalAndPreservesUnrelatedMetadata() throws {
+        let dir = try makeTempDirectory(name: "settings")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("state.json"), a = dir.appendingPathComponent("a").path, b = dir.appendingPathComponent("b").path
+        try FileTools.writeJSON([a: ["note": "keep", "futureField": 42, "doctorExemptions": ["trackedSecrets", "runtimeVersionMismatch"]],
+                                 b: ["customArtwork": "art", "futureField": [1, 2]]], to: file)
+        XCTAssertEqual(MetaStore.load(from: file)[a]?.doctorExemptions, [.runtimeVersionMismatch])
+        try MetaStore.saveDoctorExemptions([.cloudBehind, .portConflict], for: b, to: file)
+        var metadata = MetaStore.load(from: file)
+        XCTAssertEqual(metadata[b]?.doctorExemptions, [.cloudBehind]); XCTAssertEqual(metadata[b]?.customArtwork, "art")
+        metadata[a]?.starred = true
+        try MetaStore.save(metadata, to: file)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: [String: Any]])
+        XCTAssertEqual(json[a]?["futureField"] as? Int, 42); XCTAssertEqual(json[b]?["futureField"] as? [Int], [1, 2])
+        XCTAssertEqual(json[a]?["doctorExemptions"] as? [String], ["runtimeVersionMismatch"])
+        try MetaStore.saveDoctorExemptions([], for: a, to: file)
+        XCTAssertEqual(MetaStore.load(from: file)[a]?.doctorExemptions, []); XCTAssertEqual(MetaStore.load(from: file)[b]?.doctorExemptions, [.cloudBehind])
+        try Data("invalid".utf8).write(to: file)
+        XCTAssertThrowsError(try MetaStore.saveDoctorExemptions([], for: b, to: file))
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "invalid")
+    }
+
+    @MainActor func testFullDoctorPageRotatesFocusedProjectsWithinItsBudget() async throws {
+        let root = try makeTempDirectory(name: "full-batches")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = RepositoryStore()
+        store.projects = try (0..<10).map { i in
+            let dir = root.appendingPathComponent("project-\(i)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: false)
+            return makeProject(path: dir.path)
+        }
+        await store.refreshDoctorForFocused(force: false)
+        XCTAssertEqual(store.doctorReports.count, 8)
+        await store.refreshDoctorForFocused(force: false)
+        XCTAssertEqual(store.doctorReports.count, 8, "Reopening the page within five minutes must remain cheap")
+        await store.refreshDoctorForFocused(force: true)
+        XCTAssertEqual(Set(store.doctorReports.keys), Set(store.projects.map(\.path)))
     }
 
     func testAttentionQueueSurfacesFocusedDoctorCriticalIssuesOnly() {

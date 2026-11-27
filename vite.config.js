@@ -9,6 +9,7 @@ export default defineConfig({
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
   build: {
     outDir: 'public',
+    manifest: true,
     emptyOutDir: true,
     chunkSizeWarningLimit: 1200,
     rollupOptions: {

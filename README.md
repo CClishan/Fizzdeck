@@ -6,11 +6,15 @@ When AI writes your projects, three things get lost: where you left off, how to 
 
 Live site: [koroo.top/fizzdeck](https://koroo.top/fizzdeck)
 
-Download: [FizzDeck 0.7.4 for macOS](https://github.com/CClishan/Fizzdeck/releases/download/v0.7.4/FizzDeck-0.7.4-arm64.dmg) — Apple Silicon, macOS 26+.
+Download: [Latest public release](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+.
 
 No account, no telemetry, and no FizzDeck-hosted backend. Project metadata, session indexes, and settings stay on your Mac.
 
 [中文说明](README.zh-CN.md)
+
+**v0.8.0 (Build 16).** Doctor rechecks a focused project when its dependency or environment files change. See which process owns a development port, run a build or test on demand, and review 14 or 30 days of estimated AI costs and commits.
+
+The download link points to the latest public DMG. System Shortcuts require a build signed with an Apple Team ID; the default ad-hoc DMG has none. Project opening, handoff cards and health checks can also be used in the app. See [verification details](docs/SYSTEM_INTEGRATION.md).
 
 ## Three problems, solved first
 
@@ -58,15 +62,9 @@ No account, no telemetry, and no FizzDeck-hosted backend. Project metadata, sess
 
 The repository’s default package is ad-hoc signed and not Apple-notarized. On first launch:
 
-1. Open `FizzDeck-0.7.4-arm64.dmg` and drag FizzDeck into Applications.
-2. In Applications, Control-click FizzDeck, choose **Open**, then confirm.
-3. If macOS still blocks it, remove the quarantine flag after verifying the download source:
-
-```sh
-xattr -dr com.apple.quarantine /Applications/FizzDeck.app
-```
-
-This affects only the installed app. The default ad-hoc packaging path remains valid and does not stop with an error.
+1. Download the DMG and its `.sha256` file from the same GitHub release. In the download directory, run `shasum -a 256 -c FizzDeck-0.8.0-arm64.dmg.sha256` and check for `OK`.
+2. Open the DMG, drag FizzDeck to Applications, then try opening the app.
+3. If macOS blocks it and you trust the download, open **System Settings → Privacy & Security** and choose **Open Anyway** for FizzDeck.
 
 ### Build a Developer ID + notarized package
 
@@ -104,10 +102,10 @@ Build, launch, and verify the process:
 ./macos/script/build_and_run.sh --verify
 ```
 
-The default version is `0.7.4`, Build `12`. Override it when needed:
+The default version is `0.8.0`, Build `16`. Override it when needed:
 
 ```sh
-VERSION=0.7.4 BUILD_NUM=12 ./macos/script/build_and_run.sh --sign-local
+VERSION=0.8.0 BUILD_NUM=16 ./macos/script/build_and_run.sh --sign-local
 ```
 
 The app bundle is written to `macos/dist/FizzDeck.app`. To work in Xcode, open `macos/Package.swift`.
@@ -124,7 +122,7 @@ swift test --package-path macos
 ./macos/script/package_dmg.sh
 ```
 
-The default output is `macos/dist/FizzDeck-0.7.4-arm64.dmg`, plus a matching `FizzDeck-0.7.4-arm64.dmg.sha256`. The checksum is standard `shasum -a 256` output for in-app updates and GitHub Releases.
+The default output is `macos/dist/FizzDeck-0.8.0-arm64.dmg`, plus a matching `FizzDeck-0.8.0-arm64.dmg.sha256`. The checksum is standard `shasum -a 256` output for in-app updates and GitHub Releases.
 
 ### Local web UI
 
@@ -152,6 +150,8 @@ Stop the server:
 FizzDeck does not upload project data or call a FizzDeck-hosted service. Development commands it starts may make their own network requests.
 
 Shared state remains in `~/.repodeck` for compatibility:
+
+Development builds check a focused project’s configured upstream at most once per 24 hours. This contacts its Git host without pushing or changing the working tree. Project scripts still run only on request.
 
 ```text
 ~/.repodeck/
@@ -188,4 +188,6 @@ stop.sh                 Web UI stopper
 
 ## Status
 
-FizzDeck is a source-first personal tool. The current source version is `0.7.4` (Build `12`). The native app is the primary client; the web UI and bilingual landing page remain supporting surfaces.
+FizzDeck is a source-first personal tool. The current source version is `0.8.0` (Build `16`). The native app is the primary client; the web UI and bilingual landing page remain supporting surfaces.
+
+License: see [LICENSE](LICENSE). Local use and builds are free; third-party assets keep their own terms.

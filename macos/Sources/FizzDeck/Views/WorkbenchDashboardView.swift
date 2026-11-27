@@ -61,6 +61,10 @@ struct WorkbenchDashboardView: View {
         DashboardMetrics.healthAlerts(projects: store.projects, freeDiskBytes: freeDiskBytes)
     }
 
+    private var cloudProjects: [RepoProject] {
+        focusPartition.focused.map(\.project).filter { $0.behind > 0 && !store.isAttentionSuppressed(for: $0, kind: .behind) }
+    }
+
     private var timelineColumns: [TimelineDayColumn] {
         DashboardMetrics.weeklyTimeline(
             projects: store.projects,
@@ -301,6 +305,7 @@ struct WorkbenchDashboardView: View {
             if copyMode == .plain {
                 WorkbenchStatusCard(
                     runningProjects: runningProjects,
+                    cloudProjects: cloudProjects,
                     healthAlerts: healthAlerts
                 )
 
@@ -330,6 +335,7 @@ struct WorkbenchDashboardView: View {
 
                 WorkbenchStatusCard(
                     runningProjects: runningProjects,
+                    cloudProjects: cloudProjects,
                     healthAlerts: healthAlerts
                 )
             }

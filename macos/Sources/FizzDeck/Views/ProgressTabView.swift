@@ -149,6 +149,8 @@ struct ProgressTabView: View {
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: FizzSpacing.section) {
                     whereWeLeftOffCard
+                    ProjectActivityPanel(project: project)
+                        .id(project.path)
                     timelineSection
                 }
                 .padding(FizzSpacing.page)
@@ -340,6 +342,9 @@ struct ProgressTabView: View {
 
     @ViewBuilder
     private var timelineSection: some View {
+        ForEach(store.marks(for: project.path).filter(\.isProtectionBaseline)) { mark in
+            markNodeRow(mark)
+        }
         if !dayGroups.isEmpty {
             let marksBySession = associatedMarksBySession()
             VStack(alignment: .leading, spacing: 14) {
@@ -370,8 +375,17 @@ struct ProgressTabView: View {
     private func markNodeRow(_ mark: SessionMark) -> some View {
         let isSnapshot = mark.kind == .gitSnapshot
         let available = isSnapshot && (markAvailability[mark.id] ?? true)
+        let expiry = SessionMarkExpiryPolicy.state(
+            for: mark,
+            available: available
+        )
+        let expiringDays: Int? = if case .expiring(let days) = expiry {
+            days
+        } else {
+            nil
+        }
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
+        formatter.dateFormat = mark.isProtectionBaseline ? "M 月 d 日 HH:mm" : "HH:mm"
         let timeText = formatter.string(from: mark.createdAt)
 
         return HStack(spacing: 8) {
@@ -396,15 +410,34 @@ struct ProgressTabView: View {
                     .help("超过 14 天，已被 Git 清理")
             }
 
+            if let expiringDays {
+                TagChip(
+                    text: "约 \(expiringDays) 天后过期",
+                    tint: .orange,
+                    compact: true
+                )
+                .accessibilityLabel("这个对话标记约 \(expiringDays) 天后过期")
+            }
+
             Spacer(minLength: 8)
 
             if available {
                 Button {
                     Task {
-                        _ = await store.togglePin(mark: mark)
+                        let success = await store.togglePin(mark: mark)
+                        if !success {
+                            ToastCenter.shared.show(
+                                "暂时没能更新保留状态",
+                                symbol: "exclamationmark.triangle.fill",
+                                tint: .orange
+                            )
+                        }
                     }
                 } label: {
-                    Label(mark.pinned ? "已保留" : "保留", systemImage: mark.pinned ? "star.fill" : "star")
+                    Label(
+                        mark.pinned ? "已保留" : (expiringDays == nil ? "保留" : "固定保留"),
+                        systemImage: mark.pinned ? "star.fill" : "star"
+                    )
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(mark.pinned ? Color.orange : .secondary)
                 }
@@ -497,27 +530,30 @@ struct ProgressTabView: View {
             if !session.touchedFiles.isEmpty {
                 FlowLayout(spacing: 5) {
                     ForEach(visibleFiles, id: \.self) { file in
-                        if isMarkAvailable, let associatedMark {
-                            Button {
-                                diffTarget = MarkDiffSheetTarget(mark: associatedMark, initialFile: file)
-                            } label: {
+                        HStack(spacing: 2) {
+                            if isMarkAvailable, let associatedMark {
+                                Button {
+                                    diffTarget = MarkDiffSheetTarget(mark: associatedMark, initialFile: file)
+                                } label: {
+                                    Text(URL(fileURLWithPath: file).lastPathComponent)
+                                        .font(.system(size: 10.5, design: .monospaced))
+                                        .foregroundStyle(FizzTheme.accent)
+                                        .padding(.horizontal, 7)
+                                        .padding(.vertical, 3)
+                                        .background(FizzTheme.accent.opacity(0.08), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .help("点击对比「\(URL(fileURLWithPath: file).lastPathComponent)」的改动")
+                            } else {
                                 Text(URL(fileURLWithPath: file).lastPathComponent)
                                     .font(.system(size: 10.5, design: .monospaced))
-                                    .foregroundStyle(FizzTheme.accent)
+                                    .foregroundStyle(.secondary)
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 3)
-                                    .background(FizzTheme.accent.opacity(0.08), in: Capsule())
+                                    .background(FizzTheme.recessedFill, in: Capsule())
+                                    .help(file)
                             }
-                            .buttonStyle(.plain)
-                            .help("点击对比「\(URL(fileURLWithPath: file).lastPathComponent)」的改动")
-                        } else {
-                            Text(URL(fileURLWithPath: file).lastPathComponent)
-                                .font(.system(size: 10.5, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(FizzTheme.recessedFill, in: Capsule())
-                                .help(file)
+                            RelatedSessionsButton(project: project, file: file, compact: true)
                         }
                     }
                     if !expanded && overflowCount > 0 {
@@ -695,7 +731,7 @@ struct ProgressTabView: View {
         for session in conversations where result[session.stableID] == nil {
             let anchor = session.startedAt ?? session.modified
             if let candidate = projectMarks.first(where: { mark in
-                guard !usedMarkIDs.contains(mark.id) else { return false }
+                guard !mark.isProtectionBaseline, !usedMarkIDs.contains(mark.id) else { return false }
                 let delta = anchor.timeIntervalSince(mark.createdAt)
                 return delta >= -120 && delta <= 900
             }) {

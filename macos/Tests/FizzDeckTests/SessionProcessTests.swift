@@ -1,3 +1,4 @@
+import Darwin
 import XCTest
 @testable import FizzDeck
 
@@ -127,15 +128,22 @@ final class SessionProcessTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
+        let session = SessionRecord(tool: "codex", id: UUID().uuidString, cwd: directory.path,
+                                    startedAt: nil, modified: Date(), lastUser: nil)
         let executable = directory.appendingPathComponent("codex")
-        try FileManager.default.createSymbolicLink(
-            at: executable,
-            withDestinationURL: URL(fileURLWithPath: "/usr/bin/yes")
-        )
+        // cat blocks opening the FIFO named "resume", preserving argv until SIGTERM.
+        // Some versions of yes overwrite the argument buffer that ps reads.
+        guard mkfifo(directory.appendingPathComponent("resume").path, 0o600) == 0 else {
+            return XCTFail("Could not create fixture FIFO: \(String(cString: strerror(errno)))")
+        }
+        try Data(contentsOf: URL(fileURLWithPath: "/bin/cat")).write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
 
         let process = Process()
         process.executableURL = executable
-        process.arguments = ["resume", codex.id]
+        process.arguments = ["resume", session.id]
+        process.currentDirectoryURL = directory
+        process.environment = [:]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()
@@ -145,7 +153,16 @@ final class SessionProcessTests: XCTestCase {
             }
         }
 
-        let result = await SessionProcessService.end(codex)
+        let deadline = ContinuousClock.now + .seconds(3)
+        var matches = await SessionProcessService.liveProcesses(for: [session])[session.stableID] ?? []
+        while matches.isEmpty && process.isRunning && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(80))
+            matches = await SessionProcessService.liveProcesses(for: [session])[session.stableID] ?? []
+        }
+        guard matches == [process.processIdentifier] else {
+            return XCTFail("Expected only PID \(process.processIdentifier); found \(matches), running: \(process.isRunning)")
+        }
+        let result = await SessionProcessService.end(session)
 
         XCTAssertTrue(result.success, result.message)
         XCTAssertFalse(process.isRunning)

@@ -1,9 +1,14 @@
+import OSLog
 import SwiftUI
 
 struct ContentView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(SidebarLayout.collapsedKey) private var sidebarCollapsed = false
+
+    @State private var pendingRoute: AppRouting.ProjectRequest?
+    @State private var handoff: RepoProject?
+    private static let routeLog = Logger(subsystem: "com.a003.fizzdeck", category: "routing")
 
     var body: some View {
         Group {
@@ -137,12 +142,22 @@ struct ContentView: View {
                     .zIndex(20)
             }
         }
+        .onOpenURL { url in
+            // SwiftUI has already activated/reused the destination window.
+            let roots = store.phase == .idle ? RootStore.load() : store.roots
+            if let request = AppRouting.projectRequest(from: url, managedRoots: roots) {
+                pendingRoute = request
+                applyProjectRequest()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppRouting.openProjectNotification)) { _ in
-            openPendingProject()
+            receiveProjectRequest()
         }
         .onAppear {
-            openPendingProject()
+            receiveProjectRequest()
         }
+        .onChange(of: store.phase) { applyProjectRequest() }
+        .sheet(item: $handoff) { HandoffCardSheet(project: $0) }
         .animation(
             FizzMotion.resolved(reduceMotion, FizzMotion.panel),
             value: store.isCommandPalettePresented
@@ -212,11 +227,23 @@ struct ContentView: View {
         )
     }
 
-    private func openPendingProject() {
-        guard let request = AppRouting.consumePendingProject() else { return }
+    private func receiveProjectRequest() {
+        if let request = AppRouting.consumePendingProject() { pendingRoute = request }
+        applyProjectRequest()
+    }
+
+    private func applyProjectRequest() {
+        guard let request = pendingRoute else { return }
+        guard let project = store.projects.first(where: { $0.path == request.path }) else {
+            if store.phase == .ready { pendingRoute = nil }
+            return
+        }
+        pendingRoute = nil
+        if request.showHandoff { handoff = project }
         store.selectedPath = request.path
         store.requestedTab = request.tab
         store.isCommandPalettePresented = false
+        Self.routeLog.info("Applied project route: handoff=\(request.showHandoff, privacy: .public), tab=\(request.tab?.rawValue ?? "default", privacy: .public)")
     }
 }
 

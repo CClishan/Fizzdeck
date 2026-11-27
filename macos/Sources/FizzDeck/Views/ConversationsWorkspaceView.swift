@@ -39,6 +39,7 @@ struct ConversationsWorkspaceView: View {
     @State private var isSearching = false
     @State private var scrolledPastTop = false
     @State private var resumingID: String?
+    @State private var isWeeklyRecapPresented = false
 
     private var trimmedSearchQuery: String {
         searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -163,6 +164,9 @@ struct ConversationsWorkspaceView: View {
         .task(id: "\(searchQuery)|\(statusFilter.rawValue)|\(toolFilter)|\(store.projects.count)|\(store.hasIndexedSessionSearch)") {
             await runSearch()
         }
+        .sheet(isPresented: $isWeeklyRecapPresented) {
+            WeeklyRecapSheet(projects: store.projects)
+        }
     }
 
     private var header: some View {
@@ -177,6 +181,14 @@ struct ConversationsWorkspaceView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 12)
+                Button {
+                    isWeeklyRecapPresented = true
+                } label: {
+                    Label("本周回顾", systemImage: "calendar.badge.clock")
+                }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .accessibilityLabel("打开本周回顾")
                 Text(isSearchActive ? "命中 \(searchResults.count) 条" : "共 \(filteredEntries.count) 条")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.secondary)

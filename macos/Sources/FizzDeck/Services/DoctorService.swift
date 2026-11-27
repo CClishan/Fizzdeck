@@ -29,7 +29,28 @@ enum DoctorIssueKind: String, Codable, Sendable, Hashable {
     case unignoredEnvFile
     case trackedSecrets
     case portConflict
+    case runtimeVersionMismatch
     case notAGitRepo
+    case cloudBehind
+
+    // An old, edited, or future state.json must never hide a critical finding.
+    var canExempt: Bool {
+        switch self {
+        case .staleDependencies, .missingEnvFile, .runtimeVersionMismatch, .notAGitRepo, .cloudBehind: true
+        case .missingDependencies, .unignoredEnvFile, .trackedSecrets, .portConflict: false
+        }
+    }
+
+    var exemptionTitle: String {
+        switch self {
+        case .staleDependencies: "依赖过期"
+        case .missingEnvFile: "缺少环境配置"
+        case .runtimeVersionMismatch: "运行时版本不匹配"
+        case .notAGitRepo: "未开启版本保护"
+        case .cloudBehind: "云端领先"
+        default: rawValue
+        }
+    }
 }
 
 enum DoctorFixAction: Equatable, Sendable {
@@ -39,6 +60,7 @@ enum DoctorFixAction: Equatable, Sendable {
     case resolvePortConflict(PortConflict)
     case initGitRepository
     case inspectTrackedSecrets(files: [String])
+    case copyShellCommand(command: String)
 }
 
 struct DoctorIssue: Identifiable, Equatable, Sendable {
@@ -56,9 +78,15 @@ struct DoctorIssue: Identifiable, Equatable, Sendable {
         severity: DoctorSeverity,
         title: String,
         detail: String,
-        fixAction: DoctorFixAction?
+        fixAction: DoctorFixAction?,
+        identity: String? = nil
     ) {
-        self.id = "\(projectPath)::\(kind.rawValue)"
+        let baseID = "\(projectPath)::\(kind.rawValue)"
+        if let identity, !identity.isEmpty {
+            self.id = "\(baseID)::\(identity)"
+        } else {
+            self.id = baseID
+        }
         self.projectPath = projectPath
         self.kind = kind
         self.severity = severity
@@ -93,6 +121,12 @@ struct DoctorProjectReport: Identifiable, Equatable, Sendable {
     var actionableCount: Int {
         issues.filter { $0.severity != .healthy }.count
     }
+
+    func applying(_ exemptions: Set<DoctorIssueKind>) -> Self {
+        Self(projectPath: projectPath, checkedAt: checkedAt, issues: issues.filter {
+            $0.severity == .critical || !$0.kind.canExempt || !exemptions.contains($0.kind)
+        })
+    }
 }
 
 struct MachineToolStatus: Identifiable, Equatable, Sendable {
@@ -113,12 +147,14 @@ struct MachineEnvironmentReport: Equatable, Sendable {
     let gitUserName: String?
     let gitUserEmail: String?
     let nodeVersion: String?
+    let pythonVersion: String?
     let cliTools: [MachineToolStatus]
     let disk: MachineDiskStatus?
 
     var needsGitIdentity: Bool {
         gitInstalled && ((gitUserName ?? "").isEmpty || (gitUserEmail ?? "").isEmpty)
     }
+
 }
 
 enum DoctorService {
@@ -139,19 +175,26 @@ enum DoctorService {
         return "npm install"
     }
 
-    static func inspectProject(
-        _ project: RepoProject,
-        scope: DoctorCheckScope,
-        copyMode: CopyMode = .plain
+    static let l0Kinds: Set<DoctorIssueKind> = [
+        .missingDependencies, .staleDependencies, .unignoredEnvFile, .missingEnvFile, .notAGitRepo,
+    ]
+
+    static func cloudIssue(for project: RepoProject) -> DoctorIssue? {
+        guard project.behind > 0 else { return nil }
+        return DoctorIssue(projectPath: project.path, kind: .cloudBehind, severity: .warning,
+                           title: "云端领先 \(project.behind) 个提交", detail: "可在版本页查看并决定是否拉取", fixAction: nil)
+    }
+
+    static func inspectL0(
+        _ project: RepoProject, copyMode: CopyMode = .plain, exemptions: Set<DoctorIssueKind> = []
     ) async -> DoctorProjectReport {
         let directory = URL(fileURLWithPath: project.path)
         var issues: [DoctorIssue] = []
 
-        let l0Issues = await LightweightProjectCheckService.check(directory: directory, copyMode: copyMode)
+        let l0Issues = LightweightProjectCheckService.staticIssues(in: directory, copyMode: copyMode)
         for item in l0Issues {
             switch item.kind {
             case .missingDependencies:
-                guard scope == .focused else { continue }
                 issues.append(DoctorIssue(
                     projectPath: project.path,
                     kind: .missingDependencies,
@@ -161,7 +204,6 @@ enum DoctorService {
                     fixAction: .installDependencies(command: detectInstallCommand(in: directory))
                 ))
             case .staleDependencies:
-                guard scope == .focused else { continue }
                 issues.append(DoctorIssue(
                     projectPath: project.path,
                     kind: .staleDependencies,
@@ -182,32 +224,59 @@ enum DoctorService {
             }
         }
 
-        if scope == .focused {
-            let hasExample = FileTools.exists(directory.appendingPathComponent(".env.example"))
-            let hasEnv = FileTools.exists(directory.appendingPathComponent(".env"))
-                || FileTools.exists(directory.appendingPathComponent(".env.local"))
-            if hasExample && !hasEnv {
-                issues.append(DoctorIssue(
-                    projectPath: project.path,
-                    kind: .missingEnvFile,
-                    severity: .warning,
-                    title: copyMode == .plain ? "缺少项目配置文件 .env（已有模板）" : "缺少环境变量文件 .env",
-                    detail: "根目录已有 .env.example 模板，可复制成 .env 后填入所需配置",
-                    fixAction: .createEnvFromExample
-                ))
-            }
+        let hasExample = FileTools.exists(directory.appendingPathComponent(".env.example"))
+        let hasEnv = FileTools.exists(directory.appendingPathComponent(".env"))
+            || FileTools.exists(directory.appendingPathComponent(".env.local"))
+        if hasExample && !hasEnv {
+            issues.append(DoctorIssue(
+                projectPath: project.path,
+                kind: .missingEnvFile,
+                severity: .warning,
+                title: copyMode == .plain ? "缺少项目配置文件 .env（已有模板）" : "缺少环境变量文件 .env",
+                detail: "根目录已有 .env.example 模板，可复制成 .env 后填入所需配置",
+                fixAction: .createEnvFromExample
+            ))
         }
 
         if !GitService.hasGit(directory) {
             issues.append(DoctorIssue(
-                projectPath: project.path,
-                kind: .notAGitRepo,
-                severity: .warning,
+                projectPath: project.path, kind: .notAGitRepo, severity: .warning,
                 title: copyMode == .plain ? "还没有开启版本保护" : "未初始化 Git 仓库",
-                detail: "开启后，每次 AI 对话前都能自动记下状态，随时可还原",
-                fixAction: .initGitRepository
+                detail: "开启后，每次 AI 对话前都能自动记下状态，随时可还原", fixAction: .initGitRepository
             ))
-        } else {
+        }
+        return report(for: project.path, issues: issues).applying(exemptions)
+    }
+
+    static func inspectProject(
+        _ project: RepoProject,
+        scope: DoctorCheckScope,
+        copyMode: CopyMode = .plain,
+        runtimeEnvironment: RuntimeVersionEnvironment? = nil,
+        exemptions: Set<DoctorIssueKind> = []
+    ) async -> DoctorProjectReport {
+        let directory = URL(fileURLWithPath: project.path)
+        let l0 = await inspectL0(project, copyMode: copyMode, exemptions: exemptions)
+        var issues = l0.issues.filter { scope == .focused || [.unignoredEnvFile, .notAGitRepo].contains($0.kind) }
+        if scope == .focused && !exemptions.contains(.runtimeVersionMismatch) {
+            let runtimeMismatches = await RuntimeVersionChecker.inspectProject(
+                in: directory,
+                environment: runtimeEnvironment
+            )
+            for mismatch in runtimeMismatches {
+                issues.append(DoctorIssue(
+                    projectPath: project.path,
+                    kind: .runtimeVersionMismatch,
+                    severity: .warning,
+                    title: mismatch.title,
+                    detail: mismatch.detail,
+                    fixAction: .copyShellCommand(command: mismatch.fixCommand),
+                    identity: mismatch.id
+                ))
+            }
+        }
+
+        if GitService.hasGit(directory) {
             let secretFiles = await findTrackedSecretFiles(in: directory)
             if !secretFiles.isEmpty {
                 let sample = secretFiles.prefix(3).joined(separator: "、")
@@ -237,17 +306,24 @@ enum DoctorService {
             ))
         }
 
-        issues.sort {
+        return report(for: project.path, issues: issues).applying(exemptions)
+    }
+
+    static func report(for path: String, issues: [DoctorIssue]) -> DoctorProjectReport {
+        let sorted = issues.sorted {
             if $0.severity != $1.severity {
                 return $0.severity < $1.severity
             }
-            return $0.kind.rawValue < $1.kind.rawValue
+            if $0.kind != $1.kind {
+                return $0.kind.rawValue < $1.kind.rawValue
+            }
+            return $0.id < $1.id
         }
 
         return DoctorProjectReport(
-            projectPath: project.path,
+            projectPath: path,
             checkedAt: Date(),
-            issues: issues
+            issues: sorted
         )
     }
 
@@ -255,16 +331,16 @@ enum DoctorService {
         async let gitVersionTask = Shell.output("git", ["--version"], timeout: 3)
         async let gitNameTask = Shell.output("git", ["config", "--global", "user.name"], timeout: 3)
         async let gitEmailTask = Shell.output("git", ["config", "--global", "user.email"], timeout: 3)
-        async let nodeTask = Shell.output("node", ["-v"], timeout: 3)
+        async let runtimeTask = RuntimeVersionChecker.detectEnvironment(for: [.node, .python])
         async let claudePathTask = AgentCLISummaryProvider.defaultLocateExecutable("claude")
         async let codexPathTask = AgentCLISummaryProvider.defaultLocateExecutable("codex")
         async let geminiPathTask = AgentCLISummaryProvider.defaultLocateExecutable("gemini")
 
-        let (gitVer, gitName, gitEmail, nodeVer, claudePath, codexPath, geminiPath) = await (
+        let (gitVer, gitName, gitEmail, runtimes, claudePath, codexPath, geminiPath) = await (
             gitVersionTask,
             gitNameTask,
             gitEmailTask,
-            nodeTask,
+            runtimeTask,
             claudePathTask,
             codexPathTask,
             geminiPathTask
@@ -272,7 +348,8 @@ enum DoctorService {
 
         let cleanName = gitName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanEmail = gitEmail?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanNode = nodeVer?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanNode = runtimes.node
+        let cleanPython = runtimes.python
 
         let cliTools = [
             MachineToolStatus(
@@ -301,6 +378,9 @@ enum DoctorService {
             gitUserName: (cleanName?.isEmpty ?? true) ? nil : cleanName,
             gitUserEmail: (cleanEmail?.isEmpty ?? true) ? nil : cleanEmail,
             nodeVersion: (cleanNode?.isEmpty ?? true) ? nil : cleanNode,
+            pythonVersion: (cleanPython?.isEmpty ?? true)
+                ? nil
+                : RuntimeVersionChecker.installedVersion(from: cleanPython ?? ""),
             cliTools: cliTools,
             disk: probeDisk()
         )
@@ -320,19 +400,14 @@ enum DoctorService {
     }
 
     static func findTrackedSecretFiles(in directory: URL) async -> [String] {
-        guard let result = await Shell.run(
-            "git",
-            ["grep", "-l", "-I", "-E", secretPattern],
-            cwd: directory,
-            timeout: 6
-        ), result.succeeded else {
-            return []
-        }
-
-        return result.text
-            .split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        guard let git = DoctorCommand.git else { return [] }
+        let args = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "submodule.recurse=false"]
+        // Keep checking tracked working files before a save; an ignored but already tracked .env is still a risk.
+        let matches = await DoctorCommand.run(git, args + ["grep", "--no-textconv", "--threads=1", "-z", "-l", "-I", "-E", "-e", secretPattern, "--", "."],
+                                              cwd: directory, timeout: 3, outputLimit: 128 * 1024, acceptedStatuses: [0, 1])
+        let tracked = await DoctorCommand.run(git, args + ["ls-files", "--cached", "-z", "--", ".env", ":(top,glob).env.*"], cwd: directory)
+        let env = (tracked ?? "").split(separator: "\0").map(String.init).filter(DoctorInputs.isPrivateEnv)
+        return Set((matches ?? "").split(separator: "\0").map(String.init)).union(env).sorted()
     }
 
     static func createEnvFromExample(in directory: URL) -> URL? {
@@ -349,35 +424,8 @@ enum DoctorService {
         }
     }
 
-    static func initGitRepository(in directory: URL) async -> (succeeded: Bool, message: String) {
-        guard let result = await Shell.run(
-            "git",
-            ["init"],
-            cwd: directory,
-            timeout: 10
-        ), result.succeeded else {
-            return (false, "初始化版本保护失败，请确认本机已安装 Git")
-        }
-
-        let gitignore = directory.appendingPathComponent(".gitignore")
-        let existing = FileTools.readFileIfExists(gitignore, maxBytes: 256 * 1024)
-        let lines = Set(
-            existing
-                .split(whereSeparator: \.isNewline)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        )
-        let defaults = [".env", ".env.local", ".DS_Store", "node_modules/"]
-        let missing = defaults.filter { !lines.contains($0) }
-        if !missing.isEmpty {
-            var next = existing
-            if !next.isEmpty && !next.hasSuffix("\n") {
-                next += "\n"
-            }
-            next += missing.joined(separator: "\n") + "\n"
-            try? next.write(to: gitignore, atomically: true, encoding: .utf8)
-        }
-
-        return (true, "已开启版本保护并自动生成默认忽略规则")
+    static func initGitRepository(in directory: URL, marksFile: URL = AppPaths.marksFile, tmpDir: URL = AppPaths.tmpDir) async -> (succeeded: Bool, message: String) {
+        await VersionProtectionService.enable(in: directory, marksFile: marksFile, tmpDir: tmpDir)
     }
 
     static func configureGitIdentity(name: String, email: String) async -> (succeeded: Bool, message: String) {

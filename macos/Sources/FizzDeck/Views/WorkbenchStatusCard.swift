@@ -6,6 +6,7 @@ struct WorkbenchStatusCard: View {
     @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
 
     let runningProjects: [RepoProject]
+    let cloudProjects: [RepoProject]
     let healthAlerts: [HealthAlert]
 
     private var activeAIProjects: [RepoProject] {
@@ -15,7 +16,7 @@ struct WorkbenchStatusCard: View {
     }
 
     private var hasContent: Bool {
-        !runningProjects.isEmpty || !activeAIProjects.isEmpty || !healthAlerts.isEmpty
+        !runningProjects.isEmpty || !activeAIProjects.isEmpty || !healthAlerts.isEmpty || !cloudProjects.isEmpty
     }
 
     var body: some View {
@@ -32,6 +33,19 @@ struct WorkbenchStatusCard: View {
 
                 if !healthAlerts.isEmpty {
                     healthSection
+                }
+                ForEach(cloudProjects) { project in
+                    Button { store.openProject(project, tab: .version) } label: {
+                        HStack(spacing: 8) {
+                            FizzIcon(symbol: "arrow.down.circle", size: 13)
+                            Text(project.displayName).lineLimit(1)
+                            Spacer(minLength: 4)
+                            Text("云端领先 \(project.behind) 个提交").foregroundStyle(.secondary)
+                        }
+                        .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .help("查看版本")
                 }
             }
             .padding(16)
@@ -88,7 +102,7 @@ struct WorkbenchStatusCard: View {
                         .controlSize(.mini)
                     }
 
-                    Button("停止") {
+                    Button("停止…") {
                         Task { await actions.stop(project, store: store) }
                     }
                     .buttonStyle(.glass)

@@ -5,14 +5,14 @@ struct ServicesPanel: View {
     @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let project: RepoProject
+    var hasTrialPanel = false
     @State private var scripts: [ProjectScript] = []
+    @State private var checkIsTypecheck = false
     @State private var pinnedIDs: [String] = []
     @State private var selectedScriptID: String?
     @State private var pendingConflict: PortConflict?
 
-    private var devRunning: Bool {
-        project.port == .running
-    }
+    @State private var devRunning = false
 
     private var testRun: TestRunState? {
         actions.testRun(for: project.path)
@@ -47,6 +47,21 @@ struct ServicesPanel: View {
     }
 
     var body: some View {
+        Group {
+            if project.run != nil || showTestCard || !scripts.isEmpty {
+                services
+            }
+        }
+        .task(id: project.path) { await loadScripts() }
+    }
+
+    private var showTestCard: Bool {
+        guard let test = project.test else { return false }
+        // On the Run tab the shared trial panel owns these controls. Keep an existing legacy run stoppable.
+        return !hasTrialPanel || testRunning || test.label == "lint" || (test.label == "check" && !checkIsTypecheck)
+    }
+
+    private var services: some View {
         Panel(title: "服务", symbol: "bolt.horizontal") {
             VStack(alignment: .leading, spacing: 8) {
                 LazyVGrid(
@@ -56,7 +71,7 @@ struct ServicesPanel: View {
                     if let run = project.run {
                         devCard(run)
                     }
-                    if let test = project.test {
+                    if showTestCard, let test = project.test {
                         testCard(test)
                     }
                 }
@@ -86,21 +101,18 @@ struct ServicesPanel: View {
                 }
             }
         }
-        .task(id: project.path) {
-            await loadScripts()
-        }
         .alert(item: $pendingConflict) { conflict in
             Alert(
                 title: Text("结束占用 :\(conflict.port) 的进程？"),
                 message: Text(
-                    "\(conflict.occupantSummary)\n只会向确认后的目标 PID 发送 SIGTERM，不自动强杀。"
+                    "\(conflict.details)\n只向以上进程发送 SIGTERM。"
                 ),
                 primaryButton: .cancel(Text("取消")),
                 secondaryButton: .destructive(Text("结束并启动")) {
                     Task {
                         await actions.resolvePortConflictAndLaunch(
                             project,
-                            conflict: conflict,
+                            conflict: conflict.confirmedByUser(),
                             store: store
                         )
                     }
@@ -134,26 +146,11 @@ struct ServicesPanel: View {
                 .truncationMode(.middle)
                 .help(run.command)
 
-            HStack(spacing: 6) {
-                Spacer(minLength: 0)
-
-                if devRunning {
-                    if run.port > 0 {
-                        serviceButton("预览", help: "在浏览器打开 localhost:\(run.port)") {
-                            SystemActions.openURL("http://127.0.0.1:\(run.port)")
-                        }
-                    }
-
-                    serviceButton("停止", help: "停止开发服务") {
-                        Task { await actions.stop(project, store: store) }
-                    }
-                    .disabled(busy)
-                } else {
-                    serviceButton("启动", help: "启动开发服务") {
-                        Task { await actions.launch(project, store: store) }
-                    }
-                    .disabled(busy)
-                }
+            if run.port > 0 {
+                DeveloperPortList(project: project) { devRunning = $0 }
+                    .id(project.path)
+            } else {
+                Text("未配置预览端口").font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(12)
@@ -194,7 +191,7 @@ struct ServicesPanel: View {
             serviceButton("结束占用进程并启动", help: "确认后向占用 PID 发送 SIGTERM 并启动服务") {
                 pendingConflict = conflict
             }
-            .disabled(busy || conflict.occupants.isEmpty)
+            .disabled(busy || !conflict.canStop)
         }
         .padding(10)
         .background(
@@ -344,6 +341,7 @@ struct ServicesPanel: View {
                         }
                         actions.runScript(script, project: project, store: store)
                     }
+                    .disabled(ProjectTrialService.shared.runs[project.path].map { $0.status == .running && $0.choice.command == script.command } == true)
                 }
             }
         }
@@ -461,10 +459,14 @@ struct ServicesPanel: View {
 
     private func loadScripts() async {
         let path = project.path
-        let found = await Task.detached(priority: .utility) {
-            RunDetector.scripts(URL(fileURLWithPath: path))
+        let hasCheck = hasTrialPanel && project.test?.label == "check"
+        let (found, checksTypes) = await Task.detached(priority: .utility) {
+            let dir = URL(fileURLWithPath: path)
+            let packageScripts = hasCheck ? FileTools.json(dir.appendingPathComponent("package.json"))?["scripts"] as? [String: String] : nil
+            return (RunDetector.scripts(dir), TrialCommand.checksTypes(packageScripts?["check"]))
         }.value
         guard !Task.isCancelled else { return }
+        checkIsTypecheck = checksTypes
         scripts = found
         pinnedIDs = ProjectScriptPreferences.load().pinnedIDs(for: path)
         if let selectedScriptID, !scripts.contains(where: { $0.id == selectedScriptID }) {

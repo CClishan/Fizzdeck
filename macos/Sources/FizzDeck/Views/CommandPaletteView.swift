@@ -227,7 +227,7 @@ struct CommandPaletteView: View {
                 PaletteEntry(
                     id: "action.server.\(project.path)",
                     group: "快捷操作",
-                    title: isRunning ? "停止开发服务" : "启动开发服务",
+                    title: isRunning ? "停止开发服务…" : "启动开发服务",
                     subtitle: "\(project.displayName) · \(run.command)",
                     symbol: isRunning ? "stop.fill" : "play.fill",
                     tint: isRunning ? .red : .green,

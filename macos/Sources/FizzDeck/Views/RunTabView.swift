@@ -37,12 +37,12 @@ struct RunTabView: View {
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: FizzSpacing.section) {
-                if let report = store.doctorReports[project.path], !report.issues.isEmpty {
+                if let report = store.doctorReports[project.path], !report.issues.isEmpty || !store.doctorExemptions(for: project).isEmpty {
                     doctorIssuesPanel(report)
                 }
 
                 if project.run != nil || project.test != nil {
-                    ServicesPanel(project: project)
+                    ServicesPanel(project: project, hasTrialPanel: true)
                 } else {
                     Panel(title: "运行服务", symbol: "play.circle") {
                         VStack(alignment: .leading, spacing: 8) {
@@ -62,7 +62,7 @@ struct RunTabView: View {
                     }
                 }
 
-                testRunnerPanel
+                ProjectTrialPanel(project: project)
 
                 if logsVisible {
                     ProjectLogsPanel(
@@ -79,7 +79,7 @@ struct RunTabView: View {
             await refreshLogAvailability()
         }
         .task(id: project.path) {
-            await store.refreshDoctor(for: project, scope: .focused)
+            await store.refreshDoctor(for: project, scope: .focused, force: false)
         }
         .onChange(of: installScriptStatus) {
             if installScriptStatus == .succeeded || installScriptStatus == .failed || installScriptStatus == .stopped {
@@ -125,7 +125,7 @@ struct RunTabView: View {
                 guard let conflict = pendingPortConflict else { return }
                 pendingPortConflict = nil
                 Task {
-                    let result = await PortConflictService.terminateConfirmed(conflict)
+                    let result = await PortConflictService.terminateConfirmed(conflict.confirmedByUser())
                     ToastCenter.shared.show(
                         result.message,
                         symbol: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
@@ -136,7 +136,7 @@ struct RunTabView: View {
             }
         } message: {
             if let conflict = pendingPortConflict {
-                Text("将尝试结束占用端口 \(conflict.port) 的进程（\(conflict.occupantSummary)）。")
+                Text("端口 :\(conflict.port)\n\(conflict.details)\n只向以上进程发送 SIGTERM。")
             }
         }
     }
@@ -147,8 +147,8 @@ struct RunTabView: View {
         let installState = actions.installRun(for: project, command: installCmd)
 
         return Panel(
-            title: "开始之前有 \(report.issues.count) 个问题",
-            symbol: "exclamationmark.triangle.fill"
+            title: report.issues.isEmpty ? "已忽略的体检项" : "开始之前有 \(report.issues.count) 个问题",
+            symbol: report.issues.isEmpty ? "checkmark.circle" : "exclamationmark.triangle.fill"
         ) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(report.issues) { issue in
@@ -188,6 +188,8 @@ struct RunTabView: View {
                     }
                 }
             }
+        } accessory: {
+            DoctorExemptionMenu(project: project)
         }
     }
 
@@ -238,24 +240,16 @@ struct RunTabView: View {
             .controlSize(.small)
 
         case .resolvePortConflict(let conflict):
-            Button("关掉它") {
+            Button("核对占用进程…") {
                 pendingPortConflict = conflict
             }
+            .disabled(!conflict.canStop)
             .buttonStyle(.glassProminent)
             .tint(.orange)
             .controlSize(.small)
 
         case .initGitRepository:
-            Button("开启版本保护") {
-                Task {
-                    let res = await DoctorService.initGitRepository(in: dir)
-                    ToastCenter.shared.show(res.message, symbol: "checkmark.shield", tint: res.succeeded ? .green : .orange)
-                    await store.refreshGit(for: project.path)
-                    await store.refreshDoctor(for: project, scope: .focused)
-                }
-            }
-            .buttonStyle(.glass)
-            .controlSize(.small)
+            EnableVersionProtectionButton(project: project).buttonStyle(.glass)
 
         case .inspectTrackedSecrets(let files):
             Button("查看文件") {
@@ -266,91 +260,19 @@ struct RunTabView: View {
             .buttonStyle(.glass)
             .controlSize(.small)
 
+        case .copyShellCommand(let command):
+            Button("复制切换命令") {
+                SystemActions.copy(
+                    command,
+                    feedback: "运行版本切换命令已复制",
+                    microViz: .compact(state: .done)
+                )
+            }
+            .buttonStyle(.glass)
+            .controlSize(.small)
+
         case nil:
             EmptyView()
-        }
-    }
-
-    private var testRunnerPanel: some View {
-        Panel(title: "检查与测试", symbol: "checkmark.shield") {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(project.test?.command ?? "未识别测试命令")
-                            .font(.system(size: 12, design: .monospaced))
-                            .textSelection(.enabled)
-                        if let test = project.test {
-                            Text("来自 \(test.label)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Spacer(minLength: 12)
-
-                    if project.test != nil {
-                        let isRunning = testRun?.status == .running
-                        Button {
-                            if isRunning {
-                                actions.stopTests(project)
-                            } else {
-                                actions.runTests(project, store: store)
-                            }
-                        } label: {
-                            Label(
-                                isRunning ? "停止" : "运行检查",
-                                systemImage: isRunning ? "stop.fill" : "play.fill"
-                            )
-                        }
-                        .buttonStyle(.glass)
-                        .controlSize(.small)
-                    }
-                }
-
-                if let output = testRun?.output, !output.isEmpty {
-                    ScrollView {
-                        Text(output)
-                            .font(.system(size: 11, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                    }
-                    .frame(minHeight: 160, maxHeight: 340)
-                    .background(
-                        FizzTheme.recessedFill,
-                        in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                            .strokeBorder(FizzTheme.stroke, lineWidth: 1)
-                    }
-                }
-            }
-        } accessory: {
-            if let run = testRun {
-                Text(testStatusText(run))
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(testStatusColor(run.status))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(testStatusColor(run.status).opacity(0.12), in: Capsule())
-            }
-        }
-    }
-
-    private func testStatusText(_ run: TestRunState) -> String {
-        switch run.status {
-        case .running: "运行中"
-        case .passed: "通过 · \(String(format: "%.1f", run.duration ?? 0))s"
-        case .failed: "失败 · \(String(format: "%.1f", run.duration ?? 0))s"
-        }
-    }
-
-    private func testStatusColor(_ status: TestStatus) -> Color {
-        switch status {
-        case .running: .secondary
-        case .passed: .green
-        case .failed: .red
         }
     }
 
