@@ -50,7 +50,7 @@ FIZZDECK_DIST_DIR="$app_dir" VERSION=0.8.0 BUILD_NUM=16 ./macos/script/build_and
 
 PR 与分支 push 在 macOS 26 上构建、运行 Swift 测试、组装 App；Ubuntu 上执行 `npm ci`、Vite 构建和逐文件 `bash -n`。`vX.Y.Z` tag 必须与该提交的打包版本一致，先复用 CI，再构建 arm64 DMG，检验 SHA-256，并把 DMG 与 `.sha256` 上传至 GitHub **草稿** Release。此时不会改变 Latest。CI 跳过 Finder 图标排布；正式本地打包保留排布。
 
-两个 workflow 已在本地通过 actionlint。2026-11-27 查询原生仓库 Actions API：Actions 已启用，已登记 workflow 为 0。首次托管验收应从功能分支的 push / PR 进入，留存 `native`、`web-and-shell` 两项的 run 链接和结果。tag 检查只核对版本号；发布 Build 13 时必须使用独立冻结源码，不能给混合开发工作树打 `v0.7.5`。
+两个 workflow 已在本地通过 actionlint。[PR #3 的托管 CI](https://github.com/CClishan/Fizzdeck/actions/runs/46004663046) 与[同一提交的分支 CI](https://github.com/CClishan/Fizzdeck/actions/runs/46004657337) 均通过了 `native` 和 `web-and-shell`，随后合并到 `3b6a846`。`v0.8.0` 指向该合并提交。参见 [tag 打包记录](https://github.com/CClishan/Fizzdeck/actions/runs/46005894773) 和 [HANDOFF](../HANDOFF.md)。独立 Build 13 仍使用冻结源码。
 
 无签名 Secrets 时生成 ad-hoc 包。使用 Developer ID 时设置全套 GitHub Actions secrets：`DEVELOPER_ID_APP`、`CERTIFICATE_P12_BASE64`、`CERTIFICATE_PASSWORD`、`NOTARY_KEY_BASE64`、`NOTARY_KEY_ID`、`NOTARY_ISSUER_ID`。配置不完整会失败，不会静默降级。凭据只在 GitHub 托管 runner 中处理；签名钥匙串和临时文件在退出时清理。手动公证仍使用本机钥匙串的 `NOTARY_PROFILE`。
 
