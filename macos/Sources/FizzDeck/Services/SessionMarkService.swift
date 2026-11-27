@@ -18,6 +18,7 @@ struct SessionMark: Identifiable, Codable, Sendable, Hashable {
     let changedFilesAtMark: [String]
     var pinned: Bool = false
     var label: String? = nil
+    var isProtectionBaseline: Bool { label == SessionMarkService.baselineLabel && sessionID == nil }
 
     init(
         id: String = UUID().uuidString,
@@ -85,26 +86,28 @@ enum MarkStore {
     private static let maxUnpinnedPerProject = 60
 
     static func load(from file: URL = AppPaths.marksFile) -> [SessionMark] {
-        guard let data = try? Data(contentsOf: file) else { return [] }
+        (try? read(from: file)) ?? []
+    }
+
+    private static func read(from file: URL) throws -> [SessionMark] {
+        let data: Data
+        do { data = try Data(contentsOf: file) }
+        catch CocoaError.fileReadNoSuchFile { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([SessionMark].self, from: data)) ?? []
+        return try decoder.decode([SessionMark].self, from: data)
     }
 
     static func save(_ marks: [SessionMark], to file: URL = AppPaths.marksFile) {
-        do {
-            try FileTools.manager.createDirectory(
-                at: file.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(marks)
-            try data.write(to: file, options: .atomic)
-        } catch {
-            return
-        }
+        try? write(marks, to: file)
+    }
+
+    private static func write(_ marks: [SessionMark], to file: URL) throws {
+        try FileTools.manager.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(marks).write(to: file, options: .atomic)
     }
 
     static func marks(for projectPath: String, in marks: [SessionMark]) -> [SessionMark] {
@@ -116,14 +119,19 @@ enum MarkStore {
 
     @discardableResult
     static func upsert(_ mark: SessionMark, in file: URL = AppPaths.marksFile) -> [SessionMark] {
-        var all = load(from: file)
+        (try? upsertChecked(mark, in: file)) ?? load(from: file)
+    }
+
+    @discardableResult
+    static func upsertChecked(_ mark: SessionMark, in file: URL) throws -> [SessionMark] {
+        var all = try read(from: file)
         if let existing = all.firstIndex(where: { $0.id == mark.id }) {
             all[existing] = mark
         } else {
             all.append(mark)
         }
         let pruned = prune(all)
-        save(pruned, to: file)
+        try write(pruned, to: file)
         return pruned
     }
 
@@ -172,6 +180,7 @@ struct MarkRestoreResult: Sendable, Equatable {
 }
 
 enum SessionMarkService {
+    static let baselineLabel = "开启版本保护时的基线"
     static let maxFileBytes: Int64 = 5 * 1024 * 1024
     static let maxTrackedCount = 5_000
     private static let maxDirtyFilesStored = 50
@@ -190,6 +199,15 @@ enum SessionMarkService {
         ".cache",
         "DerivedData",
     ]
+
+    static func protectionBaseline(for directory: URL, stagedGit: URL, gitignore: Data, tmpDir: URL) async -> SessionMark? {
+        let id = UUID().uuidString
+        guard let sha = await buildInvisibleCommit(in: directory, headSHA: nil, message: "fizzdeck baseline \(id)",
+                                                  tmpDir: tmpDir, stagedGit: stagedGit, gitignore: gitignore) else { return nil }
+        let mark = SessionMark(id: id, projectPath: PathTools.normalize(directory.path), kind: .gitSnapshot,
+                               snapshotSHA: sha, pinned: true, label: baselineLabel)
+        return await setPinned(true, mark: mark, in: stagedGit.deletingLastPathComponent()) ? mark : nil
+    }
 
     static func createMark(
         for directory: URL,
@@ -292,7 +310,7 @@ enum SessionMarkService {
             : ["update-ref", "-d", refName]
         guard let result = await Shell.run(
             "git",
-            arguments,
+            ["-c", "core.hooksPath=/dev/null"] + arguments,
             cwd: directory,
             timeout: 10
         ) else { return false }
@@ -339,6 +357,7 @@ enum SessionMarkService {
                 .map(String.init)
             var modifiedOrDeleted: [MarkFileChange] = []
             var createdAfterMark: [MarkFileChange] = []
+            let protected = FileTools.exists(directory.appendingPathComponent(ProtectionFiles.marker))
 
             var index = 0
             while index + 1 < tokens.count {
@@ -348,6 +367,9 @@ enum SessionMarkService {
                 guard !status.isEmpty, !path.isEmpty else { continue }
 
                 if status.hasPrefix("D") {
+                    // A file may now be ignored, oversized or contain a credential. Its current bytes are not backed up.
+                    if protected,
+                       (try? FileTools.manager.attributesOfItem(atPath: directory.appendingPathComponent(path).path)) != nil { continue }
                     modifiedOrDeleted.append(MarkFileChange(path: path, status: .deleted))
                 } else if status.hasPrefix("A") {
                     createdAfterMark.append(MarkFileChange(path: path, status: .createdAfterMark))
@@ -404,7 +426,7 @@ enum SessionMarkService {
             guard let idxPath,
                   let diffResult = await Shell.run(
                     "git",
-                    ["--no-pager", "diff", "--cached", "--no-color", sha, "--", change.path],
+                    ["--literal-pathspecs", "--no-pager", "diff", "--cached", "--no-color", sha, "--", change.path],
                     cwd: directory,
                     timeout: 15,
                     extraEnvironment: ["GIT_INDEX_FILE": idxPath]
@@ -497,11 +519,27 @@ enum SessionMarkService {
             allowGitSnapshot: true,
             tmpDir: tmpDir
         )
-        MarkStore.upsert(backupMark, in: marksFile)
+        if FileTools.exists(directory.appendingPathComponent(ProtectionFiles.marker)) {
+            guard let backupSHA = backupMark.snapshotSHA,
+                  let tree = await Shell.run("git", ["ls-tree", "-rz", "--name-only", backupSHA], cwd: directory), tree.succeeded else {
+                return MarkRestoreResult(succeeded: false, message: "无法核对还原前的备份，未修改文件。", restoredCount: 0, trashedCount: 0, preRestoreMark: nil)
+            }
+            let captured = Set(tree.text.split(separator: "\0").map(String.init))
+            for path in uniqueRestore + uniqueTrash {
+                let file = directory.appendingPathComponent(path)
+                if (try? FileTools.manager.attributesOfItem(atPath: file.path)) != nil, !captured.contains(path) {
+                    return MarkRestoreResult(succeeded: false, message: "所选文件已变化，无法安全备份。请重新查看差异。", restoredCount: 0, trashedCount: 0, preRestoreMark: nil)
+                }
+            }
+        }
+        guard backupMark.kind == .gitSnapshot, (try? MarkStore.upsertChecked(backupMark, in: marksFile)) != nil else {
+            return MarkRestoreResult(succeeded: false, message: "无法保存还原前的备份，未修改文件。", restoredCount: 0,
+                                     trashedCount: 0, preRestoreMark: nil)
+        }
 
         var restoredCount = 0
         if !uniqueRestore.isEmpty {
-            let args = ["restore", "--source=\(sha)", "--worktree", "--"] + uniqueRestore
+            let args = ["--literal-pathspecs", "restore", "--source=\(sha)", "--worktree", "--"] + uniqueRestore
             guard let restoreResult = await Shell.run(
                 "git",
                 args,
@@ -580,7 +618,7 @@ enum SessionMarkService {
             "git",
             ["status", "--porcelain=v1", "-uall"],
             cwd: directory,
-            timeout: 15
+            timeout: 15, extraEnvironment: ["GIT_OPTIONAL_LOCKS": "0"]
         ), result.succeeded else {
             return []
         }
@@ -601,14 +639,15 @@ enum SessionMarkService {
         in directory: URL,
         headSHA: String?,
         message: String,
-        tmpDir: URL
+        tmpDir: URL, stagedGit: URL? = nil, gitignore: Data? = nil
     ) async -> String? {
-        await withTemporaryWorktreeIndex(in: directory, tmpDir: tmpDir) { idxPath in
+        let objectRepo = stagedGit?.deletingLastPathComponent() ?? directory
+        return await withTemporaryWorktreeIndex(in: directory, tmpDir: tmpDir, stagedGit: stagedGit, gitignore: gitignore) { idxPath in
             guard let idxPath else { return nil }
             guard let treeResult = await Shell.run(
                 "git",
                 ["write-tree"],
-                cwd: directory,
+                cwd: objectRepo,
                 timeout: 20,
                 extraEnvironment: ["GIT_INDEX_FILE": idxPath]
             ), treeResult.succeeded else {
@@ -617,7 +656,7 @@ enum SessionMarkService {
             let treeSHA = treeResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard isValidSHA(treeSHA) else { return nil }
 
-            var commitArgs = ["commit-tree", treeSHA]
+            var commitArgs = ["-c", "commit.gpgSign=false", "commit-tree", treeSHA]
             if let headSHA, !headSHA.isEmpty {
                 commitArgs.append(contentsOf: ["-p", headSHA])
             }
@@ -632,7 +671,7 @@ enum SessionMarkService {
             guard let commitResult = await Shell.run(
                 "git",
                 commitArgs,
-                cwd: directory,
+                cwd: objectRepo,
                 timeout: 15,
                 extraEnvironment: fallbackEnv
             ), commitResult.succeeded else {
@@ -646,8 +685,13 @@ enum SessionMarkService {
     private static func withTemporaryWorktreeIndex<T>(
         in directory: URL,
         tmpDir: URL,
+        stagedGit: URL? = nil, gitignore: Data? = nil,
         _ body: (String?) async -> T
     ) async -> T {
+        if stagedGit != nil || FileTools.exists(directory.appendingPathComponent(ProtectionFiles.marker)) {
+            return await ProtectionFiles.withIndex(in: directory, gitDir: stagedGit ?? directory.appendingPathComponent(".git"),
+                                                   tmpDir: tmpDir, gitignore: gitignore, body)
+        }
         guard let candidateFiles = await candidatePaths(in: directory) else {
             return await body(nil)
         }
@@ -751,6 +795,6 @@ enum SessionMarkService {
     }
 
     private static func isValidSHA(_ value: String) -> Bool {
-        value.count == 40 && value.allSatisfy { $0.isHexDigit }
+        (value.count == 40 || value.count == 64) && value.allSatisfy { $0.isHexDigit }
     }
 }

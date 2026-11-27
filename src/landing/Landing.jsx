@@ -17,9 +17,13 @@ import {
   X,
 } from 'lucide-react';
 import fizzDeckLogo from '../assets/fizzdeck-logo-light.svg';
-import heroDisplayImg from '../assets/hero-studio-display.png';
+import studioDisplay from '../assets/studio-display.webp';
+import workbenchShot from '../assets/native-075-workbench.webp';
 import { COPY, DMG_URL, REPO_URL } from './i18n.js';
-import { GitLoopTileStage, ServicesTileStage, WorkbenchTileStage } from './stages/FeatureStages.jsx';
+import progressShot from '../assets/native-075-progress.webp';
+import versionShot from '../assets/native-075-version.webp';
+import doctorShot from '../assets/native-075-doctor.webp';
+const screenshots = { workbench: progressShot, git: versionShot, services: doctorShot };
 import './landing.css';
 
 const STORAGE_KEY = 'fizzdeck.landing.lang';
@@ -245,7 +249,8 @@ function Hero({ t, onToggleLang }) {
       <div className="hero-gallery-well">
         <div className="hero-zoom-inner" ref={zoomRef}>
           <figure className="hero-figure">
-            <img src={heroDisplayImg} alt={t.hero.heroAlt} loading="eager" decoding="async" />
+            <img src={studioDisplay} alt="" width="2400" height="1610" fetchPriority="high" decoding="async" />
+            <img className="studio-window" src={workbenchShot} alt={t.hero.heroAlt} width="1600" height="1042" fetchPriority="high" decoding="async" />
           </figure>
         </div>
       </div>
@@ -265,9 +270,7 @@ function Showcase({ t }) {
         {t.showcase.tiles.map((tile) => (
           <article className="showcase-col" key={tile.id}>
             <div className="showcase-media">
-              {tile.id === 'workbench' && <WorkbenchTileStage copy={t.stages.workbench} />}
-              {tile.id === 'git' && <GitLoopTileStage copy={t.stages.git} />}
-              {tile.id === 'services' && <ServicesTileStage copy={t.stages.services} />}
+              <img src={screenshots[tile.id]} alt={tile.alt} width="1056" height="688" loading="lazy" decoding="async" />
             </div>
             <p className="tile-copy">
               <strong className="ink-strong">{tile.lead}</strong>{' '}

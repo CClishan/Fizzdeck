@@ -1,0 +1,28 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: ['**']
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build --package-path macos --product FizzDeck
+      - run: swift test --package-path macos
+      - run: ./macos/script/build_and_run.sh --build-only
+  web-and-shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run build
+      - run: git ls-files -z '*.sh' | xargs -0 -n 1 bash -n

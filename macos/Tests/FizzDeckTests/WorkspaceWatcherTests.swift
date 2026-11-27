@@ -151,6 +151,8 @@ final class WorkspaceWatcherTests: XCTestCase {
         watcher.setGitPath(root.path)
         defer { watcher.stop() }
 
+        // Replay the pre-existing HEAD creation after attaching, as FSEvents can do when coalescing writes.
+        watcher.handleEventPaths([gitDirectory.appendingPathComponent("HEAD").path], change: .git)
         try? await Task.sleep(for: .milliseconds(700))
         try "[core]\n\tbare = false\n".write(
             to: gitDirectory.appendingPathComponent("config"),
@@ -194,6 +196,48 @@ final class WorkspaceWatcherTests: XCTestCase {
             path: gitDir.appendingPathComponent("config").path,
             gitPath: symlinkRepo.path
         ))
+    }
+
+    func testManifestEventsAreShallowTargetedAndFollowFocusChanges() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("fizz-watch-inputs-" + UUID().uuidString)
+        let first = root.appendingPathComponent("one"), second = root.appendingPathComponent("two")
+        let nested = first.appendingPathComponent("node_modules/pkg")
+        for dir in [nested, second] { try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true) }
+        defer { try? FileManager.default.removeItem(at: root) }
+        func write(_ name: String, _ dir: URL) throws { try UUID().uuidString.write(to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8) }
+        try write("package.json", first)
+        var changes: [WorkspaceChange] = []
+        let watcher = WorkspaceWatcher(homeDirectory: root, sessionRoots: [], debounceInterval: 0.12) { changes.append($0) }
+        watcher.setFocusedPaths([first.path]); watcher.start()
+        defer { watcher.stop() }
+        let attached = await waitUntil(timeout: 3) { changes == [.manifest(first.path)] }
+        XCTAssertTrue(attached); changes.removeAll()
+        try write("package.json", nested); try write("src.swift", first); try write("pnpm-lock.yaml", second)
+        try await Task.sleep(for: .milliseconds(650))
+        XCTAssertEqual(changes, [])
+        try write("package.json", first)
+        let modified = await waitUntil(timeout: 3) { changes == [.manifest(first.path)] }
+        XCTAssertTrue(modified)
+        changes.removeAll()
+        try "in-place".write(to: first.appendingPathComponent("package.json"), atomically: false, encoding: .utf8)
+        let inPlace = await waitUntil(timeout: 3) { changes.contains(.manifest(first.path)) }
+        XCTAssertTrue(inPlace)
+        changes.removeAll()
+        try write(".env.preview", first)
+        let created = await waitUntil(timeout: 3) { changes.contains(.manifest(first.path)) }
+        XCTAssertTrue(created)
+        try FileManager.default.removeItem(at: first.appendingPathComponent(".env.preview"))
+        let deleted = await waitUntil(timeout: 3) { changes.count >= 2 }
+        XCTAssertTrue(deleted)
+        changes.removeAll(); watcher.setFocusedPaths([second.path]); try write(".env.old", first)
+        let attachedSecond = await waitUntil(timeout: 3) { changes == [.manifest(second.path)] }
+        XCTAssertTrue(attachedSecond); changes.removeAll()
+        try write("Gemfile.lock", second)
+        let switched = await waitUntil(timeout: 3) { changes.contains(.manifest(second.path)) }
+        XCTAssertTrue(switched)
+        XCTAssertFalse(changes.contains(.manifest(first.path)))
+        watcher.pause(); changes.removeAll(); try write("go.mod", second)
+        try await Task.sleep(for: .milliseconds(500)); XCTAssertTrue(changes.isEmpty)
     }
 
     private func waitUntil(

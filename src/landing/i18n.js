@@ -1,7 +1,6 @@
 export const REPO_URL = 'https://github.com/CClishan/Fizzdeck';
-export const DMG_URL =
-  'https://github.com/CClishan/Fizzdeck/releases/download/v0.7.4/FizzDeck-0.7.4-arm64.dmg';
-export const RELEASES_URL = 'https://github.com/CClishan/Fizzdeck/releases/tag/v0.7.4';
+export const RELEASES_URL = `${REPO_URL}/releases`;
+export const DMG_URL = `${RELEASES_URL}/latest`;
 
 export const COPY = {
   zh: {
@@ -15,36 +14,39 @@ export const COPY = {
       features: '能力',
       shortcut: '快捷键',
       faq: '常见问题',
-      download: '下载 v0.7.4',
+      download: '下载公开版',
       langSwitch: 'EN',
       langAria: 'Switch to English',
     },
     hero: {
       lead: 'AI 写的项目，记得住、回得去、跑得起。',
       rest: '原生 macOS 工作台，用人话看懂每次对话，改坏了也能退回。',
-      primaryCta: '下载 macOS 版 — v0.7.4',
+      primaryCta: '下载 macOS 公开版',
       secondaryCta: 'GitHub 源码',
-      note: 'Apple Silicon · macOS 26+ · 免费下载',
-      stageCaption: 'FizzDeck v0.7.4 · Apple Studio Display 实机界面',
-      heroAlt: '运行在 Apple Studio Display 与 Mac Studio 上的 FizzDeck 0.7.4 浅色工作台界面',
+      note: 'v0.8.0（Build 16）· Apple Silicon · macOS 26+ · 截图来自 v0.7.5（Build 13）',
+      stageCaption: 'FizzDeck v0.7.5 · 工作台实机截图',
+      heroAlt: 'Studio Display 样机中的 FizzDeck v0.7.5 工作台：关注项目、本周活动和待处理事项，显示器旁是 Mac Studio',
     },
     showcase: {
       lead: '先让 AI 项目不再失控。',
       rest: '记得住上次做到哪，回得去改坏之前，跑得起本机环境。',
-      hint: '悬停卡片即可预览交互细节',
+      hint: '原生应用实机截图',
       tiles: [
         {
           id: 'workbench',
+          alt: '项目进度页的对话时间线与四个项目页签',
           lead: '记得住。',
           rest: '跨项目对话时间线、中文搜索和 ⌘K 直达，上次让 AI 做了什么不用翻终端。',
         },
         {
           id: 'git',
+          alt: '版本页中的当前分支、待暂存文件和版本记录',
           lead: '回得去。',
           rest: '每次对话前悄悄留个标记；看 Diff、按文件还原，再把这次改动存成真正的版本。',
         },
         {
           id: 'services',
+          alt: 'Doctor 的依赖问题与本机运行环境',
           lead: '跑得起。',
           rest: '体检盯依赖、端口、密钥和版本保护；跑不起来时先给能点的一步，而不是一串报错。',
         },
@@ -66,8 +68,8 @@ export const COPY = {
         },
         {
           icon: 'activity',
-          lead: '对话时间线。',
-          rest: '按天串起 Codex、Claude 等 AI 会话，首句需求、改动文件、结果和花费在一处。',
+          lead: '本周回顾。',
+          rest: '按项目看近 14 或 30 天的费用和提交趋势；每周回顾可复制为 Markdown，也可选择仅用数字统计润色。',
         },
         {
           icon: 'terminal',
@@ -97,12 +99,12 @@ export const COPY = {
         {
           icon: 'hard-drive',
           lead: 'Doctor 体检。',
-          rest: '关注项目自动盯依赖、端口、密钥与版本保护；闲置项目整理默认移到废纸篓。',
+          rest: '依赖或环境文件变化时重新体检；工作台也会提醒关注仓库有新的云端改动。',
         },
         {
           icon: 'menubar',
           lead: '运行页先体检。',
-          rest: '进运行页先看问题，缺依赖、端口冲突就地处理；日志报错可解释或复制求助 prompt。',
+          rest: '看清哪个进程占着开发端口。自己点「试跑一下」才会构建、检查类型或运行测试，日志里随时可停。',
         },
         {
           icon: 'layers',
@@ -133,8 +135,8 @@ export const COPY = {
         },
         {
           q: '打开下载的 DMG 时提示「无法验证开发者」怎么办？',
-          aLead: '当前 v0.7.4 默认安装包采用临时（ad-hoc）签名；除非发布说明明确写了 Developer ID 公证版，否则都会被 Gatekeeper 拦一次。',
-          aRest: '首次拖入「应用程序」后，可按住 Control 右键打开，或在终端执行 xattr -dr com.apple.quarantine /Applications/FizzDeck.app 即可正常运行；你也可以随时从源码自行构建。',
+          aLead: '当前公开的默认安装包采用临时（ad-hoc）签名；除非发布说明明确写了 Developer ID 公证版，否则都会被 Gatekeeper 拦一次。',
+          aRest: '先用同一 Release 的 .sha256 核对下载，再将 App 拖入「应用程序」并打开一次。若你信任来源，可在「系统设置 → 隐私与安全性」中为 FizzDeck 选择「仍要打开」。本版没有团队签名，系统快捷指令可能无法执行；可在应用内打开项目、复制接力卡和查看体检。',
         },
         {
           q: '人话模式到底是什么？会改变功能吗？',
@@ -158,7 +160,7 @@ export const COPY = {
         },
         {
           q: 'FizzDeck 收费吗？如何升级到新版本？',
-          aLead: '可以免费下载和自行构建；当前仓库暂未附 LICENSE 文件，再分发前请以仓库实际授权说明为准。',
+          aLead: '可以免费下载并在本机自行构建使用。再分发前请查阅相应版本的许可条款；第三方素材保留各自许可。',
           aRest: '你可以在应用内「设置 → 关于」检查更新、下载 DMG、校验 SHA-256 并安全替换重启，也可以直接前往 GitHub Releases 下载最新 arm64 DMG。',
         },
       ],
@@ -169,7 +171,7 @@ export const COPY = {
       colProduct: '产品',
       colInfo: '信息',
       linksProduct: [
-        { label: '下载 v0.7.4 DMG', href: DMG_URL, external: true },
+        { label: '下载最新公开版', href: DMG_URL, external: true },
         { label: 'Release 更新日志', href: RELEASES_URL, external: true },
         { label: '从源码构建', href: `${REPO_URL}#quick-start`, external: true },
       ],
@@ -233,18 +235,18 @@ export const COPY = {
       features: 'Features',
       shortcut: 'Shortcut',
       faq: 'FAQ',
-      download: 'Download v0.7.4',
+      download: 'Download release',
       langSwitch: '中文',
       langAria: '切换为中文',
     },
     hero: {
       lead: 'AI-built projects that remember, rewind, and run.',
       rest: 'A native Mac workbench in plain language—pick up where you left off and undo what broke.',
-      primaryCta: 'Download for Mac — v0.7.4',
+      primaryCta: 'Download the Mac release',
       secondaryCta: 'View on GitHub',
-      note: 'Apple Silicon · macOS 26+ · Free Download',
-      stageCaption: 'FizzDeck v0.7.4 · Captured live on macOS',
-      heroAlt: 'FizzDeck 0.7.4 light mode workbench displayed on an Apple Studio Display with Mac Studio',
+      note: 'v0.8.0 (Build 16) · Apple Silicon · macOS 26+ · Screenshots from v0.7.5 (Build 13)',
+      stageCaption: 'FizzDeck v0.7.5 · Native workbench',
+      heroAlt: 'FizzDeck v0.7.5 on a Studio Display beside a Mac Studio, showing focused projects, weekly activity and items that need attention',
     },
     showcase: {
       lead: 'Stop losing control of AI projects.',
@@ -253,16 +255,19 @@ export const COPY = {
       tiles: [
         {
           id: 'workbench',
+          alt: 'Progress tab showing conversations and the four project tabs',
           lead: 'Remember.',
           rest: 'A cross-project conversation timeline, Chinese search, and ⌘K keep the last AI request in reach.',
         },
         {
           id: 'git',
+          alt: 'Version tab showing the current branch and changed files',
           lead: 'Rewind.',
           rest: 'A quiet mark before each conversation; inspect changes, restore files, then save a real version.',
         },
         {
           id: 'services',
+          alt: 'Doctor listing missing dependencies and the local environment',
           lead: 'Run.',
           rest: 'Doctor watches dependencies, ports, secrets, and version protection before errors pile up.',
         },
@@ -284,8 +289,8 @@ export const COPY = {
         },
         {
           icon: 'activity',
-          lead: 'Conversation timeline.',
-          rest: 'Codex, Claude, and other sessions grouped by day with the first request, touched files, status, and cost.',
+          lead: 'Weekly recap.',
+          rest: 'See 14 or 30 days of estimated costs and commits per project. Copy your weekly recap as Markdown, or opt in to polish it using totals alone.',
         },
         {
           icon: 'terminal',
@@ -315,12 +320,12 @@ export const COPY = {
         {
           icon: 'hard-drive',
           lead: 'Doctor.',
-          rest: 'Focused projects are checked for dependencies, ports, secrets, and version protection; idle cleanup defaults to Trash.',
+          rest: 'Doctor rechecks a project when dependencies or environment files change. The workbench shows when a focused repository has new remote commits.',
         },
         {
           icon: 'menubar',
           lead: 'Run-tab preflight.',
-          rest: 'See blockers before launch, fix dependencies or port conflicts in place, and turn log errors into an agent prompt.',
+          rest: 'See which process holds a development port. Builds, type checks, and tests run only when you start a trial; watch the log or stop it there.',
         },
         {
           icon: 'layers',
@@ -351,8 +356,8 @@ export const COPY = {
         },
         {
           q: 'Why does macOS ask about an unidentified developer on first launch?',
-          aLead: 'v0.7.4 uses ad-hoc signing by default; unless release notes explicitly name a Developer ID notarized build, Gatekeeper will ask once.',
-          aRest: 'After dragging FizzDeck into Applications, Control-click and choose Open once—or run xattr -dr com.apple.quarantine /Applications/FizzDeck.app. You can also build directly from source.',
+          aLead: 'Public builds use ad-hoc signing by default; unless release notes explicitly name a Developer ID notarized build, Gatekeeper will ask once.',
+          aRest: 'Verify the download against the .sha256 file from the same release, drag FizzDeck to Applications and try opening it. If you trust the download, choose Open Anyway for FizzDeck in System Settings → Privacy & Security. This build has no team signature, so system Shortcuts may not run. Opening projects, copying handoffs and viewing health reports work inside the app.',
         },
         {
           q: 'What does plain-language mode change?',
@@ -376,7 +381,7 @@ export const COPY = {
         },
         {
           q: 'Is FizzDeck free? How do updates work?',
-          aLead: 'It is free to download and build yourself. The repository does not include a LICENSE file yet; check its actual terms before redistributing.',
+          aLead: 'Download, build and use FizzDeck locally for free. Check the license for the version you plan to redistribute; third-party assets retain their own terms.',
           aRest: 'Check for updates inside Settings → About to download the DMG, verify SHA-256 automatically, replace atomically, and relaunch—or grab arm64 builds from GitHub Releases.',
         },
       ],
@@ -387,7 +392,7 @@ export const COPY = {
       colProduct: 'Product',
       colInfo: 'Information',
       linksProduct: [
-        { label: 'Download v0.7.4 DMG', href: DMG_URL, external: true },
+        { label: 'Download the latest release', href: DMG_URL, external: true },
         { label: 'Release Notes', href: RELEASES_URL, external: true },
         { label: 'Build from Source', href: `${REPO_URL}#quick-start`, external: true },
       ],

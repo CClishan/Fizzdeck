@@ -1,0 +1,69 @@
+{
+  "_jsx-runtime-BjXToVzR.js": {
+    "file": "assets/jsx-runtime-BjXToVzR.js",
+    "name": "jsx-runtime"
+  },
+  "index.html": {
+    "file": "assets/main-BZ5iFK15.js",
+    "name": "main",
+    "src": "index.html",
+    "isEntry": true,
+    "imports": [
+      "_jsx-runtime-BjXToVzR.js"
+    ],
+    "css": [
+      "assets/main-BeLEcS3r.css"
+    ],
+    "assets": [
+      "assets/fizzdeck-logo-TpJr9-LM.png"
+    ]
+  },
+  "landing.html": {
+    "file": "assets/landing-CLJZ3PfJ.js",
+    "name": "landing",
+    "src": "landing.html",
+    "isEntry": true,
+    "imports": [
+      "_jsx-runtime-BjXToVzR.js"
+    ],
+    "css": [
+      "assets/landing-fwm7mota.css"
+    ],
+    "assets": [
+      "assets/fizzdeck-logo-light-B7htTTxm.svg",
+      "assets/studio-display-HUYN63_w.webp",
+      "assets/native-075-workbench-KwRgCmaB.webp",
+      "assets/native-075-progress-DFinJdrS.webp",
+      "assets/native-075-version-DANicgRd.webp",
+      "assets/native-075-doctor-dLaJfaDR.webp"
+    ]
+  },
+  "src/assets/fizzdeck-logo-light.svg": {
+    "file": "assets/fizzdeck-logo-light-B7htTTxm.svg",
+    "src": "src/assets/fizzdeck-logo-light.svg"
+  },
+  "src/assets/fizzdeck-logo.png": {
+    "file": "assets/fizzdeck-logo-TpJr9-LM.png",
+    "src": "src/assets/fizzdeck-logo.png"
+  },
+  "src/assets/native-075-doctor.webp": {
+    "file": "assets/native-075-doctor-dLaJfaDR.webp",
+    "src": "src/assets/native-075-doctor.webp"
+  },
+  "src/assets/native-075-progress.webp": {
+    "file": "assets/native-075-progress-DFinJdrS.webp",
+    "src": "src/assets/native-075-progress.webp"
+  },
+  "src/assets/native-075-version.webp": {
+    "file": "assets/native-075-version-DANicgRd.webp",
+    "src": "src/assets/native-075-version.webp"
+  },
+  "src/assets/native-075-workbench.webp": {
+    "file": "assets/native-075-workbench-KwRgCmaB.webp",
+    "src": "src/assets/native-075-workbench.webp"
+  },
+  "src/assets/studio-display.webp": {
+    "file": "assets/studio-display-HUYN63_w.webp",
+    "src": "src/assets/studio-display.webp"
+  }
+}

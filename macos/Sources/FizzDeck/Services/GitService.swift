@@ -184,16 +184,27 @@ enum GitService {
     }
 
     static func weekly(_ directory: URL) async -> [String: Int]? {
-        guard hasGit(directory) else { return nil }
+        await dailyCommitCounts(directory, days: 7)
+    }
+
+    static func dailyCommitCounts(
+        _ directory: URL, days: Int, now: Date = Date(), calendar: Calendar = .current
+    ) async -> [String: Int]? {
+        guard days > 0, hasGit(directory),
+              let start = calendar.date(byAdding: .day, value: 1 - days, to: calendar.startOfDay(for: now))
+        else { return nil }
         guard let output = await Shell.output(
             "git",
-            ["log", "--since=7.days", "--date=short", "--format=%ad"],
+            ["log", "--since=@\(Int(start.timeIntervalSince1970))", "--format=%ct"],
             cwd: directory
         ) else { return nil }
 
         var counts: [String: Int] = [:]
-        for day in output.split(separator: "\n").map(String.init) where !day.isEmpty {
-            counts[day, default: 0] += 1
+        for timestamp in output.split(separator: "\n").compactMap({ Int($0) }) {
+            let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
+            if (start...now).contains(date) {
+                counts[WorkbenchMetrics.dayKey(date, calendar: calendar), default: 0] += 1
+            }
         }
         return counts
     }

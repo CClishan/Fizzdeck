@@ -44,3 +44,18 @@ final class AppRoutingTests: XCTestCase {
         XCTAssertNil(AppRouting.projectRequest(from: ["projectPath": ""]))
     }
 }
+
+extension AppRoutingTests {
+    func testExternalURLsRequireAnExactManagedProjectAndKnownAction() throws {
+        let roots = ["/Users/test/茶 Room"]
+        var url = URLComponents()
+        url.scheme = "fizzdeck"; url.host = "open"
+        url.queryItems = [.init(name: "path", value: roots[0]), .init(name: "tab", value: "run")]
+        XCTAssertEqual(AppRouting.projectRequest(from: try XCTUnwrap(url.url), managedRoots: roots)?.tab, .run)
+        url.host = "handoff"; url.queryItems?.removeLast()
+        XCTAssertEqual(AppRouting.projectRequest(from: try XCTUnwrap(url.url), managedRoots: roots)?.showHandoff, true)
+        for raw in ["fizzdeck://open?path=/tmp", "fizzdeck://open?path=/p&path=/p", "fizzdeck://open?path=/p&tab=push", "fizzdeck://open?path=/p&cmd=test", "https://open?path=/p", "fizzdeck://stop?path=/p", "fizzdeck://handoff?path=/p&tab=run", "fizzdeck://open:7?path=/p"] {
+            XCTAssertNil(AppRouting.projectRequest(from: try XCTUnwrap(URL(string: raw)), managedRoots: ["/p"]), raw)
+        }
+    }
+}

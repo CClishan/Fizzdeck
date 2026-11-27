@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct ProjectInfoTabView: View {
-    @Environment(RepositoryStore.self) private var store
     let project: RepoProject
     let docs: [DocFile]
     @Binding var noteDraft: String
@@ -9,7 +8,6 @@ struct ProjectInfoTabView: View {
     let onShowCleanup: () -> Void
 
     @State private var previewDoc: DocFile?
-    @State private var isInitializingGit = false
 
     private var hasGitRepository: Bool {
         GitService.hasGit(URL(fileURLWithPath: project.path))
@@ -34,7 +32,7 @@ struct ProjectInfoTabView: View {
     }
 
     private var nonGitOnboardingMessage: String {
-        "这个目录还没有 Git 版本记录。开启后，每次让 AI 开始干活前都会自动记下现场，改坏了随时能一键回到对话前。"
+        "开启时会按技术栈补全忽略规则，并记下第一份可还原的基线。"
     }
 
     private var nonGitGuidePanel: some View {
@@ -47,32 +45,9 @@ struct ProjectInfoTabView: View {
 
                 Spacer(minLength: 12)
 
-                Button {
-                    Task {
-                        isInitializingGit = true
-                        defer { isInitializingGit = false }
-                        let dir = URL(fileURLWithPath: project.path)
-                        let result = await DoctorService.initGitRepository(in: dir)
-                        ToastCenter.shared.show(
-                            result.message,
-                            symbol: result.succeeded ? "checkmark.shield.fill" : "exclamationmark.triangle.fill",
-                            tint: result.succeeded ? .green : .orange
-                        )
-                        await store.refreshGit(for: project.path)
-                        await store.refreshDoctor(for: project, scope: .focused)
-                    }
-                } label: {
-                    if isInitializingGit {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Label("一键开启版本保护", systemImage: "checkmark.shield")
-                    }
-                }
-                .buttonStyle(.glassProminent)
-                .tint(FizzTheme.accent)
-                .controlSize(.small)
-                .disabled(isInitializingGit)
+                EnableVersionProtectionButton(project: project)
+                    .buttonStyle(.glassProminent)
+                    .tint(FizzTheme.accent)
             }
         }
     }

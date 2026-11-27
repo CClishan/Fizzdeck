@@ -2,11 +2,15 @@
 
 The native, SwiftUI-first client for FizzDeck.
 
-Download: [FizzDeck 0.7.4 for macOS](https://github.com/CClishan/Fizzdeck/releases/download/v0.7.4/FizzDeck-0.7.4-arm64.dmg) — Apple Silicon, macOS 26+. Public DMGs use ad-hoc signing unless the release notes explicitly name a Developer ID notarized build.
+Download: [Latest public release](https://github.com/CClishan/Fizzdeck/releases/latest) — Apple Silicon, macOS 26+. Public DMGs use ad-hoc signing unless the release notes explicitly name a Developer ID notarized build.
 
 FizzDeck reads and writes the same local state as the web UI, but runs without Node.js and without a local HTTP server.
 
 [Chinese README](../README.zh-CN.md)
+
+**v0.8.0 (Build 16).** Doctor rechecks a focused project when its dependency or environment files change. See which process owns a development port, run a build or test on demand, and review 14 or 30 days of estimated AI costs and commits.
+
+The download link points to the latest public DMG. System Shortcuts require a build signed with an Apple Team ID; the default ad-hoc DMG has none. Project opening, handoff cards and health checks can also be used in the app. See [verification details](../docs/SYSTEM_INTEGRATION.md).
 
 ## Requirements
 
@@ -70,10 +74,10 @@ Build, launch, and verify:
 ./script/build_and_run.sh --verify
 ```
 
-The default version is `0.7.4`, Build `12`. Both values can be overridden:
+The default version is `0.8.0`, Build `16`. Both values can be overridden:
 
 ```sh
-VERSION=0.7.4 BUILD_NUM=12 ./script/build_and_run.sh --sign-local
+VERSION=0.8.0 BUILD_NUM=16 ./script/build_and_run.sh --sign-local
 ```
 
 Run the Swift test baseline:
@@ -106,17 +110,17 @@ Default ad-hoc package:
 Output:
 
 ```text
-dist/FizzDeck-0.7.4-arm64.dmg
-dist/FizzDeck-0.7.4-arm64.dmg.sha256
+dist/FizzDeck-0.8.0-arm64.dmg
+dist/FizzDeck-0.8.0-arm64.dmg.sha256
 ```
 
 The checksum file is standard `shasum -a 256` output containing only the DMG filename. Custom version, build number, and output path are available:
 
 ```sh
 ./script/package_dmg.sh \
-  --version 0.7.4 \
-  --build-num 12 \
-  --output dist/FizzDeck-0.7.4-arm64.dmg
+  --version 0.8.0 \
+  --build-num 16 \
+  --output dist/FizzDeck-0.8.0-arm64.dmg
 ```
 
 Run `./script/package_dmg.sh --help` for all options.
@@ -199,28 +203,28 @@ npm run build
 
 ```sh
 ./macos/script/package_dmg.sh
-hdiutil verify macos/dist/FizzDeck-0.7.4-arm64.dmg
+hdiutil verify macos/dist/FizzDeck-0.8.0-arm64.dmg
 mkdir -p /tmp/fizzdeck-verify
-hdiutil attach -nobrowse -readonly -mountpoint /tmp/fizzdeck-verify macos/dist/FizzDeck-0.7.4-arm64.dmg
+hdiutil attach -nobrowse -readonly -mountpoint /tmp/fizzdeck-verify macos/dist/FizzDeck-0.8.0-arm64.dmg
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /tmp/fizzdeck-verify/FizzDeck.app/Contents/Info.plist
 /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' /tmp/fizzdeck-verify/FizzDeck.app/Contents/Info.plist
 codesign --verify --deep --strict /tmp/fizzdeck-verify/FizzDeck.app
 hdiutil detach /tmp/fizzdeck-verify
-cd macos/dist && shasum -a 256 -c FizzDeck-0.7.4-arm64.dmg.sha256
+cd macos/dist && shasum -a 256 -c FizzDeck-0.8.0-arm64.dmg.sha256
 ```
 
-Expected values: version `0.7.4`, build `12`.
+Expected values: version `0.8.0`, build `16`.
 
-### 3. In-app update: v0.5.3 or v0.7.3 → v0.7.4
+### 3. In-app update: v0.5.3 or v0.7.4 → v0.8.0
 
 Run this once from each old version, on a Mac that can keep the existing `~/.repodeck` state:
 
-1. Install the old app into `/Applications` and publish the new v0.7.4 DMG plus its `.sha256` to a test release or the final release.
+1. Install the old app into `/Applications` and publish the new v0.8.0 DMG plus its `.sha256` to a test release or the final release.
 2. Launch the old app and open **Settings → About**.
-3. Click check for updates and confirm the app finds `v0.7.4`.
+3. Click check for updates and confirm the app finds `v0.8.0`.
 4. Start the download and watch the progress state; confirm it fetches both the DMG and checksum.
 5. Let FizzDeck verify SHA-256, mount the DMG, verify the bundle identifier and code signature, replace the app atomically, and relaunch.
-6. Confirm the relaunched app reads `0.7.4` and Build `12`:
+6. Confirm the relaunched app reads `0.8.0` and Build `16`:
 
 ```sh
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /Applications/FizzDeck.app/Contents/Info.plist
@@ -229,7 +233,7 @@ Run this once from each old version, on a Mac that can keep the existing `~/.rep
 
 7. Confirm projects, stars, notes, and the previous update setting survived the update.
 8. Open the app once more from Finder and confirm it launches without a blank window or repeated update prompt.
-9. Repeat the same steps starting from the other old version (`v0.5.3` and `v0.7.3`).
+9. Repeat the same steps starting from the other old version (`v0.5.3` and `v0.7.4`).
 
 Do not claim the update is release-ready if either starting version fails, or if the checksum, bundle ID, or version check is skipped.
 
@@ -237,8 +241,8 @@ Do not claim the update is release-ready if either starting version fails, or if
 
 ```sh
 ./macos/script/package_dmg.sh --notarize
-xcrun stapler validate macos/dist/FizzDeck-0.7.4-arm64.dmg
-spctl -a -vvv -t open --context context:primary-signature macos/dist/FizzDeck-0.7.4-arm64.dmg
+xcrun stapler validate macos/dist/FizzDeck-0.8.0-arm64.dmg
+spctl -a -vvv -t open --context context:primary-signature macos/dist/FizzDeck-0.8.0-arm64.dmg
 ```
 
 For the installed notarized app:
@@ -253,8 +257,8 @@ codesign --display --verbose=4 /Applications/FizzDeck.app
 Upload both:
 
 ```text
-FizzDeck-0.7.4-arm64.dmg
-FizzDeck-0.7.4-arm64.dmg.sha256
+FizzDeck-0.8.0-arm64.dmg
+FizzDeck-0.8.0-arm64.dmg.sha256
 ```
 
 After publishing, verify the release tag, filenames, checksum, and in-app update once from a clean install.
@@ -300,9 +304,13 @@ script/build_and_run.sh      Build and launch entry point
 script/package_dmg.sh        Packaging, signing, notarization, and checksum entry point
 ```
 
+See [system integration and release automation](../docs/SYSTEM_INTEGRATION.md) for the URL scheme, local Apple Development signing instructions, CI secrets, and scale benchmark. All three Shortcuts actions ran in the macOS editor with a development signature. The ad-hoc bundle was discoverable but could not execute the health action.
+
 ## Current boundaries
 
 - Warp resume commands still need to be copied; FizzDeck opens the project directory rather than injecting a command.
 - Ending Codex Desktop sessions is intentionally unsupported; FizzDeck never terminates the shared app-server.
 - Developer ID signing and notarization are implemented in the packaging script, but public releases remain ad-hoc until credentials are supplied at build time.
 - Conversation marks depend on temporary Git objects and normally expire after about 14 days unless pinned.
+
+License: see [LICENSE](../LICENSE). Local use and builds are free; third-party assets keep their own terms.

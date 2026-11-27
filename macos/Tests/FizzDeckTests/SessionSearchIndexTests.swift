@@ -147,4 +147,88 @@ final class SessionSearchIndexTests: XCTestCase {
         )
         XCTAssertEqual(memHits.map(\.sessionID), ["s-drag"])
     }
+
+    func testFindsSessionsByTouchedFilePathWithBoundaryMatchingAndMemoryFallback() async throws {
+        let (dir, dbURL) = try makeTempDB(name: "file-history")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let projectPath = "/tmp/fizzdeck-file-history"
+        let now = Date()
+        let project = makeProject(
+            path: projectPath,
+            name: "file-history",
+            sessions: [
+                SessionRecord(
+                    tool: "codex",
+                    id: "s-exact",
+                    cwd: projectPath,
+                    startedAt: now.addingTimeInterval(-1_800),
+                    modified: now.addingTimeInterval(-1_200),
+                    firstUser: "修一下主入口",
+                    touchedFiles: ["\(projectPath)/src/App.swift"]
+                ),
+                SessionRecord(
+                    tool: "claude",
+                    id: "s-boundary",
+                    cwd: projectPath,
+                    startedAt: now.addingTimeInterval(-3_600),
+                    modified: now.addingTimeInterval(-3_000),
+                    firstUser: "调整旁边的应用",
+                    touchedFiles: ["\(projectPath)/src/MyApp.swift"]
+                ),
+                SessionRecord(
+                    tool: "grok",
+                    id: "s-chinese",
+                    cwd: projectPath,
+                    startedAt: now.addingTimeInterval(-5_400),
+                    modified: now.addingTimeInterval(-5_000),
+                    firstUser: "补中文说明",
+                    touchedFiles: ["文档/使用说明.swift"]
+                ),
+            ]
+        )
+
+        let index = SessionSearchIndex(databaseURL: dbURL)
+        await index.rebuild(from: [project])
+
+        let exact = await index.sessions(
+            touchingFile: "src/App.swift",
+            projectPath: projectPath
+        )
+        XCTAssertEqual(exact.map(\.sessionID), ["s-exact"])
+
+        let basename = await index.sessions(
+            touchingFile: "App.swift",
+            projectPath: projectPath
+        )
+        XCTAssertEqual(basename.map(\.sessionID), ["s-exact"])
+        XCTAssertFalse(basename.contains { $0.sessionID == "s-boundary" })
+        XCTAssertFalse(
+            SessionSearchIndex.touchedPathMatches(
+                "/tmp/other-project/src/App.swift",
+                target: "src/App.swift",
+                projectPath: projectPath
+            )
+        )
+
+        let chinese = await index.sessions(
+            touchingFile: "文档/使用说明.swift",
+            projectPath: projectPath
+        )
+        XCTAssertEqual(chinese.map(\.sessionID), ["s-chinese"])
+
+        let none = await index.sessions(
+            touchingFile: "src/Missing.swift",
+            projectPath: projectPath
+        )
+        XCTAssertTrue(none.isEmpty)
+
+        let memory = SessionSearchIndex.inMemorySessions(
+            touchingFile: "src/App.swift",
+            projectPath: projectPath,
+            projects: [project]
+        )
+        XCTAssertEqual(memory.map(\.sessionID), ["s-exact"])
+        XCTAssertEqual(memory.first?.tool, "codex")
+    }
 }

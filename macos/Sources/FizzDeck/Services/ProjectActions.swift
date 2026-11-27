@@ -269,45 +269,35 @@ final class ProjectActions {
         }
     }
 
-    func stop(_ project: RepoProject, store: RepositoryStore) async {
-        guard !isBusy(project.path) else { return }
-        guard isManaged(project, in: store) else {
-            messages[project.path] = "不在受管项目内，拒绝停止"
+    func stop(_ project: RepoProject, store: RepositoryStore, presentNotice: () -> Void = {}) async {
+        let path = project.path
+        guard !isBusy(path) else { return }
+        func review(_ reason: String) {
+            let hint = "请到体检的「开发监听端口」逐个核对 PID。"
+            messages[path] = "\(reason)。\(hint)"
+            presentNotice()
+            ToastCenter.shared.show(reason, symbol: "info.circle", tint: .orange, duration: 8, subtitle: hint,
+                                    action: ToastAction(title: "去体检", symbol: "stethoscope") { store.openCleanup() })
+        }
+        func registered() -> Bool { store.projects.contains { $0.path == path && $0.run == project.run } }
+        guard registered(), let owner = PreviewProject.from(project, actions: self) else {
+            review("项目或预览端口已变化")
             return
         }
-        guard let port = project.run?.port, port > 0 else {
-            messages[project.path] = "没有可停止的预览端口"
-            return
-        }
-
-        messages[project.path] = nil
-        busy[project.path] = .stopping
-        defer { busy[project.path] = nil }
-
-        let pids = await listeningPIDs(port)
-        guard !pids.isEmpty else {
-            store.setPort(PortProbe.isOpen(port) ? .running : .stopped, for: project.path)
-            messages[project.path] = "端口 \(port) 没有监听进程"
-            return
-        }
-
-        for pid in pids {
-            _ = Darwin.kill(pid, SIGTERM)
-        }
-
-        let deadline = Date().addingTimeInterval(5)
-        while Date() < deadline {
-            if !PortProbe.isOpen(port) { break }
-            try? await Task.sleep(for: .milliseconds(200))
-        }
-
-        if PortProbe.isOpen(port) {
-            store.setPort(.running, for: project.path)
-            messages[project.path] = "已发送停止信号（PID \(pids.map(String.init).joined(separator: ", "))），端口 \(port) 仍在监听"
-        } else {
-            portConflicts[project.path] = nil
-            store.setPort(.stopped, for: project.path)
-            messages[project.path] = "已停止端口 \(port)"
+        busy[path] = .stopping
+        defer { busy[path] = nil }
+        let launch = devProcesses[path]
+        let outcome = await ManagedPreviewStop.request(project: owner, launch: launch, isCurrent: {
+            registered() && self.devProcesses[path] === launch
+        }, confirm: ManagedPreviewStop.confirm)
+        switch outcome {
+        case .cancelled: break
+        case .portFree(let message):
+            guard registered() else { return }
+            portConflicts[path] = nil
+            store.setPort(.stopped, for: path)
+            messages[path] = message
+        case .reviewInDoctor(let reason): review(reason)
         }
     }
 
@@ -634,18 +624,6 @@ final class ProjectActions {
         }
         return AppPaths.logsDir
             .appendingPathComponent("script-\(projectSlug)-\(String(scriptSlug)).log")
-    }
-
-    private func listeningPIDs(_ port: Int) async -> [Int32] {
-        let result = await Shell.run(
-            "lsof",
-            ["-ti", "tcp:\(port)", "-sTCP:LISTEN"],
-            timeout: 5
-        )
-        guard let text = result?.text else { return [] }
-        return text
-            .split(whereSeparator: \.isNewline)
-            .compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
     }
 
     private func handleDevTermination(

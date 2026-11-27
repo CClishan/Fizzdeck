@@ -96,8 +96,10 @@ struct Panel<Content: View, Accessory: View>: View {
                 FizzIcon(symbol: symbol, size: 13)
                     .foregroundStyle(.secondary)
                     .frame(width: 16)
+                    .accessibilityHidden(true)
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 12)
                 accessory
             }

@@ -14,7 +14,6 @@ struct ProjectDetailView: View {
     @State private var noteDraft = ""
     @State private var showingCleanupSheet = false
     @State private var showingHandoffSheet = false
-    @Namespace private var tabNamespace
 
     var body: some View {
         VStack(spacing: 0) {
@@ -112,49 +111,28 @@ struct ProjectDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 2) {
+                Picker("项目页签", selection: $tab.animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring))) {
                     ForEach(ProjectTab.allCases) { item in
-                        projectTabButton(item)
+                        Text(item.title(for: copyMode)).tag(item)
                     }
                 }
-                .padding(2)
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("项目页签")
-            }
-        }
-    }
-
-    private var accent: Color {
-        project.color?.color ?? ProjectGrouping.color(for: project.group)
-    }
-
-    private func projectTabButton(_ item: ProjectTab) -> some View {
-        let selected = tab == item
-        let labelTitle = item.title(for: copyMode)
-
-        return Button {
-            withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
-                tab = item
-            }
-        } label: {
-            Text(labelTitle)
-                .font(.system(size: 11.5, weight: selected ? .semibold : .medium))
-                .foregroundStyle(selected ? Color.white : Color.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background {
-                    if selected {
-                        Capsule()
-                            .fill(FizzTheme.accent)
-                            .matchedGeometryEffect(id: "projectTabSelection", in: tabNamespace)
-                    }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .tint(FizzTheme.accent)
+                .fixedSize()
+                .focusable(interactions: .edit)
+                .onKeyPress(keys: [.leftArrow, .rightArrow]) { key in
+                    let tabs = ProjectTab.allCases
+                    guard key.modifiers.intersection([.command, .option, .control, .shift]).isEmpty,
+                          let index = tabs.firstIndex(of: tab) else { return .ignored }
+                    let step = key.key == .leftArrow ? -1 : 1
+                    tab = tabs[(index + step + tabs.count) % tabs.count]
+                    return .handled
                 }
-                .contentShape(Capsule())
+                .accessibilityValue(tab.title(for: copyMode))
+            }
         }
-        .buttonStyle(.plain)
-        .help(item.title(for: copyMode))
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityRemoveTraits(selected ? [] : .isSelected)
     }
 
     private func applyRequestedCleanupSheet() {

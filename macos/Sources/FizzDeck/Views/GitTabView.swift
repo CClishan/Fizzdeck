@@ -124,12 +124,16 @@ struct GitTabView: View {
                     await refreshAfterWrite()
                 }
             }
+        } else if GitService.hasGit(directory) {
+            ProgressView("读取版本记录…").task { await onSyncCompleted() }
         } else {
-            ContentUnavailableView(
-                "不是 Git 仓库",
-                systemImage: "arrow.triangle.branch",
-                description: Text("这个目录没有 .git，仍可在概览里查看体积和文件信息。")
-            )
+            ContentUnavailableView {
+                Label("还没有开启版本保护", systemImage: "arrow.triangle.branch")
+            } description: {
+                Text("开启后可从第一条基线查看变化或还原文件。")
+            } actions: {
+                EnableVersionProtectionButton(project: project).buttonStyle(.glassProminent)
+            }
         }
     }
 
@@ -525,7 +529,16 @@ struct GitTabView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusable(interactions: .edit)
+            .onKeyPress(keys: [.leftArrow, .rightArrow, .space, .return], phases: .down) { key in
+                guard key.modifiers.intersection([.command, .option, .control, .shift]).isEmpty else { return .ignored }
+                let expanded = expandedPaths.contains(change.path)
+                if key.key == .leftArrow && !expanded || key.key == .rightArrow && expanded { return .handled }
+                withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) { toggleDiff(change) }
+                return .handled
+            }
             .accessibilityLabel("\(change.path) Diff")
+            .accessibilityValue(expandedPaths.contains(change.path) ? "已展开" : "已收起")
             .accessibilityHint(expandedPaths.contains(change.path) ? "收起 Diff" : "展开 Diff")
 
             if change.hasUnstagedChanges {
@@ -542,6 +555,7 @@ struct GitTabView: View {
                     }
                 }
             }
+            RelatedSessionsButton(project: project, file: change.path, compact: true)
         }
         .padding(.vertical, 5)
 
@@ -561,6 +575,12 @@ struct GitTabView: View {
         Button(title, action: action)
             .buttonStyle(.glass)
             .controlSize(.mini)
+            .focusable(interactions: .edit)
+            .onKeyPress(keys: [.space, .return], phases: .down) { key in
+                guard !isBusy, key.modifiers.intersection([.command, .option, .control, .shift]).isEmpty else { return .ignored }
+                action()
+                return .handled
+            }
             .disabled(isBusy)
             .help(help)
             .accessibilityLabel(help)
@@ -868,7 +888,7 @@ struct GitTabView: View {
                                 .foregroundStyle(mark.kind == .gitSnapshot ? .teal : .secondary)
                                 .padding(.top, 4)
 
-                                Text("AI 标记")
+                                Text(mark.isProtectionBaseline ? "基线" : "AI 标记")
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundStyle(.teal)
                                     .frame(width: 54, alignment: .leading)
@@ -894,6 +914,22 @@ struct GitTabView: View {
                                 Spacer(minLength: 8)
 
                                 if mark.kind == .gitSnapshot {
+                                    Button(mark.pinned ? "取消固定" : "固定保留") {
+                                        Task {
+                                            let success = await store.togglePin(mark: mark)
+                                            if !success {
+                                                ToastCenter.shared.show(
+                                                    "暂时没能更新固定状态",
+                                                    symbol: "exclamationmark.triangle.fill",
+                                                    tint: .orange
+                                                )
+                                            }
+                                        }
+                                    }
+                                    .buttonStyle(.glass)
+                                    .controlSize(.small)
+                                    .help(mark.pinned ? "取消永久保留" : "永久保留，不会被 Git 清理")
+
                                     Button("看变化") {
                                         markDiffTarget = mark
                                     }

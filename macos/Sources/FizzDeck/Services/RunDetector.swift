@@ -287,7 +287,9 @@ enum RunDetector {
 
     static func manager(for directory: URL) -> String {
         if FileTools.exists(directory.appendingPathComponent("pnpm-lock.yaml")) { return "pnpm" }
-        if FileTools.exists(directory.appendingPathComponent("bun.lock")) { return "bun" }
+        if FileTools.exists(directory.appendingPathComponent("yarn.lock")) { return "yarn" }
+        if FileTools.exists(directory.appendingPathComponent("bun.lock"))
+            || FileTools.exists(directory.appendingPathComponent("bun.lockb")) { return "bun" }
         return "npm"
     }
 
