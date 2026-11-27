@@ -1,6 +1,6 @@
 # FizzDeck 现有能力全量梳理与后续演进路线
 
-> **源码基线**：macOS 原生端 `v0.7.4`（Build `12`，准备发布）｜ 线上公开版本 [`v0.5.3`](https://github.com/CClishan/Fizzdeck/releases/tag/v0.5.3)（Build `11`）｜ 官网 [`https://koroo.top/fizzdeck`](https://koroo.top/fizzdeck)
+> **源码基线**：macOS 原生端 `v0.7.4`（Build `12`，已发布）｜ 线上公开版本 [`v0.7.4`](https://github.com/CClishan/Fizzdeck/releases/tag/v0.7.4)（Build `12`）｜ 官网 [`https://koroo.top/fizzdeck`](https://koroo.top/fizzdeck)
 > **工程规模**：macOS 原生源码 **110** 个 Swift 文件（`App` 1 / `Models` 4 / `Stores` 1 / `Services` 38 / `Support` 24 / `Views` 42），**46** 个测试文件；配套本地 Web UI 与双语官网。
 
 ---
@@ -135,7 +135,7 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 | `v0.7.1` | 详情页瘦身、项目信息与文档列表合并 | 已落地 |
 | `v0.7.2` | 找得回：中文 FTS5、短词回退、⌘K 对话直达 | 已落地 |
 | `v0.7.3` | 跑得起：Doctor、闲置整理、运行页体检、报错求助 | 已落地 |
-| `v0.7.4` | 正式分发准备：版本统一、签名/公证脚本、双语新手文档、官网同步 | 当前基线，待发布 |
+| `v0.7.4` | 正式分发：版本统一、签名/公证脚本、双语新手文档、官网同步 | 已发布（ad-hoc，未公证） |
 
 ---
 

@@ -2,11 +2,11 @@
 
 - 更新时间：2026-11-27
 - 仓库：`/Users/a003/dsh-workspace/repo-dashboard`
-- 当前分支：`main`（准备发布 `v0.7.4`）
-- 线上公开版本：`v0.5.3`（Build 11）
+- 当前分支：`main`（`v0.7.4` 已发布）
+- 线上公开版本：`v0.7.4`（Build 12）
 - 当前源码版本：`0.7.4`（Build 12）
-- 状态：`v0.6.0–v0.7.3` 能力已落地；双语 README、官网、能力矩阵、签名/公证脚本与发布 Checklist 已同步。默认 ad-hoc DMG 候选已通过版本、签名、镜像和 SHA-256 校验，待提交、推送和创建 GitHub Release。
-- 发布候选：`macos/dist/FizzDeck-0.7.4-arm64.dmg`，SHA-256 `bf91a21fefc4524b59af1c437e687a5251d1aef08cc487142825c61f5b077931`。
+- 状态：`v0.7.4` 已发布为 GitHub Latest；`main` 发布提交 `fbbc21f`，tag `v0.7.4`。双语 README、官网、能力矩阵、签名/公证脚本与发布 Checklist 已同步。公开 DMG 仍为 ad-hoc 签名，未公证。
+- 发布资产：`macos/dist/FizzDeck-0.7.4-arm64.dmg`，SHA-256 `bf91a21fefc4524b59af1c437e687a5251d1aef08cc487142825c61f5b077931`。
 
 ## 新对话开场提示
 
@@ -32,7 +32,7 @@
 | 原生分发 | `v0.7.4` ad-hoc DMG 候选已打包；Developer ID 与公证参数可通过脚本注入，当前环境未提供凭据 |
 | Web UI | `src/`、`server.mjs` 与 `public/` 已同步当前官网与工作台；`npm run build` 通过 |
 | Landing | `src/landing/i18n.js` 与静态 `landing.html` 已对齐 `v0.7.4`，公开部署仍需单独执行 |
-| 仓库 | 工作区改动待提交；GitHub 线上最新 Release 仍为 `v0.5.3` |
+| 仓库 | `v0.7.4` 已推送并发布为 GitHub Latest；Release 资产与下载 SHA-256 已复核 |
 | 验证基线 | Swift test 252/252、`swift build` 0 warning、`bash -n`、`git diff --check`、`codesign --verify --deep --strict`、`hdiutil verify` 全部通过；DMG SHA-256 与 `.sha256` 一致 |
 | 发布阻塞 | `gh` API 凭据失效；真实 Developer ID 公证与 `v0.5.3 / v0.7.3 → v0.7.4` 应用内更新尚未实测 |
 
@@ -742,10 +742,13 @@ CUA 实测：
 
 ## 发布记录
 
-- v0.7.4：待 GitHub Release；源码版本 `0.7.4`（Build 12）
-- v0.7.4 安装包：`FizzDeck-0.7.4-arm64.dmg`，Apple Silicon，ad-hoc 签名，未公证
+- v0.7.4：`https://github.com/CClishan/Fizzdeck/releases/tag/v0.7.4`（Latest）
+- v0.7.4 安装包：`FizzDeck-0.7.4-arm64.dmg`，5,982,222 bytes，Apple Silicon，ad-hoc 签名，未公证；asset ID `799518355`
+- v0.7.4 校验文件：`FizzDeck-0.7.4-arm64.dmg.sha256`，91 bytes；asset ID `799518339`
 - v0.7.4 SHA-256：`bf91a21fefc4524b59af1c437e687a5251d1aef08cc487142825c61f5b077931`
 - v0.7.4 校验：`swift test` 252/252、`swift build` 0 warning、`codesign --verify --deep --strict`、`hdiutil verify` 通过
+- v0.7.4 发布提交：`fbbc21f Release FizzDeck 0.7.4 with vibe-coder workflows`；tag object `6127b3e`
+- v0.7.4 线上验收：`releases/latest` 指向 v0.7.4；重新下载 DMG 的 GitHub digest 与 `.sha256` 一致，`hdiutil verify` 通过
 - v0.3.0：`https://github.com/CClishan/Fizzdeck/releases/tag/v0.3.0`（Release ID `459028876`，DMG asset ID `794574637`，Latest）
 - v0.3.0 安装包：`FizzDeck-0.3.0-arm64.dmg`，3,143,502 bytes，Apple Silicon，ad-hoc 签名，未公证
 - v0.3.0 SHA-256：`6db40472c6cbf16844d11af1ec1a5af564a854560eab66f68f8156b6567d7eb6`
@@ -787,18 +790,18 @@ CUA 实测：
 
 ## 工作区现状（重要）
 
-- 当前发布分支是 `main`；`v0.7.4` 改动待提交，GitHub 线上最新 Release 仍为 `v0.5.3`。
+- 当前发布分支是 `main`；`v0.7.4` 已推送并发布为 GitHub Latest。
 - `~/.repodeck` 的 `roots.json`、`state.json` 未因打包或 GUI 验收改动。
 - 当前运行中或本机安装目录 `/Applications/FizzDeck.app` 未在本次发版中被改动，仍可能为旧版本。
 - 最新可分发包是 `macos/dist/FizzDeck-0.7.4-arm64.dmg`；`.app` 已按 ad-hoc 方式签名并通过校验（本机钥匙串无 Developer ID 证书，未公证）。
-- `src/landing/i18n.js` 与静态官网已指向 `v0.7.4`；外部部署和 `releases/latest` 更新需在 Release 后复核。
+- `src/landing/i18n.js` 与静态官网已指向 `v0.7.4`；`releases/latest` 已指向 v0.7.4，外部部署仍需单独执行。
 - 不要回滚 `server.mjs`、`vite.config.js`、`public/`、`landing.html`、`src/landing/`、`src/stageshow/` 的已发布内容；需要修改时单独开任务。
 
 ## 待增加能力（移交清单）
 
 ### 发布与交付
 
-- [ ] `v0.7.4` GitHub Release：提交并推送 `main`，创建 tag，上传 DMG 与 `.sha256`，复核 `releases/latest`。
+- [x] `v0.7.4` GitHub Release：`main` 与 tag 已推送，DMG 与 `.sha256` 已上传，`releases/latest` 与下载哈希已复核。
 - [ ] 应用内更新：分别从 `v0.5.3` 和 `v0.7.3` 实机更新到 `v0.7.4`，核对版本、Build、SHA-256、项目状态与重启行为。
 - [ ] 正式签名与公证：提供 Developer ID 与 `NOTARY_PROFILE` 后运行 `./macos/script/package_dmg.sh --notarize`，并在干净 Mac 上安装验收。
 - [ ] 旧域名收敛：把 `https://fizzdeck.pages.dev` 301 到 `https://koroo.top/fizzdeck`，保留 Cloudflare Pages 项目作为回滚。验收：旧路径 301、canonical/OG 不重复、静态资源不丢。

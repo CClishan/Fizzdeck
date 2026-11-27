@@ -2,7 +2,7 @@
 
 > 配套文档：[CAPABILITIES_AND_ROADMAP.md](./CAPABILITIES_AND_ROADMAP.md)（现有能力全量梳理）。
 > 本文回答：**小白到底卡在哪 → 方向 1「AI 会话记忆中枢」的能力边界 → 轻量「对话标记」替代存档点 → LLM 总结怎么接 → 版本任务拆解**。
-> **当前基线（2026-11-27）**：`v0.6.0–v0.7.3` 已落地；`v0.7.4`（Build 12）进入分发准备，版本、签名/公证脚本、双语新手文档和官网已同步，真实更新与公证待发布验收。
+> **当前基线（2026-11-27）**：`v0.6.0–v0.7.3` 已落地；`v0.7.4`（Build 12）已发布为 GitHub Latest，版本、签名/公证脚本、双语新手文档和官网已同步；真实应用内更新与 Developer ID 公证待验收。
 
 **已拍板（2026-11-27）**
 
@@ -272,12 +272,13 @@ flowchart LR
 | 7.3.2 | 报错转 prompt：日志报错 + 栈 + 最近改动文件 → 可复制求助 prompt；人话解释（词典 / LLM） | `ProjectServicesPanel` 日志区 | 小白不需要理解报错也能求助 |
 | 7.3.3 | 密钥泄露守护增强（跟踪文件 `git grep`）与非 Git 项目引导 + 一键 `git init` | `GitSyncService`、`ProjectInfoTabView` | 含 Key 的跟踪改动被拦截；非 Git 项目引导后标记 ② 可用 |
 
-### `v0.7.4` 正式分发准备
+### `v0.7.4` 正式分发
 
 - 版本号统一为 `0.7.4`（Build `12`），构建脚本支持 `VERSION` / `BUILD_NUM` 覆盖。
 - `package_dmg.sh` 支持 Developer ID、Hardened Runtime、DMG 签名、公证、staple 与 `spctl`；未提供身份时保留 ad-hoc。
 - 双语新手 README、官网三大主线文案与 `v0.5.3 / v0.7.3 → v0.7.4` 发布验证步骤已补齐。
-- 发布前仍需用真实 Developer ID / 公证凭据打一次包，并分别在 `v0.5.3`、`v0.7.3` 上实测应用内下载更新。详见 [CAPABILITIES_AND_ROADMAP.md 第六节](./CAPABILITIES_AND_ROADMAP.md#六v074-发布验证清单)。
+- GitHub Release 已发布为 Latest，公开 DMG 与 `.sha256` 已完成下载、哈希和镜像复验。
+- 仍需用真实 Developer ID / 公证凭据打一次包，并分别在 `v0.5.3`、`v0.7.3` 上实测应用内下载更新。详见 [CAPABILITIES_AND_ROADMAP.md 第六节](./CAPABILITIES_AND_ROADMAP.md#六v074-发布验证清单)。
 
 ---
 
@@ -625,4 +626,4 @@ stateDiagram-v2
 ## 十、规划状态
 
 > ✅ **`v0.6.0–v0.7.3` 已按本文落地**：人话模式、对话时间线、接力卡、对话标记、Diff/还原、存版本、可选 AI 总结、中文搜索、4 页签与 Doctor 均已进入原生端。
-> 🚀 **`v0.7.4` 进入分发收口**：版本与打包脚本、双语新手文档、官网文案已同步；剩余验收是用真实签名/公证凭据打包，并按发布 Checklist 实测 `v0.5.3 / v0.7.3 → v0.7.4` 应用内更新。
+> 🚀 **`v0.7.4` 已发布**：版本与打包脚本、双语新手文档、官网文案已同步，GitHub Release 已上传并校验；剩余验收是用真实签名/公证凭据打包，并按发布 Checklist 实测 `v0.5.3 / v0.7.3 → v0.7.4` 应用内更新。
