@@ -1,3 +1,4 @@
+import Darwin
 import XCTest
 @testable import FizzDeck
 
@@ -130,13 +131,19 @@ final class SessionProcessTests: XCTestCase {
         let session = SessionRecord(tool: "codex", id: UUID().uuidString, cwd: directory.path,
                                     startedAt: nil, modified: Date(), lastUser: nil)
         let executable = directory.appendingPathComponent("codex")
-        // ps must see the fixture's executable name, independent of symlink resolution.
-        try Data(contentsOf: URL(fileURLWithPath: "/usr/bin/yes")).write(to: executable)
+        // cat blocks opening the FIFO named "resume", preserving argv until SIGTERM.
+        // Some versions of yes overwrite the argument buffer that ps reads.
+        guard mkfifo(directory.appendingPathComponent("resume").path, 0o600) == 0 else {
+            return XCTFail("Could not create fixture FIFO: \(String(cString: strerror(errno)))")
+        }
+        try Data(contentsOf: URL(fileURLWithPath: "/bin/cat")).write(to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
 
         let process = Process()
         process.executableURL = executable
         process.arguments = ["resume", session.id]
+        process.currentDirectoryURL = directory
+        process.environment = [:]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()
@@ -153,8 +160,7 @@ final class SessionProcessTests: XCTestCase {
             matches = await SessionProcessService.liveProcesses(for: [session])[session.stableID] ?? []
         }
         guard matches == [process.processIdentifier] else {
-            let row = await Shell.output("/bin/ps", ["-ww", "-p", String(process.processIdentifier), "-o", "command="])
-            return XCTFail("Expected only the test child; matches: \(matches), fixture command: \(row ?? "missing")")
+            return XCTFail("Expected only PID \(process.processIdentifier); found \(matches), running: \(process.isRunning)")
         }
         let result = await SessionProcessService.end(session)
 
