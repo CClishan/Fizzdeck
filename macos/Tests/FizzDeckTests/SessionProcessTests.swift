@@ -127,15 +127,16 @@ final class SessionProcessTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
+        let session = SessionRecord(tool: "codex", id: UUID().uuidString, cwd: directory.path,
+                                    startedAt: nil, modified: Date(), lastUser: nil)
         let executable = directory.appendingPathComponent("codex")
-        try FileManager.default.createSymbolicLink(
-            at: executable,
-            withDestinationURL: URL(fileURLWithPath: "/usr/bin/yes")
-        )
+        // ps must see the fixture's executable name, independent of symlink resolution.
+        try Data(contentsOf: URL(fileURLWithPath: "/usr/bin/yes")).write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
 
         let process = Process()
         process.executableURL = executable
-        process.arguments = ["resume", codex.id]
+        process.arguments = ["resume", session.id]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()
@@ -145,7 +146,17 @@ final class SessionProcessTests: XCTestCase {
             }
         }
 
-        let result = await SessionProcessService.end(codex)
+        let deadline = ContinuousClock.now + .seconds(3)
+        var matches = await SessionProcessService.liveProcesses(for: [session])[session.stableID] ?? []
+        while matches.isEmpty && process.isRunning && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(80))
+            matches = await SessionProcessService.liveProcesses(for: [session])[session.stableID] ?? []
+        }
+        guard matches == [process.processIdentifier] else {
+            let row = await Shell.output("/bin/ps", ["-ww", "-p", String(process.processIdentifier), "-o", "command="])
+            return XCTFail("Expected only the test child; matches: \(matches), fixture command: \(row ?? "missing")")
+        }
+        let result = await SessionProcessService.end(session)
 
         XCTAssertTrue(result.success, result.message)
         XCTAssertFalse(process.isRunning)
