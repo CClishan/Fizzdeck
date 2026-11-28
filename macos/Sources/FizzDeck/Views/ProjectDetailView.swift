@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct ProjectDetailView: View {
@@ -19,8 +18,7 @@ struct ProjectDetailView: View {
         VStack(spacing: 0) {
             ProjectHero(
                 project: project,
-                onShowHandoff: { showingHandoffSheet = true },
-                onShowCleanup: { showingCleanupSheet = true }
+                onShowHandoff: { showingHandoffSheet = true }
             )
             Group {
                 switch tab {
@@ -41,7 +39,7 @@ struct ProjectDetailView: View {
                         noteDraft: $noteDraft,
                         saveNote: {
                             store.setNote(noteDraft, for: project)
-                            ToastCenter.shared.show("备注已保存", symbol: "checkmark.circle.fill", tint: .green)
+                            ToastCenter.shared.show("备注已保存", symbol: "checkmark.circle.fill", tint: FizzTheme.statusSuccess)
                         },
                         onShowCleanup: {
                             showingCleanupSheet = true
@@ -50,7 +48,6 @@ struct ProjectDetailView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.top, 8)
             .overlay(alignment: .top) {
                 FizzScrollTopHairline(
                     visible: scrolledPastTop
@@ -92,23 +89,16 @@ struct ProjectDetailView: View {
         }
         .sheet(isPresented: $showingCleanupSheet) {
             VStack(spacing: 0) {
-                HStack {
-                    Text("清理空间 · \(project.displayName)")
-                        .font(.system(size: 15, weight: .semibold))
-                    Spacer()
-                    Button("完成") {
-                        showingCleanupSheet = false
-                    }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
+                FizzSheetHeader(title: "清理空间 · \(project.displayName)") {
+                    showingCleanupSheet = false
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .padding(FizzSpacing.panel)
                 Divider()
                 CleanupTabView(project: project)
             }
             .frame(minWidth: 680, minHeight: 460)
         }
+        .focusedSceneValue(\.fizzProjectTab, $tab)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Picker("项目页签", selection: $tab.animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring))) {
@@ -119,15 +109,12 @@ struct ProjectDetailView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .controlSize(.small)
-                .tint(FizzTheme.accent)
+                .tint(.secondary)
                 .fixedSize()
                 .focusable(interactions: .edit)
                 .onKeyPress(keys: [.leftArrow, .rightArrow]) { key in
-                    let tabs = ProjectTab.allCases
-                    guard key.modifiers.intersection([.command, .option, .control, .shift]).isEmpty,
-                          let index = tabs.firstIndex(of: tab) else { return .ignored }
-                    let step = key.key == .leftArrow ? -1 : 1
-                    tab = tabs[(index + step + tabs.count) % tabs.count]
+                    guard key.modifiers.intersection([.command, .option, .control, .shift]).isEmpty else { return .ignored }
+                    tab = tab.adjacent(forward: key.key == .rightArrow)
                     return .handled
                 }
                 .accessibilityValue(tab.title(for: copyMode))
@@ -160,93 +147,72 @@ struct ProjectDetailView: View {
     }
 }
 
+extension FocusedValues {
+    @Entry var fizzProjectTab: Binding<ProjectTab>?
+}
+
 private struct ProjectHero: View {
     let project: RepoProject
     let onShowHandoff: () -> Void
-    let onShowCleanup: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .center, spacing: FizzSpacing.grid) {
             ProjectBadgeIcon(project: project, size: 42, framed: true)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 7) {
                     Text(project.displayName)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(FizzTypography.pageTitle)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
 
                     if project.port == .running {
-                        RunningPulseDot(size: 7)
+                        RunningPulseDot()
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Button {
-                    SystemActions.copy(project.path)
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(PathTools.displayPath(project.path))
-                            .font(.system(size: 11, design: .monospaced))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        FizzIcon(symbol: "doc.on.doc", size: 9)
-                    }
+                Text(verbatim: PathTools.displayPath(project.path))
+                    .font(FizzTypography.mono)
                     .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("复制完整路径")
-                .accessibilityLabel("复制项目路径")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(project.path)
 
                 FlowLayout(spacing: 6) {
-                    TagChip(text: project.group, tint: accent)
+                    TagChip(text: project.group)
+                        .frame(maxWidth: 200)
+                        .help(project.group)
                     if let branch = project.branch {
-                        TagChip(text: branch, tint: .blue)
+                        TagChip(text: branch, tint: Color.secondary)
+                            .frame(maxWidth: 200)
+                            .help(branch)
                     }
                     if project.dirtyCount > 0 {
-                        TagChip(text: "\(project.dirtyCount) 个改动", tint: .orange)
+                        TagChip(text: "\(project.dirtyCount) 个改动", tint: FizzTheme.statusWarning)
                     }
                     if let tool = project.sessions.lastTool {
                         TagChip(
                             text: DetectedTool(rawValue: tool)?.title ?? tool.capitalized,
-                            tint: .purple
+                            tint: Color.secondary
                         )
                     }
                     if let test = project.test {
-                        TagChip(text: test.label, tint: .green)
+                        TagChip(text: test.label)
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            ProjectHeroActions(
-                project: project,
-                onShowHandoff: onShowHandoff,
-                onShowCleanup: onShowCleanup
-            )
+            ProjectHeroActions(project: project, onShowHandoff: onShowHandoff)
+                .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)
         }
-        .padding(17)
+        .padding(FizzSpacing.panel)
         .fizzCard(radius: FizzRadius.panel)
-        .overlay {
-            if project.artwork != nil {
-                RadialGradient(
-                    colors: [accent.opacity(0.05), .clear],
-                    center: .topLeading,
-                    startRadius: 10,
-                    endRadius: 340
-                )
-                .clipShape(RoundedRectangle(cornerRadius: FizzRadius.panel, style: .continuous))
-                .allowsHitTesting(false)
-            }
-        }
         .padding(.horizontal, FizzSpacing.page)
         .padding(.top, FizzSpacing.row)
-    }
-
-    private var accent: Color {
-        project.color?.color ?? ProjectGrouping.color(for: project.group)
     }
 }
 
@@ -254,196 +220,42 @@ private struct ProjectHeroActions: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
     @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     let project: RepoProject
     let onShowHandoff: () -> Void
-    let onShowCleanup: () -> Void
 
-    @State private var hovering: Action?
-    @State private var remote: GitRemote?
-    @State private var remoteResolved = false
     @State private var removalRequest: ProjectRemovalRequest?
     @State private var removalError: String?
     @State private var removalWorking = false
 
-    private enum Action {
-        case star
-        case open
-        case more
-    }
-
-    private var utilityIconStyle: Color {
-        colorScheme == .dark ? Color.primary.opacity(0.86) : Color.secondary
+    private var starTitle: String {
+        copyMode == .plain
+            ? (project.starred ? "取消关注" : "加入关注")
+            : (project.starred ? "取消星标" : "设为星标")
     }
 
     var body: some View {
-        GlassEffectContainer(spacing: 0) {
-            HStack(spacing: 0) {
-                Button {
-                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
-                        store.toggleStar(project)
-                    }
-                } label: {
-                    FizzIcon(symbol: project.starred ? "star.fill" : "star", size: 13)
-                        .foregroundStyle(project.starred ? Color.yellow : utilityIconStyle)
-                        .frame(width: 30, height: 30)
-                        .background(segmentBackground(.star), in: segmentShape)
-                        .contentShape(segmentShape)
-                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+        HStack(spacing: FizzSpacing.row) {
+            FizzIconButton(title: starTitle, symbol: project.starred ? "star.fill" : "star", height: .compact) {
+                withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
+                    store.toggleStar(project)
                 }
-                .buttonStyle(.plain)
-                .help(copyMode == .plain
-                    ? (project.starred ? "取消关注" : "加入关注")
-                    : (project.starred ? "取消星标" : "设为星标"))
-                .accessibilityLabel(copyMode == .plain
-                    ? (project.starred ? "取消关注" : "加入关注")
-                    : (project.starred ? "取消星标" : "设为星标"))
-                .onHover { hovering = $0 ? .star : nil }
-
-                segmentDivider
-
-                Menu {
-                    ProjectQuickActions(project: project)
-                } label: {
-                    HStack(spacing: 3) {
-                        FizzIcon(symbol: "folder", size: 12)
-                            .foregroundStyle(utilityIconStyle)
-                        FizzIcon(symbol: "chevron.down", size: 7)
-                            .foregroundStyle(colorScheme == .dark ? Color.primary.opacity(0.65) : Color.secondary.opacity(0.7))
-                    }
-                    .frame(width: 39, height: 30)
-                    .background(segmentBackground(.open), in: segmentShape)
-                    .contentShape(segmentShape)
-                    .accessibilityElement(children: .ignore)
-                }
-                .menuStyle(.button)
-                .menuIndicator(.hidden)
-                .buttonStyle(.plain)
-                .help("打开方式")
-                .accessibilityLabel("打开方式")
-                .onHover { hovering = $0 ? .open : nil }
-
-                segmentDivider
-
-                Menu {
-                    Menu("标签颜色") {
-                        Button("无标签") { store.setColor(nil, for: project) }
-                        ForEach(TagColor.allCases) { color in
-                            Button(color.label) { store.setColor(color, for: project) }
-                        }
-                    }
-                    ProjectGroupingMenu(project: project)
-                    Divider()
-                    Button {
-                        if let url = ArtworkFilePicker.pickImageURL(),
-                           store.setCustomArtwork(from: url, for: project) {
-                            ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: FizzTheme.accent)
-                        }
-                    } label: {
-                        Label(
-                            project.artwork == nil ? "上传项目截图…" : "替换项目截图…",
-                            systemImage: "photo.badge.plus"
-                        )
-                    }
-                    if project.customArtwork != nil {
-                        Button {
-                            store.clearCustomArtwork(for: project)
-                            ToastCenter.shared.show("已恢复自动识别封面", symbol: "arrow.uturn.backward.circle.fill", tint: .secondary)
-                        } label: {
-                            Label("恢复自动识别截图", systemImage: "arrow.uturn.backward")
-                        }
-                    }
-                    Divider()
-                    Button {
-                        SystemActions.copy(project.path)
-                    } label: {
-                        Label("复制路径", systemImage: "doc.on.doc")
-                    }
-
-                    Divider()
-
-                    if let remote {
-                        if let url = remote.webURL {
-                            Button {
-                                SystemActions.openURL(url.absoluteString)
-                            } label: {
-                                Label("在浏览器中打开远程仓库", systemImage: "arrow.up.right.square")
-                            }
-                        }
-                        Button {
-                            SystemActions.copy(remote.raw)
-                        } label: {
-                            Label("复制远程地址", systemImage: "link")
-                        }
-                    } else if remoteResolved {
-                        Button {} label: {
-                            Label("没有远程仓库", systemImage: "link.badge.plus")
-                        }
-                        .disabled(true)
-                    }
-
-                    Button {
-                        let result = HandoffCardBuilder.build(project: project, copyMode: copyMode)
-                        SystemActions.copy(result.markdown)
-                        ToastCenter.shared.show(
-                            "接力卡已复制",
-                            symbol: "doc.on.clipboard.fill",
-                            tint: FizzTheme.accent,
-                            subtitle: "\(result.characterCount) 字"
-                        )
-                    } label: {
-                        Label("复制接力卡", systemImage: "doc.on.clipboard")
-                    }
-                    Button {
-                        onShowHandoff()
-                    } label: {
-                        Label("预览接力卡…", systemImage: "text.viewfinder")
-                    }
-                    Button {
-                        onShowCleanup()
-                    } label: {
-                        if project.cleanup.reusableBytes > 0 {
-                            Label("清理空间（可腾出 \(Format.bytes(project.cleanup.reusableBytes))）…", systemImage: "trash.slash")
-                        } else {
-                            Label("清理空间…", systemImage: "trash.slash")
-                        }
-                    }
-
-                    Divider()
-
-                    Button("移入废纸篓…", role: .destructive) {
-                        removalRequest = ProjectRemovalRequest(mode: .trash)
-                    }
-                    Button("永久删除…", role: .destructive) {
-                        removalRequest = ProjectRemovalRequest(mode: .permanent)
-                    }
-                } label: {
-                    FizzIcon(symbol: "ellipsis", size: 12)
-                        .foregroundStyle(utilityIconStyle)
-                        .frame(width: 30, height: 30)
-                        .background(segmentBackground(.more), in: segmentShape)
-                        .contentShape(segmentShape)
-                }
-                .menuStyle(.button)
-                .menuIndicator(.hidden)
-                .buttonStyle(.plain)
-                .help("更多")
-                .accessibilityLabel("更多")
-                .onHover { hovering = $0 ? .more : nil }
             }
-            .padding(3)
-            .glassEffect(.regular.interactive(), in: Capsule())
+            .foregroundStyle(project.starred ? Color.secondary : Color.primary)
+
+            FizzMenuButton(title: "打开方式", symbol: "folder") {
+                ProjectQuickActions(project: project)
+            }
+
+            FizzMenuButton(title: "更多项目操作") {
+                projectMenuItems
+            }
+
+            SessionContinueButton(project: project, style: .hero)
+                .id(project.path)
         }
-        .fizzAdaptiveShadow(.subtle)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("项目操作")
-        .task(id: project.path) {
-            remote = store.cachedRemote(for: project.path)
-            remoteResolved = store.hasResolvedRemote(for: project.path)
-            remote = await store.remote(for: project)
-            remoteResolved = true
-        }
         .sheet(item: $removalRequest) { request in
             ProjectRemovalSheet(
                 project: project,
@@ -481,6 +293,60 @@ private struct ProjectHeroActions: View {
         }
     }
 
+    @ViewBuilder
+    private var projectMenuItems: some View {
+        Menu("标签颜色") {
+            Button("无标签") { store.setColor(nil, for: project) }
+            ForEach(TagColor.allCases) { color in
+                Button(color.label) { store.setColor(color, for: project) }
+            }
+        }
+        ProjectGroupingMenu(project: project)
+        Divider()
+
+        Button {
+            if let url = ArtworkFilePicker.pickImageURL(),
+               store.setCustomArtwork(from: url, for: project) {
+                ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: Color.secondary)
+            }
+        } label: {
+            Label(project.artwork == nil ? "上传项目截图…" : "替换项目截图…", systemImage: "photo.badge.plus")
+        }
+        if project.customArtwork != nil {
+            Button("恢复自动识别截图", systemImage: "arrow.uturn.backward") {
+                store.clearCustomArtwork(for: project)
+                ToastCenter.shared.show("已恢复自动识别封面", symbol: "arrow.uturn.backward.circle.fill", tint: .secondary)
+            }
+        }
+
+        Divider()
+
+        Button("复制接力卡", systemImage: "doc.on.clipboard") {
+            let result = HandoffCardBuilder.build(project: project, copyMode: copyMode)
+            SystemActions.copy(result.markdown, feedback: nil)
+            let subtitle = result.redactedCount > 0
+                ? "\(result.characterCount) 字 · 已打码 \(result.redactedCount) 处密钥"
+                : "\(result.characterCount) 字 · 含 \(result.includedSessionCount) 次对话"
+            ToastCenter.shared.show(
+                "接力卡已复制",
+                symbol: "doc.on.clipboard.fill",
+                tint: Color.secondary,
+                subtitle: subtitle,
+                action: ToastAction(title: "预览", symbol: "eye") { onShowHandoff() }
+            )
+        }
+        Button("预览接力卡…", systemImage: "text.viewfinder", action: onShowHandoff)
+
+        Divider()
+
+        Button("移入废纸篓…", role: .destructive) {
+            removalRequest = ProjectRemovalRequest(mode: .trash)
+        }
+        Button("永久删除…", role: .destructive) {
+            removalRequest = ProjectRemovalRequest(mode: .permanent)
+        }
+    }
+
     private var removalBlockedReason: String? {
         if removalWorking { return "正在处理移除操作。" }
         if project.port == .running { return "先停止运行中的开发服务。" }
@@ -489,21 +355,6 @@ private struct ProjectHeroActions: View {
         }
         if actions.isBusy(project.path) { return "正在启动或停止服务，稍后再试。" }
         return nil
-    }
-
-    private var segmentShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-    }
-
-    private func segmentBackground(_ action: Action) -> Color {
-        hovering == action ? FizzTheme.selectedFill : .clear
-    }
-
-    private var segmentDivider: some View {
-        Rectangle()
-            .fill(FizzTheme.hairline)
-            .frame(width: 1, height: 15)
-            .padding(.horizontal, 2)
     }
 }
 
@@ -527,48 +378,44 @@ private struct ProjectRemovalSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                FizzIcon(symbol: mode.symbol, size: 18)
-                    .foregroundStyle(.red)
-                Text("\(mode.title) \(project.displayName)")
-                    .font(.headline)
-            }
+        VStack(alignment: .leading, spacing: FizzSpacing.panel) {
+            FizzSheetHeader(title: "\(mode.title) \(project.displayName)", onClose: onCancel)
 
-            Text(mode.explanation)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Label {
+                Text(mode.explanation)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                FizzIcon(.lg, symbol: mode.symbol)
+                    .foregroundStyle(.secondary)
+            }
+            .font(FizzTypography.body)
 
             if let blockedReason {
                 Label(blockedReason, systemImage: "exclamationmark.triangle")
-                    .font(.callout)
-                    .foregroundStyle(.orange)
+                    .font(FizzTypography.body)
+                    .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("输入目录名「\(expectedName)」确认")
-                    .font(.caption)
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
                 TextField(expectedName, text: $confirmation)
                     .textFieldStyle(.roundedBorder)
+                    .font(FizzTypography.body)
             }
 
-            HStack {
-                Spacer()
-                Button("取消", role: .cancel) {
-                    onCancel()
-                }
-                .buttonStyle(.glass)
-                Button(mode.actionTitle, role: .destructive) {
+            FizzSheetFooter {
+                FizzActionButton(title: "取消", role: .cancel, action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                FizzActionButton(title: mode.actionTitle, prominence: .primary, role: .destructive) {
                     onConfirm(confirmation)
                 }
-                .buttonStyle(.glassProminent)
-                .tint(.red)
                 .disabled(confirmation != expectedName || blockedReason != nil)
             }
         }
-        .padding(24)
+        .padding(FizzSpacing.page)
         .frame(width: 440)
     }
 }

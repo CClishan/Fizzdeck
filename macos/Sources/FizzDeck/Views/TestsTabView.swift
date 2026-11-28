@@ -18,11 +18,11 @@ struct TestsTabView: View {
                         VStack(alignment: .leading, spacing: 14) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(project.test?.command ?? "未识别测试命令")
-                                    .font(.system(size: 12, design: .monospaced))
+                                    .font(FizzTypography.font(12))
                                     .textSelection(.enabled)
                                 if let test = project.test {
                                     Text("来自 \(test.label)")
-                                        .font(.caption)
+                                        .font(FizzTypography.micro(.regular))
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -30,7 +30,7 @@ struct TestsTabView: View {
                             if let output = runState?.output, !output.isEmpty {
                                 ScrollView {
                                     Text(output)
-                                        .font(.system(size: 11, design: .monospaced))
+                                        .font(FizzTypography.caption)
                                         .textSelection(.enabled)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(12)
@@ -64,12 +64,7 @@ struct TestsTabView: View {
     @ViewBuilder
     private var statusBadge: some View {
         if let run = runState {
-            Text(statusText(run))
-                .font(.caption.weight(.medium))
-                .foregroundStyle(statusColor(run.status))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(statusColor(run.status).opacity(0.12), in: Capsule())
+            TagChip(text: statusText(run), tint: statusColor(run.status))
         }
     }
 
@@ -87,8 +82,8 @@ struct TestsTabView: View {
     private func statusColor(_ status: TestStatus) -> Color {
         switch status {
         case .running: .secondary
-        case .passed: .green
-        case .failed: .red
+        case .passed: FizzTheme.statusSuccess
+        case .failed: FizzTheme.statusDanger
         }
     }
 }

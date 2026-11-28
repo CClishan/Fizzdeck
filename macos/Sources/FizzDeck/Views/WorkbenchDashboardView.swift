@@ -3,13 +3,14 @@ import SwiftUI
 struct WorkbenchDashboardView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     @AppStorage(CopyModePreferences.onboardingSeenKey) private var onboardingSeen = false
 
     @State private var freeDiskBytes: Int64?
     @State private var scrolledPastTop = false
     @State private var onboardingStep = 0
+    @State private var showingHeatmap = false
+    let onShowRecap: () -> Void
 
     private var focusPartition: FocusPartition {
         ProjectFocusPolicy.partition(projects: store.projects)
@@ -35,13 +36,6 @@ struct WorkbenchDashboardView: View {
                 activeAIProjectPaths: store.activeAIProjectPaths
             ) == .broken
         }.count
-    }
-
-    private var kpi: DashboardKPISummary {
-        DashboardMetrics.kpiSummary(
-            projects: store.projects,
-            commitActivity: store.commitActivity
-        )
     }
 
     private var continueItems: [ContinueWorkItem] {
@@ -89,11 +83,14 @@ struct WorkbenchDashboardView: View {
                 GeometryReader { proxy in
                     let outerWidth = max(320, proxy.size.width)
                     let contentWidth = max(260, outerWidth - FizzSpacing.page * 2)
-
                     ScrollView(.vertical) {
                         VStack(alignment: .leading, spacing: FizzSpacing.section) {
-                            header(width: contentWidth)
-                            mainColumns(width: contentWidth)
+                            header
+                            actionPanels(width: contentWidth)
+                            timeline
+                            statusCard
+                            if copyMode == .plain && !onboardingSeen { onboardingCard }
+                            if isAllClear { allClearCard }
                         }
                         .frame(width: contentWidth, alignment: .leading)
                         .padding(FizzSpacing.page)
@@ -116,230 +113,90 @@ struct WorkbenchDashboardView: View {
         .onPreferenceChange(FizzScrollPastTopKey.self) { value in
             scrolledPastTop = value
         }
-    }
-
-    @ViewBuilder
-    private func header(width: CGFloat) -> some View {
-        if width >= 660 {
-            HStack(alignment: .top, spacing: 20) {
-                headerDateBlock
-                Spacer(minLength: 16)
-                headerKPIs(alignment: .trailing)
+        .sheet(isPresented: $showingHeatmap) {
+            VStack(spacing: FizzSpacing.row) {
+                HStack {
+                    Spacer()
+                    FizzIconButton(title: "关闭热力图", symbol: "xmark", height: .compact) { showingHeatmap = false }
+                        .keyboardShortcut(.cancelAction)
+                }
+                CommitHeatmapCard(snapshot: store.commitActivity, projects: store.projects) { dayKey in
+                    showingHeatmap = false
+                    if copyMode == .plain {
+                        store.openConversations()
+                    } else {
+                        store.openLibrary(LibraryQuery(commitDayKey: dayKey))
+                    }
+                }
             }
-        } else {
-            VStack(alignment: .leading, spacing: 12) {
-                headerDateBlock
-                headerKPIs(alignment: .leading)
-            }
+            .padding(FizzSpacing.panel)
+            .frame(width: 600)
+            .background(FizzTheme.page)
         }
     }
 
-    private var headerDateBlock: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            if copyMode == .plain {
-                Text("\(FizzCopy.greeting()) · \(formattedToday)")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.secondary)
-                Text(
-                    FizzCopy.dashboardStatusLine(
-                        activeCount: focusPartition.focused.count,
-                        brokenCount: brokenFocusedCount,
-                        attentionCount: attentionItems.count,
-                        mode: .plain
-                    )
-                )
-                .font(.system(size: 25, weight: .semibold))
-                .accessibilityAddTraits(.isHeader)
-            } else {
-                Text(formattedToday)
-                    .font(.system(size: 25, weight: .semibold))
-                    .accessibilityAddTraits(.isHeader)
-                Text(headerSubtitle)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+    private var header: some View {
+        FizzPageHeader(
+            title: copyMode == .plain ? FizzCopy.dashboardStatusLine(
+                activeCount: focusPartition.focused.count,
+                brokenCount: brokenFocusedCount,
+                attentionCount: attentionItems.count,
+                mode: .plain
+            ) : "工作台",
+            subtitle: "\(FizzCopy.greeting()) · \(formattedToday)"
+        ) {
+            let summary = weeklySummary
+            Button(action: onShowRecap) {
+                HStack(spacing: 6) {
+                    Text(summary).foregroundStyle(.secondary)
+                    Text("复盘").font(FizzTypography.caption(.medium))
+                    FizzIcon(.xs, symbol: "arrow.up.right").accessibilityHidden(true)
+                }
+                .font(FizzTypography.caption)
+                .padding(.vertical, 5)
+                .contentShape(Rectangle())
             }
-        }
-        .layoutPriority(1)
-    }
-
-    private func headerKPIs(alignment: HorizontalAlignment) -> some View {
-        HStack(spacing: 24) {
-            if copyMode == .plain {
-                kpiNumber(
-                    value: "\(kpi.weeklySessions)",
-                    label: "本周对话",
-                    alignment: alignment
-                )
-                kpiNumber(
-                    value: "\(kpi.weeklyTouchedFiles)",
-                    label: FizzCopy.weeklyOutputLabel(.plain),
-                    alignment: alignment
-                )
-            } else {
-                kpiNumber(
-                    value: "\(kpi.weeklyCommits)",
-                    label: FizzCopy.weeklyOutputLabel(.pro),
-                    alignment: alignment
-                )
-                kpiNumber(
-                    value: "\(kpi.weeklySessions)",
-                    label: "AI 会话",
-                    alignment: alignment
-                )
-            }
-
-            if let cost = Format.cost(kpi.weeklyCostUSD, estimated: kpi.costIsEstimate) {
-                kpiNumber(
-                    value: cost,
-                    label: copyMode == .plain
-                        ? "本周花费"
-                        : (kpi.costIsEstimate ? "本周费用(估)" : "本周费用"),
-                    alignment: alignment
-                )
-                .help(costTooltip)
-            } else if kpi.weeklyTokens > 0 {
-                kpiNumber(
-                    value: Format.tokens(kpi.weeklyTokens),
-                    label: "本周 tokens",
-                    alignment: alignment
-                )
-            }
+            .buttonStyle(.plain)
+            .fizzKeyboardAction(action: onShowRecap)
+            .accessibilityLabel("复盘")
+            .accessibilityValue(summary)
         }
     }
 
     private var formattedToday: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_Hans")
-        formatter.dateFormat = "M 月 d 日 EEEE"
-        return formatter.string(from: Date())
+        Date().formatted(.dateTime.month().day().weekday(.wide).locale(Locale(identifier: "zh_Hans")))
     }
 
-    private var headerSubtitle: String {
-        var parts: [String] = []
-        parts.append(attentionItems.isEmpty ? "暂无待处理" : "\(attentionItems.count) 项待处理")
-        let running = store.runningCount
-        if running > 0 {
-            parts.append("\(running) 个运行中")
-        }
+    private var weeklySummary: String {
+        let totals = DashboardMetrics.weeklyConversationTotals(projects: store.projects)
+        var parts = ["近 7 天 \(totals.sessions) 次对话"]
+        if let amount = totals.cost.amount { parts.append(WeeklyRecapMetric.cost.label(amount)) }
+        if let tokens = totals.value(.tokens) { parts.append("\(WeeklyRecapMetric.tokens.label(tokens)) tokens") }
         return parts.joined(separator: " · ")
     }
 
-    private var costTooltip: String {
-        var parts: [String] = []
-        if let monthly = Format.cost(kpi.monthlyCostUSD, estimated: kpi.costIsEstimate) {
-            parts.append("近 30 天 \(monthly)")
-        }
-        if let delta = kpi.weekOverWeekCostDeltaPercent {
-            let sign = delta >= 0 ? "↑" : "↓"
-            parts.append(String(format: "较上周 %@ %.0f%%", sign, abs(delta)))
-        }
-        return parts.isEmpty ? "AI 会话费用估算" : parts.joined(separator: " · ")
-    }
-
-    private func kpiNumber(
-        value: String,
-        label: String,
-        alignment: HorizontalAlignment = .trailing
-    ) -> some View {
-        VStack(alignment: alignment, spacing: 2) {
-            Text(value)
-                .font(.system(size: 24, weight: .semibold))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-                .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: value)
-                .lineLimit(1)
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder
-    private func mainColumns(width: CGFloat) -> some View {
-        if width >= 920 {
-            let widths = OverviewLayoutPolicy.splitWidths(
-                totalWidth: width,
-                spacing: FizzSpacing.grid,
-                leadingRatio: 0.58
-            )
-            HStack(alignment: .top, spacing: FizzSpacing.grid) {
-                leftColumn
-                    .frame(width: widths.leading, alignment: .top)
-                rightColumn
-                    .frame(width: widths.trailing, alignment: .top)
-            }
-        } else {
-            VStack(alignment: .leading, spacing: FizzSpacing.grid) {
-                leftColumn
-                rightColumn
-            }
-        }
-    }
-
-    private var leftColumn: some View {
-        VStack(alignment: .leading, spacing: FizzSpacing.grid) {
-            if copyMode == .plain && !onboardingSeen && !store.projects.isEmpty {
-                onboardingCard
-            }
-            if isAllClear {
-                allClearCard
-            }
+    private func actionPanels(width: CGFloat) -> some View {
+        let columns = OverviewLayoutPolicy.splitWidths(totalWidth: width, spacing: FizzSpacing.grid, leadingRatio: 0.52)
+        return HStack(alignment: .top, spacing: FizzSpacing.grid) {
             ContinueWorkSection(items: continueItems)
-            AttentionQueueView(
-                showsTabs: copyMode == .pro,
-                focusedOnly: copyMode == .plain
-            )
-            WeeklyTimelineCard(columns: timelineColumns, copyMode: copyMode) { path in
-                if let project = store.projects.first(where: { $0.path == path }) {
-                    store.openProject(project, tab: .progress)
-                }
-            }
+                .frame(width: columns.leading)
+            AttentionQueueView(showsTabs: copyMode == .pro, focusedOnly: copyMode == .plain, fillHeight: true)
+                .frame(width: columns.trailing)
         }
     }
 
-    private var rightColumn: some View {
-        VStack(alignment: .leading, spacing: FizzSpacing.grid) {
-            if copyMode == .plain {
-                WorkbenchStatusCard(
-                    runningProjects: runningProjects,
-                    cloudProjects: cloudProjects,
-                    healthAlerts: healthAlerts
-                )
-
-                AICostBreakdownCard(
-                    projects: store.projects,
-                    kpi: kpi
-                )
-
-                CommitHeatmapCard(
-                    snapshot: store.commitActivity,
-                    projects: store.projects
-                ) { _ in
-                    store.openConversations()
-                }
-            } else {
-                CommitHeatmapCard(
-                    snapshot: store.commitActivity,
-                    projects: store.projects
-                ) { dayKey in
-                    store.openLibrary(LibraryQuery(commitDayKey: dayKey))
-                }
-
-                AICostBreakdownCard(
-                    projects: store.projects,
-                    kpi: kpi
-                )
-
-                WorkbenchStatusCard(
-                    runningProjects: runningProjects,
-                    cloudProjects: cloudProjects,
-                    healthAlerts: healthAlerts
-                )
+    private var timeline: some View {
+        WeeklyTimelineCard(columns: timelineColumns, copyMode: copyMode) { path in
+            if let project = store.projects.first(where: { $0.path == path }) {
+                store.openProject(project, tab: .progress)
             }
+        } onOpenHeatmap: {
+            showingHeatmap = true
         }
+    }
+
+    private var statusCard: some View {
+        WorkbenchStatusCard(runningProjects: runningProjects, cloudProjects: cloudProjects, healthAlerts: healthAlerts)
     }
 
     private var onboardingCard: some View {
@@ -351,91 +208,36 @@ struct WorkbenchDashboardView: View {
         let clamped = min(steps.count - 1, max(0, onboardingStep))
         let current = steps[clamped]
 
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                FizzIcon(symbol: "sparkles", size: 13)
-                    .foregroundStyle(FizzTheme.accent)
-                Text(current.title)
-                    .font(.system(size: 13, weight: .semibold))
-                Spacer(minLength: 8)
-                Button("跳过") {
-                    onboardingSeen = true
-                }
-                .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
+        return Panel(title: current.title, symbol: "sparkles") {
             Text(current.body)
-                .font(.system(size: 12))
+                .font(FizzTypography.body)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            HStack {
-                HStack(spacing: 5) {
-                    ForEach(steps.indices, id: \.self) { index in
-                        Circle()
-                            .fill(index == clamped ? FizzTheme.accent : FizzTheme.hairline)
-                            .frame(width: 6, height: 6)
-                    }
+        } accessory: {
+            FizzActionButton(title: "跳过", height: .compact) { onboardingSeen = true }
+            FizzActionButton(title: clamped < steps.count - 1 ? "下一步" : "知道了", height: .compact,
+                             prominence: continueItems.isEmpty ? .primary : .secondary) {
+                if clamped < steps.count - 1 {
+                    onboardingStep += 1
+                } else {
+                    onboardingSeen = true
                 }
-                Spacer()
-                Button(clamped < steps.count - 1 ? "下一步" : "知道了") {
-                    if clamped < steps.count - 1 {
-                        onboardingStep += 1
-                    } else {
-                        onboardingSeen = true
-                    }
-                }
-                .buttonStyle(.glassProminent)
-                .tint(FizzTheme.accent)
-                .controlSize(.small)
             }
         }
-        .padding(14)
-        .fizzCard(radius: FizzRadius.panel)
     }
 
     private var allClearCard: some View {
         let recentProjects = Array(HomeSort.recent.sort(store.projects).prefix(4))
 
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                FizzIcon(symbol: "checkmark.circle", size: 15)
-                    .foregroundStyle(.green)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(FizzCopy.allClearTitle(copyMode))
-                        .font(.system(size: 14, weight: .semibold))
-                    Text(copyMode == .plain ? "没有待处理问题，也没有运行中的服务" : "没有待处理项、陈旧改动或运行中的服务")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-
-            if !recentProjects.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(recentProjects) { project in
-                        Button {
-                            store.openProject(project)
-                        } label: {
-                            HStack(spacing: 6) {
-                                ProjectBadgeIcon(project: project, size: 18, framed: false)
-                                Text(project.displayName)
-                                    .font(.system(size: 11.5, weight: .medium))
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, 10)
-                            .frame(height: 28)
-                            .background(FizzTheme.recessedFill, in: Capsule())
-                        }
-                        .buttonStyle(.plain)
+        return Panel(title: FizzCopy.allClearTitle(copyMode), symbol: "checkmark.circle") {
+            HStack(spacing: FizzSpacing.row) {
+                ForEach(recentProjects) { project in
+                    FizzActionButton(title: project.displayName, height: .compact) {
+                        store.openProject(project)
                     }
                 }
             }
         }
-        .padding(16)
-        .fizzCard(radius: FizzRadius.panel)
     }
 
     @ViewBuilder
@@ -449,21 +251,20 @@ struct WorkbenchDashboardView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ContentUnavailableView {
-                Label("还没有项目", systemImage: "square.stack.3d.up")
+                VStack(spacing: FizzSpacing.row) {
+                    FizzIcon(.lg, symbol: "square.stack.3d.up").accessibilityHidden(true)
+                    Text("还没有项目").font(FizzTypography.sectionTitle)
+                }
             } description: {
                 Text("扫描常用目录或手动添加文件夹，FizzDeck 会分析 Git、AI 会话和体积。")
             } actions: {
-                HStack(spacing: 10) {
-                    Button("智能扫描本机项目") {
-                        store.presentFirstRunScan()
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(FizzTheme.accent)
-
-                    Button("手动添加文件夹") {
+                HStack(spacing: FizzSpacing.row) {
+                    FizzActionButton(title: "手动添加文件夹") {
                         Task { await store.addRoot() }
                     }
-                    .buttonStyle(.glass)
+                    FizzActionButton(title: "智能扫描本机项目", prominence: .primary) {
+                        store.presentFirstRunScan()
+                    }
                 }
             }
         }

@@ -38,7 +38,7 @@ private struct ProjectActivityChart: View {
         let commitTotal = series.compactMap(\.commits).reduce(0, +)
 
         Panel(title: "项目活动", symbol: "chart.bar.xaxis") {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: FizzSpacing.row) {
                 rowTitle("AI 估算费用", value: sessionsReady ? cost.description : "读取中…")
                     .help("会话费用归入最后活动的本地日期；空心菱形表示有未计价的会话。")
                 bars(series, costRow: true)
@@ -52,7 +52,7 @@ private struct ProjectActivityChart: View {
                         Spacer()
                         Text(last.date, format: .dateTime.month().day())
                     }
-                    .font(.caption2)
+                    .font(FizzTypography.micro)
                     .foregroundStyle(.secondary)
                 }
             }
@@ -63,7 +63,9 @@ private struct ProjectActivityChart: View {
             }
             .labelsHidden()
             .pickerStyle(.segmented)
-            .frame(width: 124)
+            .controlSize(.small)
+            .frame(width: 124, height: FizzControlHeight.compact.rawValue)
+            .focusable(interactions: .edit)
         }
     }
 
@@ -71,22 +73,27 @@ private struct ProjectActivityChart: View {
         HStack {
             Text(title).foregroundStyle(.secondary)
             Spacer()
-            Text(value).monospacedDigit()
+            Text(value)
         }
-        .font(.caption)
+        .font(FizzTypography.caption)
     }
 
     private func bars(_ series: ArraySlice<ProjectActivityDay>, costRow: Bool) -> some View {
         let peak = series.map { costRow ? $0.cost.subtotal : Double($0.commits ?? 0) }.max() ?? 0
-        let tint = costRow ? FizzTheme.accent : Color.teal
+        let tint = Color.secondary.opacity(costRow ? 0.65 : 0.85)
         return HStack(alignment: .bottom, spacing: 3) {
             ForEach(series) { day in
                 let value = costRow ? day.cost.amount : day.commits.map(Double.init)
                 let unknown = costRow && day.cost.unpriced > 0
                 let detail = costRow ? day.cost.description : (day.commits.map { "\($0) 次提交" } ?? "暂无提交数据")
                 VStack(spacing: 1) {
-                    if unknown { Image(systemName: "diamond").font(.system(size: 6)).foregroundStyle(.secondary) }
-                    RoundedRectangle(cornerRadius: 2)
+                    if unknown {
+                        Rectangle()
+                            .strokeBorder(.secondary, lineWidth: 1)
+                            .frame(width: 5, height: 5)
+                            .rotationEffect(.degrees(45))
+                    }
+                    RoundedRectangle(cornerRadius: FizzRadius.micro)
                         .fill((value ?? 0) > 0 || (costRow && day.cost.priced > 0) ? tint : FizzTheme.stroke)
                         .frame(height: value.map { peak > 0 ? max(2, 27 * $0 / peak) : 2 } ?? 1)
                 }

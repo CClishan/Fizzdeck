@@ -7,12 +7,14 @@ struct FizzDeckApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage(AppearancePreferences.key) private var appearance: AppAppearance = .system
     @AppStorage(SidebarLayout.collapsedKey) private var sidebarCollapsed = false
+    @FocusedBinding(\.fizzProjectTab) private var projectTab
     @State private var store = RepositoryStore()
     @State private var actions = ProjectActions()
 
     var body: some Scene {
         WindowGroup("FizzDeck", id: "main") {
             ContentView()
+                .font(FizzTypography.body)
                 .environment(store)
                 .environment(actions)
                 .preferredColorScheme(appearance.colorScheme)
@@ -61,6 +63,19 @@ struct FizzDeckApp: App {
                     store.openDashboard()
                 }
                 .keyboardShortcut("0", modifiers: [.command])
+
+                Button("上一个项目页签") {
+                    projectTab = projectTab?.adjacent(forward: false)
+                }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                .disabled(projectTab == nil)
+
+                Button("下一个项目页签") {
+                    projectTab = projectTab?.adjacent(forward: true)
+                }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                .disabled(projectTab == nil)
+
                 Button("重新扫描") {
                     Task { await store.scan() }
                 }
@@ -77,6 +92,7 @@ struct FizzDeckApp: App {
 
         Settings {
             AppSettingsView()
+                .font(FizzTypography.body)
         }
         .defaultSize(width: 720, height: 500)
 
@@ -91,6 +107,7 @@ struct FizzDeckApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        FizzTypography.registerBundledFonts()
         AppearancePreferences.applyStoredAppearance()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)

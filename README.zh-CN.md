@@ -12,7 +12,7 @@
 
 [English](README.md)
 
-**v0.8.0（Build 16）。** 关注项目的依赖或环境配置变化后，Doctor 会重新体检。可以查看开发端口由谁占用，手动试跑构建或测试，并回顾单个项目近 14 或 30 天的 AI 估算费用与提交。
+**本地发布候选：[v0.9.0（Build 23）](docs/releases/v0.9.0.md)。** 在工作台管理 Git 并行工作区，用三种接力卡交接，检索 Cursor 和 OpenCode 对话；跨 Agent 复盘可分享光栅或 ASCII 卡片。英文和数字使用随包的 Obel Mono，中文沿用 macOS 系统字体。当前公开下载仍为 [v0.8.0（Build 16）](https://github.com/CClishan/Fizzdeck/releases/tag/v0.8.0)。
 
 下载按钮指向最新公开 DMG。默认临时签名包没有 Apple Team ID，不能依赖系统「快捷指令」执行动作；在 FizzDeck 内仍可打开项目、复制接力卡和查看体检。详见[签名与验收](docs/SYSTEM_INTEGRATION.md)。
 
@@ -24,6 +24,7 @@
 - **跨项目「对话」时间线**：按天串起 Codex、Claude 等 AI 会话，直接看到每次想做什么、改了哪些文件、是否报错结束、花了多少。
 - **中文可用的本地搜索**：SQLite FTS5 覆盖跨项目对话，1–2 个字会用短词回退；搜索框和 `⌘K` 都能直达对应对话节点。
 - **纯剪贴板的「接力卡」**：把项目状态和最近对话整理成 Markdown，复制给任意 Agent 接手；不写项目文件，复制前统一脱敏。
+- **跨 Agent 复盘**：看近 7、30、90 天或全部已索引历史，对比对话、AI 干活时长、估算费用和 Tokens；按项目看趋势、活跃天数和连续活跃，逐条查看日志支持的轮数和测试结果。可复制 Markdown，或复制默认隐藏项目名的浅色／暗色 PNG。AI 润色每次单独确认，只发送汇总数字。
 
 ### 回得去
 
@@ -102,10 +103,10 @@ sudo xcodebuild -license accept
 ./macos/script/build_and_run.sh --verify
 ```
 
-默认版本为 `0.8.0`、Build `16`，也可以在构建时覆盖：
+默认版本为 `0.9.0`、Build `23`，也可以在构建时覆盖：
 
 ```sh
-VERSION=0.8.0 BUILD_NUM=16 ./macos/script/build_and_run.sh --sign-local
+VERSION=0.9.0 BUILD_NUM=23 ./macos/script/build_and_run.sh --build-only
 ```
 
 产物在 `macos/dist/FizzDeck.app`。用 Xcode 调试时直接打开 `macos/Package.swift`。
@@ -122,7 +123,7 @@ swift test --package-path macos
 ./macos/script/package_dmg.sh
 ```
 
-默认输出 `macos/dist/FizzDeck-0.8.0-arm64.dmg`，同时生成同名的 `FizzDeck-0.8.0-arm64.dmg.sha256`。校验文件是标准 `shasum -a 256` 格式，供应用内更新与 GitHub Release 使用。
+默认输出 `macos/dist/FizzDeck-0.9.0-arm64.dmg`，同时生成同名的 `FizzDeck-0.9.0-arm64.dmg.sha256`。校验文件是标准 `shasum -a 256` 格式，供应用内更新与 GitHub Release 使用。
 
 ### 本地网页版
 
@@ -188,6 +189,8 @@ stop.sh                 网页版停止脚本
 
 ## 状态
 
-FizzDeck 是源码优先的个人工具，当前源码版本为 `0.8.0`（Build `16`）。原生版是主入口，网页版和双语官网保留为补充入口。
+FizzDeck 是源码优先的个人工具。原生版是主入口，网页版和双语官网保留为补充入口。
 
 许可：[LICENSE](LICENSE)。可免费下载、构建和在本机使用；第三方素材保留各自许可。
+
+随包素材许可：[Obel Mono（SIL OFL 1.1）](macos/Resources/Fonts/OFL.txt) · [Kubai 图标（MIT）](macos/Resources/Icons/LICENSE)。

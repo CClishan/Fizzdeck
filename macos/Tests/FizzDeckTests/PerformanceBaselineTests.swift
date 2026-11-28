@@ -220,9 +220,7 @@ final class PerformanceBaselineTests: XCTestCase {
         }
 
         let workbenchTime = elapsed {
-            _ = DashboardMetrics.kpiSummary(projects: projects, commitActivity: snapshot, now: now)
-            _ = DashboardMetrics.weeklyToolShares(projects: projects, now: now)
-            _ = DashboardMetrics.costBreakdown(projects: projects, mode: .byTool, now: now)
+            _ = DashboardMetrics.weeklyConversationTotals(projects: projects, now: now)
             _ = DashboardMetrics.weeklyTimeline(projects: projects, commitActivity: snapshot, now: now)
             _ = DashboardMetrics.continueWorkItems(projects: projects, limit: 4)
             _ = DashboardMetrics.healthAlerts(projects: projects, freeDiskBytes: 15_000_000_000, now: now)

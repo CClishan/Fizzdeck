@@ -12,7 +12,7 @@ No account, no telemetry, and no FizzDeck-hosted backend. Project metadata, sess
 
 [中文说明](README.zh-CN.md)
 
-**v0.8.0 (Build 16).** Doctor rechecks a focused project when its dependency or environment files change. See which process owns a development port, run a build or test on demand, and review 14 or 30 days of estimated AI costs and commits.
+**Release candidate: [v0.9.0 (Build 23)](docs/releases/v0.9.0.md).** Manage Git worktrees, pass context with three handoff cards, and search Cursor and OpenCode conversations. The new Workbench and cross-agent recap include raster and ASCII share cards. Latin text uses bundled Obel Mono; Chinese keeps the macOS system font. The candidate is local; [v0.8.0 (Build 16)](https://github.com/CClishan/Fizzdeck/releases/tag/v0.8.0) remains the public download.
 
 The download link points to the latest public DMG. System Shortcuts require a build signed with an Apple Team ID; the default ad-hoc DMG has none. Project opening, handoff cards and health checks can also be used in the app. See [verification details](docs/SYSTEM_INTEGRATION.md).
 
@@ -24,6 +24,7 @@ The download link points to the latest public DMG. System Shortcuts require a bu
 - **A cross-project conversation timeline.** Codex, Claude, and other AI sessions are grouped by day with the first request, touched files, final status, and cost.
 - **Search that works in Chinese.** A local SQLite FTS5 index covers conversations across projects, with a short-query fallback for one- or two-character searches. Results open from the search box or `⌘K`.
 - **A clipboard-only handoff card.** Turn project state and recent conversations into Markdown for any agent. Nothing is written into the project, and secrets are redacted before copying.
+- **Cross-agent recap.** Choose 7d, 30d, 90d, or all indexed history. Compare sessions, recorded agent time, estimated cost, and tokens; see project trends, active days and streaks, and the turns and test results each log supports. Copy Markdown or a light/dark PNG with project names hidden by default. Optional recap polish sends only aggregate figures after you approve that request.
 
 ### Rewind
 
@@ -102,10 +103,10 @@ Build, launch, and verify the process:
 ./macos/script/build_and_run.sh --verify
 ```
 
-The default version is `0.8.0`, Build `16`. Override it when needed:
+The default version is `0.9.0`, Build `23`. Override it when needed:
 
 ```sh
-VERSION=0.8.0 BUILD_NUM=16 ./macos/script/build_and_run.sh --sign-local
+VERSION=0.9.0 BUILD_NUM=23 ./macos/script/build_and_run.sh --build-only
 ```
 
 The app bundle is written to `macos/dist/FizzDeck.app`. To work in Xcode, open `macos/Package.swift`.
@@ -122,7 +123,7 @@ swift test --package-path macos
 ./macos/script/package_dmg.sh
 ```
 
-The default output is `macos/dist/FizzDeck-0.8.0-arm64.dmg`, plus a matching `FizzDeck-0.8.0-arm64.dmg.sha256`. The checksum is standard `shasum -a 256` output for in-app updates and GitHub Releases.
+The default output is `macos/dist/FizzDeck-0.9.0-arm64.dmg`, plus a matching `FizzDeck-0.9.0-arm64.dmg.sha256`. The checksum is standard `shasum -a 256` output for in-app updates and GitHub Releases.
 
 ### Local web UI
 
@@ -188,6 +189,8 @@ stop.sh                 Web UI stopper
 
 ## Status
 
-FizzDeck is a source-first personal tool. The current source version is `0.8.0` (Build `16`). The native app is the primary client; the web UI and bilingual landing page remain supporting surfaces.
+FizzDeck is a source-first personal tool. The native app is the primary client; the web UI and bilingual landing page remain supporting surfaces.
 
 License: see [LICENSE](LICENSE). Local use and builds are free; third-party assets keep their own terms.
+
+Bundled assets: [Obel Mono (SIL OFL 1.1)](macos/Resources/Fonts/OFL.txt) · [Kubai Icons (MIT)](macos/Resources/Icons/LICENSE).

@@ -148,11 +148,11 @@ struct LibraryTableView: View {
                 HStack(spacing: 7) {
                     ProjectBadgeIcon(project: row.project, size: 18, framed: false)
                     Text(row.name)
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(FizzTypography.body(.medium))
                         .lineLimit(1)
                     if row.project.starred {
-                        FizzIcon(symbol: "star.fill", size: 8)
-                            .foregroundStyle(.yellow)
+                        FizzIcon(.xs, symbol: "star.fill")
+                            .foregroundStyle(Color.secondary)
                     }
                     if row.project.port == .running {
                         PortStatusBadge(state: .running, port: row.project.run?.port)
@@ -163,14 +163,15 @@ struct LibraryTableView: View {
 
             TableColumn("分组", sortUsing: LibraryRowComparator(column: .group)) { row in
                 Text(row.group)
-                    .font(.system(size: 11.5))
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             .width(min: 60, ideal: 78)
 
             TableColumn("框架", sortUsing: LibraryRowComparator(column: .framework)) { row in
                 Text(row.framework)
-                    .font(.system(size: 11.5))
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -178,7 +179,7 @@ struct LibraryTableView: View {
 
             TableColumn("分支", sortUsing: LibraryRowComparator(column: .branch)) { row in
                 Text(row.branch)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(FizzTypography.monoSmall)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -186,21 +187,23 @@ struct LibraryTableView: View {
 
             TableColumn("改动", sortUsing: LibraryRowComparator(column: .dirtyCount)) { row in
                 Text(row.dirtyCount > 0 ? "\(row.dirtyCount)" : "—")
-                    .font(.system(size: 11.5).monospacedDigit())
-                    .foregroundStyle(row.dirtyCount > 0 ? Color.orange : Color.secondary)
+                    .font(FizzTypography.mono)
+                    .foregroundStyle(row.dirtyCount > 0 ? Color.primary : Color.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .width(min: 48, ideal: 56)
 
             TableColumn("未推送", sortUsing: LibraryRowComparator(column: .ahead)) { row in
                 Text(row.ahead > 0 ? "↑\(row.ahead)" : "—")
-                    .font(.system(size: 11.5).monospacedDigit())
-                    .foregroundStyle(row.ahead > 0 ? FizzTheme.accent : Color.secondary)
+                    .font(FizzTypography.mono)
+                    .foregroundStyle(row.ahead > 0 ? Color.secondary : Color.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .width(min: 52, ideal: 62)
 
             TableColumn("最近提交", sortUsing: LibraryRowComparator(column: .commitSubject)) { row in
                 Text(row.commitSubject)
-                    .font(.system(size: 11.5))
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -209,8 +212,9 @@ struct LibraryTableView: View {
 
             TableColumn("AI 费用", sortUsing: LibraryRowComparator(column: .aiCost)) { row in
                 Text(row.aiCostDisplay)
-                    .font(.system(size: 11.5).monospacedDigit())
+                    .font(FizzTypography.mono)
                     .foregroundStyle(row.aiCostSortValue >= 0 ? Color.primary : Color.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .width(min: 66, ideal: 78)
 
@@ -218,22 +222,22 @@ struct LibraryTableView: View {
                 Group {
                     if row.project.sizeLoadState == .ready {
                         Text(row.sizeDisplay)
-                            .font(.system(size: 11.5).monospacedDigit())
                             .foregroundStyle(.secondary)
                     } else if row.project.sizeLoadState == .loading {
                         FizzShimmerPlaceholder(width: 42, height: 10)
                     } else {
                         Text("—")
-                            .font(.system(size: 11.5).monospacedDigit())
                             .foregroundStyle(.tertiary)
                     }
                 }
+                .font(FizzTypography.mono)
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .width(min: 64, ideal: 76)
 
             TableColumn("最近活跃", sortUsing: LibraryRowComparator(column: .recentTimestamp)) { row in
                 Text(row.recentDisplay)
-                    .font(.system(size: 11.5))
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
             .width(min: 72, ideal: 86)

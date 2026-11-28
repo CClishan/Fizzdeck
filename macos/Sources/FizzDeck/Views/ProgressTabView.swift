@@ -91,8 +91,8 @@ struct ProgressTabView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            modeBar
             if viewMode == .allSessions {
-                allSessionsHeaderBar
                 SessionsTabView(project: project)
             } else {
                 timelineScrollView
@@ -121,27 +121,26 @@ struct ProgressTabView: View {
         }
     }
 
-    private var allSessionsHeaderBar: some View {
-        HStack {
-            Text("共 \(project.sessions.sessionCount) 条会话记录（含工作区摘要）")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 12)
-            modePicker
+    private var modeBar: some View {
+        HStack(spacing: FizzSpacing.grid) {
+            if viewMode == .allSessions {
+                Text("共 \(project.sessions.sessionCount) 条会话记录（含工作区摘要）")
+                    .font(FizzTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Picker("视图模式", selection: $viewMode) {
+                ForEach(ViewMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 190, height: FizzControlHeight.standard.rawValue)
+            .focusable(interactions: .edit)
         }
         .padding(.horizontal, FizzSpacing.page)
-        .padding(.top, 8)
-    }
-
-    private var modePicker: some View {
-        Picker("视图模式", selection: $viewMode) {
-            ForEach(ViewMode.allCases) { mode in
-                Text(mode.title).tag(mode)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.segmented)
-        .frame(width: 190)
+        .padding(.top, FizzSpacing.page)
     }
 
     private var timelineScrollView: some View {
@@ -153,7 +152,8 @@ struct ProgressTabView: View {
                         .id(project.path)
                     timelineSection
                 }
-                .padding(FizzSpacing.page)
+                .padding([.horizontal, .bottom], FizzSpacing.page)
+                .padding(.top, FizzSpacing.section)
             }
             .fizzTracksScrollPastTop()
             .onAppear {
@@ -176,15 +176,21 @@ struct ProgressTabView: View {
         )
 
         return Panel(title: "做到哪了", symbol: "sparkles.rectangle.stack") {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: FizzSpacing.grid) {
+                TagChip(
+                    text: projectSummary.isAIGenerated ? "✦ AI 总结" : "自动整理",
+                    tint: projectSummary.isAIGenerated ? Color.secondary : .secondary,
+                    compact: true
+                )
+
                 if projectSummary.isAIGenerated {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(projectSummary.headline)
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .font(FizzTypography.cardTitle)
                             .foregroundStyle(.primary)
                         if let suggestion = projectSummary.suggestion, !suggestion.isEmpty {
                             Text("建议下一步：\(suggestion)")
-                                .font(.caption)
+                                .font(FizzTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -192,35 +198,18 @@ struct ProgressTabView: View {
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        FizzTheme.accent.opacity(0.06),
+                        Color.secondary.opacity(0.06),
                         in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
                     )
                 }
 
                 if conversations.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: FizzSpacing.row) {
                         Text("还没有和 AI 在这里聊过")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(FizzTypography.sectionTitle)
                         Text("打开终端或编辑器开始一次对话后，这里会自动记下每次想做什么、改了哪些文件。")
-                            .font(.callout)
+                            .font(FizzTypography.body)
                             .foregroundStyle(.secondary)
-                        HStack(spacing: 8) {
-                            Button {
-                                SystemActions.openTerminal(project.path)
-                            } label: {
-                                Label("打开终端", systemImage: "terminal")
-                            }
-                            .buttonStyle(.glass)
-                            .controlSize(.small)
-
-                            Button {
-                                SystemActions.reveal(project.path)
-                            } label: {
-                                Label("在 Finder 打开", systemImage: "folder")
-                            }
-                            .buttonStyle(.glass)
-                            .controlSize(.small)
-                        }
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 7) {
@@ -231,22 +220,20 @@ struct ProgressTabView: View {
                                 copyMode: copyMode
                             )
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Circle()
-                                    .fill(session.endedWithError ? Color.orange : FizzTheme.accent.opacity(0.75))
-                                    .frame(width: 5, height: 5)
+                                FizzStatusDot(tint: session.endedWithError ? FizzTheme.statusWarning : Color.secondary.opacity(0.75))
                                 Text(aiSession.isAIGenerated
                                     ? aiSession.headline
                                     : (session.primaryIntent ?? "\(HomeDashboardModel.toolTitle(session.tool)) 会话"))
-                                    .font(.system(size: 12.5, weight: .medium))
+                                    .font(FizzTypography.body(.medium))
                                     .lineLimit(1)
                                 Spacer(minLength: 8)
                                 if !session.touchedFiles.isEmpty {
                                     Text("改了 \(session.touchedFiles.count) 个文件")
-                                        .font(.caption2)
+                                        .font(FizzTypography.micro)
                                         .foregroundStyle(.secondary)
                                 }
                                 Text(Format.relative(session.modified))
-                                    .font(.caption2)
+                                    .font(FizzTypography.micro)
                                     .foregroundStyle(.tertiary)
                             }
                         }
@@ -257,85 +244,59 @@ struct ProgressTabView: View {
                        let err = latest.lastError,
                        !err.isEmpty {
                         HStack(spacing: 6) {
-                            FizzIcon(symbol: "exclamationmark.triangle.fill", size: 11)
-                                .foregroundStyle(.orange)
+                            FizzIcon(.sm, symbol: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.secondary)
                             Text("最近报错：\(err)")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.orange)
+                                .font(FizzTypography.mono)
+                                .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
+                        .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
                     }
 
-                    HStack(spacing: 8) {
-                        SessionContinueButton(project: project, style: .prominent)
-                        HandoffCopyButton(project: project)
-                        if project.dirtyCount > 0 {
-                            Button {
-                                Task { await createManualMark() }
-                            } label: {
-                                if isCreatingMark {
-                                    ProgressView()
-                                        .controlSize(.mini)
-                                } else {
-                                    Label("记一下当前状态", systemImage: "bookmark")
-                                        .font(.system(size: 11.5, weight: .medium))
-                                }
-                            }
-                            .buttonStyle(.glass)
-                            .controlSize(.small)
-                            .disabled(isCreatingMark)
-                        }
-                        Spacer(minLength: 0)
-                        Text(FizzCopy.projectStatusSummary(
-                            dirtyCount: project.changes.total,
-                            ahead: project.ahead,
-                            behind: project.behind,
-                            mode: copyMode
-                        ))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    }
+                    Text(FizzCopy.projectStatusSummary(
+                        dirtyCount: project.changes.total,
+                        ahead: project.ahead,
+                        behind: project.behind,
+                        mode: copyMode
+                    ))
+                    .font(FizzTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 }
             }
         } accessory: {
-            HStack(spacing: 8) {
+            HStack(spacing: FizzSpacing.row) {
                 if projectSummary.isAIGenerated {
-                    TagChip(text: "✦ AI 总结", tint: FizzTheme.accent, compact: true)
-                    Button {
+                    FizzIconButton(title: "重新生成 AI 状态总结", symbol: "arrow.clockwise", height: .compact) {
                         Task {
                             isRefreshingAISummary = true
                             defer { isRefreshingAISummary = false }
                             _ = await summaryEngine.forceRefreshProjectStatus(project, copyMode: copyMode)
                         }
-                    } label: {
-                        if isRefreshingAISummary {
-                            ProgressView()
-                                .controlSize(.mini)
-                        } else {
-                            FizzIcon(symbol: "arrow.clockwise", size: 11)
-                                .foregroundStyle(.secondary)
-                        }
                     }
-                    .buttonStyle(.plain)
-                    .help("重新生成 AI 状态总结")
-                } else {
-                    TagChip(text: "自动整理", tint: .secondary, compact: true)
-                    if !aiSummaryEnabled {
-                        Button("开启 AI 总结") {
-                            openSettings()
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(FizzTheme.accent)
+                    .disabled(isRefreshingAISummary)
+                    .accessibilityValue(isRefreshingAISummary ? "重新生成中" : "")
+                } else if !aiSummaryEnabled {
+                    FizzActionButton(title: "开启 AI 总结", height: .compact) {
+                        openSettings()
                     }
                 }
-                modePicker
+
+                if !conversations.isEmpty, project.dirtyCount > 0 {
+                    FizzActionButton(
+                        title: isCreatingMark ? "记录中…" : "记一下当前状态",
+                        symbol: "bookmark",
+                        height: .compact
+                    ) {
+                        Task { await createManualMark() }
+                    }
+                    .disabled(isCreatingMark)
+                }
             }
         }
     }
@@ -347,11 +308,11 @@ struct ProgressTabView: View {
         }
         if !dayGroups.isEmpty {
             let marksBySession = associatedMarksBySession()
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: FizzSpacing.panel) {
                 ForEach(dayGroups) { group in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(group.title)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(FizzTypography.cardTitle)
                             .foregroundStyle(.secondary)
 
                         VStack(spacing: 8) {
@@ -389,23 +350,21 @@ struct ProgressTabView: View {
         let timeText = formatter.string(from: mark.createdAt)
 
         return HStack(spacing: 8) {
-            FizzIcon(
-                symbol: isSnapshot ? "diamond.fill" : "diamond",
-                size: 10
-            )
-            .foregroundStyle(available ? FizzTheme.accent : .secondary.opacity(0.65))
+            FizzIcon(.xs, symbol: isSnapshot ? "diamond.fill" : "diamond")
+            .foregroundStyle(available ? Color.secondary : .secondary.opacity(0.65))
 
             Text("\(mark.label ?? "对话开始前的样子") · \(timeText)")
-                .font(.system(size: 11.5, weight: .medium))
+                .font(FizzTypography.caption(.medium))
                 .foregroundStyle(available ? .primary : .secondary)
+                .lineLimit(1)
 
             if !isSnapshot {
                 Text("仅记录，无法还原")
-                    .font(.system(size: 10.5))
+                    .font(FizzTypography.micro)
                     .foregroundStyle(.tertiary)
             } else if !available {
                 Text("已过期")
-                    .font(.system(size: 10.5))
+                    .font(FizzTypography.micro)
                     .foregroundStyle(.tertiary)
                     .help("超过 14 天，已被 Git 清理")
             }
@@ -413,7 +372,6 @@ struct ProgressTabView: View {
             if let expiringDays {
                 TagChip(
                     text: "约 \(expiringDays) 天后过期",
-                    tint: .orange,
                     compact: true
                 )
                 .accessibilityLabel("这个对话标记约 \(expiringDays) 天后过期")
@@ -422,34 +380,28 @@ struct ProgressTabView: View {
             Spacer(minLength: 8)
 
             if available {
-                Button {
+                FizzActionButton(
+                    title: mark.pinned ? "已保留" : (expiringDays == nil ? "保留" : "固定保留"),
+                    symbol: mark.pinned ? "star.fill" : "star",
+                    height: .compact
+                ) {
                     Task {
                         let success = await store.togglePin(mark: mark)
                         if !success {
                             ToastCenter.shared.show(
                                 "暂时没能更新保留状态",
                                 symbol: "exclamationmark.triangle.fill",
-                                tint: .orange
+                                tint: FizzTheme.statusWarning
                             )
                         }
                     }
-                } label: {
-                    Label(
-                        mark.pinned ? "已保留" : (expiringDays == nil ? "保留" : "固定保留"),
-                        systemImage: mark.pinned ? "star.fill" : "star"
-                    )
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(mark.pinned ? Color.orange : .secondary)
                 }
-                .buttonStyle(.plain)
+                .foregroundStyle(Color.primary)
                 .help(mark.pinned ? "取消永久保留" : "永久保留，不会被 Git 清理")
 
-                Button("还原到这里") {
+                FizzActionButton(title: "还原到这里", height: .compact) {
                     diffTarget = MarkDiffSheetTarget(mark: mark)
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(FizzTheme.accent)
             }
         }
         .padding(.horizontal, 6)
@@ -477,52 +429,52 @@ struct ProgressTabView: View {
             HStack(spacing: 8) {
                 TagChip(
                     text: toolTitle,
-                    tint: DetectedTool(rawValue: session.tool)?.tint ?? .secondary,
+                    tint: .secondary,
                     compact: true
                 )
 
                 if let mins = session.durationMinutes, mins > 0 {
                     Text("\(mins) 分钟")
-                        .font(.caption)
+                        .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 if let cost = Format.cost(session.costUSD, estimated: session.costIsEstimate ?? false) {
                     Text(cost)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(FizzTypography.mono)
                         .foregroundStyle(.secondary)
                 }
 
                 Text(Format.relative(session.modified))
-                    .font(.caption)
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.tertiary)
 
                 Spacer(minLength: 8)
 
                 if isLive {
                     HStack(spacing: 4) {
-                        RunningPulseDot(size: 5)
+                        RunningPulseDot()
                         Text("进行中")
-                            .font(.caption)
-                            .foregroundStyle(.green)
+                            .font(FizzTypography.caption)
+                            .foregroundStyle(.secondary)
                     }
                 } else if session.endedWithError {
-                    TagChip(text: "⚠ 报错结束", tint: .orange, compact: true)
+                    TagChip(text: "⚠ 报错结束", tint: FizzTheme.statusWarning, compact: true)
                 } else {
                     Text("✓ 正常结束")
-                        .font(.caption)
+                        .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
             Text("「\(session.primaryIntent ?? "\(toolTitle) 会话")」")
-                .font(.system(size: 13.5, weight: .medium))
+                .font(FizzTypography.body(.medium))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if aiSummary.isAIGenerated {
                 Text("✦ \(aiSummary.headline)")
-                    .font(.system(size: 12))
+                    .font(FizzTypography.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -531,95 +483,80 @@ struct ProgressTabView: View {
                 FlowLayout(spacing: 5) {
                     ForEach(visibleFiles, id: \.self) { file in
                         HStack(spacing: 2) {
+                            let fileName = URL(fileURLWithPath: file).lastPathComponent
                             if isMarkAvailable, let associatedMark {
-                                Button {
+                                FizzActionButton(title: fileName, height: .compact) {
                                     diffTarget = MarkDiffSheetTarget(mark: associatedMark, initialFile: file)
-                                } label: {
-                                    Text(URL(fileURLWithPath: file).lastPathComponent)
-                                        .font(.system(size: 10.5, design: .monospaced))
-                                        .foregroundStyle(FizzTheme.accent)
-                                        .padding(.horizontal, 7)
-                                        .padding(.vertical, 3)
-                                        .background(FizzTheme.accent.opacity(0.08), in: Capsule())
                                 }
-                                .buttonStyle(.plain)
-                                .help("点击对比「\(URL(fileURLWithPath: file).lastPathComponent)」的改动")
+                                .frame(maxWidth: 200)
+                                .truncationMode(.middle)
+                                .help("对比「\(fileName)」的改动")
                             } else {
-                                Text(URL(fileURLWithPath: file).lastPathComponent)
-                                    .font(.system(size: 10.5, design: .monospaced))
+                                Text(fileName)
+                                    .font(FizzTypography.monoSmall)
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 3)
                                     .background(FizzTheme.recessedFill, in: Capsule())
+                                    .frame(maxWidth: 200)
                                     .help(file)
                             }
                             RelatedSessionsButton(project: project, file: file, compact: true)
                         }
                     }
                     if !expanded && overflowCount > 0 {
-                        Button("+\(overflowCount)") {
+                        FizzActionButton(title: "+\(overflowCount)", height: .compact) {
                             expandedFileSessions.insert(session.stableID)
                         }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                        .foregroundStyle(FizzTheme.accent)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(FizzTheme.accent.opacity(0.1), in: Capsule())
+                        .help("展开其余 \(overflowCount) 个文件")
+                        .accessibilityLabel("展开其余 \(overflowCount) 个文件")
                     }
                 }
             }
 
             if session.endedWithError, let err = session.lastError, !err.isEmpty {
                 Text(err)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.orange)
+                    .font(FizzTypography.mono)
+                    .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
+                    .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
             }
 
-            HStack(spacing: 8) {
-                if isMarkAvailable, let associatedMark {
-                    Button {
-                        diffTarget = MarkDiffSheetTarget(mark: associatedMark)
-                    } label: {
-                        Label("看改了什么", systemImage: "doc.text.magnifyingglass")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
-                }
-
-                if session.resumeCommand != nil {
-                    Button {
-                        Task { await resumeSession(session) }
-                    } label: {
-                        if isResuming {
-                            ProgressView()
-                                .controlSize(.mini)
-                        } else {
-                            Label(isLive ? "回到这次对话" : "继续这次对话", systemImage: "play.fill")
-                                .font(.system(size: 11, weight: .medium))
+            if isMarkAvailable || session.resumeCommand != nil {
+                HStack(spacing: FizzSpacing.row) {
+                    Spacer(minLength: 0)
+                    if isMarkAvailable, let associatedMark {
+                        FizzActionButton(title: "看改了什么", symbol: "doc.text.magnifyingglass", height: .compact) {
+                            diffTarget = MarkDiffSheetTarget(mark: associatedMark)
                         }
                     }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
-                    .disabled(isResuming)
-                }
 
-                HandoffCopyButton(project: project, compact: true)
-                Spacer(minLength: 0)
+                    if session.resumeCommand != nil {
+                        FizzActionButton(
+                            title: isResuming ? "继续中…" : (isLive ? "回到这次对话" : "继续这次对话"),
+                            symbol: "play.fill",
+                            height: .compact
+                        ) {
+                            Task { await resumeSession(session) }
+                        }
+                        .disabled(isResuming)
+                    }
+                }
             }
         }
-        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(FizzSpacing.panel)
         .fizzCard(radius: FizzRadius.card)
         .overlay {
             if isHighlighted {
                 RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous)
-                    .strokeBorder(FizzTheme.accent, lineWidth: 1.5)
+                    .strokeBorder(Color.secondary, lineWidth: 1.5)
+                    .allowsHitTesting(false)
             }
         }
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: isHighlighted)
@@ -651,7 +588,7 @@ struct ProgressTabView: View {
             ToastCenter.shared.show(
                 "已唤起 \(HomeDashboardModel.toolTitle(session.tool))",
                 symbol: "terminal.fill",
-                tint: .green,
+                tint: FizzTheme.statusSuccess,
                 subtitle: project.displayName
             )
         } else {
@@ -661,7 +598,7 @@ struct ProgressTabView: View {
             ToastCenter.shared.show(
                 result.message,
                 symbol: "exclamationmark.triangle.fill",
-                tint: .orange,
+                tint: FizzTheme.statusWarning,
                 subtitle: result.fallbackCommand != nil ? "已复制命令到剪贴板" : nil
             )
         }
@@ -704,7 +641,7 @@ struct ProgressTabView: View {
         ToastCenter.shared.show(
             mark.kind == .gitSnapshot ? "已记下当前状态" : "已添加纯记录标记",
             symbol: "bookmark.circle.fill",
-            tint: FizzTheme.accent,
+            tint: Color.secondary,
             subtitle: mark.kind == .gitSnapshot ? "之后随时可在时间线对比或还原" : nil
         )
     }

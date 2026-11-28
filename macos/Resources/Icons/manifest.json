@@ -1,363 +1,572 @@
 {
-  "source": "https://iconmcp.com/mcp",
-  "style": "outline",
-  "size": 16,
-  "stroke": 1.3,
-  "radius": 2,
+  "source": "kubai-icons-static@0.17.0",
+  "variant": "svg-line",
+  "size": 24,
+  "stroke": 2,
   "icons": [
-    {
-      "file": "sliders.svg",
-      "name": "sliders",
-      "set": "generic",
-      "label": "Adjust"
-    },
-    {
-      "file": "info.svg",
-      "name": "info",
-      "set": "generic",
-      "label": "Info"
-    },
-    {
-      "file": "power.svg",
-      "name": "power",
-      "set": "interface",
-      "label": "Power"
-    },
-    {
-      "file": "bell.svg",
-      "name": "bell",
-      "set": "generic",
-      "label": "Bell"
-    },
-    {
-      "file": "bell-off.svg",
-      "name": "bell-off",
-      "set": "security",
-      "label": "Bell off"
-    },
-    {
-      "file": "shield-lock.svg",
-      "name": "shield-lock",
-      "set": "security",
-      "label": "Shield lock"
-    },
-    {
-      "file": "shield-check.svg",
-      "name": "shield-check",
-      "set": "security",
-      "label": "Shield check"
-    },
-    {
-      "file": "refresh.svg",
-      "name": "refresh",
-      "set": "generic",
-      "label": "Refresh"
-    },
-    {
-      "file": "home.svg",
-      "name": "home",
-      "set": "generic",
-      "label": "Home"
-    },
-    {
-      "file": "mention.svg",
-      "name": "mention",
-      "set": "social",
-      "label": "Mention"
-    },
-    {
-      "file": "code.svg",
-      "name": "code",
-      "set": "editor",
-      "label": "Code"
-    },
-    {
-      "file": "arrow-up-right.svg",
-      "name": "arrow-up-right",
-      "set": "arrows",
-      "label": "Arrow up right"
-    },
-    {
-      "file": "external-link.svg",
-      "name": "external-link",
-      "set": "generic",
-      "label": "External link"
-    },
-    {
-      "file": "close.svg",
-      "name": "close",
-      "set": "generic",
-      "label": "Close"
-    },
-    {
-      "file": "search.svg",
-      "name": "search",
-      "set": "generic",
-      "label": "Search"
-    },
-    {
-      "file": "folder.svg",
-      "name": "folder",
-      "set": "generic",
-      "label": "Folder"
-    },
-    {
-      "file": "folder-plus.svg",
-      "name": "folder-plus",
-      "set": "files",
-      "label": "New folder"
-    },
-    {
-      "file": "folder-minus.svg",
-      "name": "folder-minus",
-      "set": "files",
-      "label": "Folder minus"
-    },
-    {
-      "file": "star.svg",
-      "name": "star",
-      "set": "generic",
-      "label": "Star"
-    },
-    {
-      "file": "grid.svg",
-      "name": "grid",
-      "set": "generic",
-      "label": "Grid"
-    },
-    {
-      "file": "list-bullet.svg",
-      "name": "list-bullet",
-      "set": "editor",
-      "label": "Bulleted list"
-    },
-    {
-      "file": "filter.svg",
-      "name": "filter",
-      "set": "generic",
-      "label": "Filter"
-    },
-    {
-      "file": "multi-select.svg",
-      "name": "multi-select",
-      "set": "interface",
-      "label": "Multi-select"
-    },
-    {
-      "file": "circle-check.svg",
-      "name": "circle-check",
-      "set": "generic",
-      "label": "Success"
-    },
-    {
-      "file": "check.svg",
-      "name": "check",
-      "set": "generic",
-      "label": "Check"
-    },
-    {
-      "file": "x-circle.svg",
-      "name": "x-circle",
-      "set": "security",
-      "label": "Error"
-    },
     {
       "file": "alert-circle.svg",
       "name": "alert-circle",
-      "set": "security",
-      "label": "Alert circle"
+      "kubai": "circle-alert",
+      "variant": "svg-line"
     },
     {
       "file": "alert-octagon.svg",
       "name": "alert-octagon",
-      "set": "security",
-      "label": "Stop alert"
-    },
-    {
-      "file": "copy.svg",
-      "name": "copy",
-      "set": "generic",
-      "label": "Copy"
-    },
-    {
-      "file": "file-text.svg",
-      "name": "file-text",
-      "set": "files",
-      "label": "Document"
-    },
-    {
-      "file": "git-branch.svg",
-      "name": "git-branch",
-      "set": "files",
-      "label": "Git branch"
-    },
-    {
-      "file": "git-pull.svg",
-      "name": "git-pull",
-      "set": "dev",
-      "label": "Pull"
-    },
-    {
-      "file": "git-push.svg",
-      "name": "git-push",
-      "set": "dev",
-      "label": "Git push"
-    },
-    {
-      "file": "message.svg",
-      "name": "message",
-      "set": "generic",
-      "label": "Message"
-    },
-    {
-      "file": "trash.svg",
-      "name": "trash",
-      "set": "generic",
-      "label": "Trash"
-    },
-    {
-      "file": "terminal.svg",
-      "name": "terminal",
-      "set": "files",
-      "label": "Terminal"
-    },
-    {
-      "file": "sparkles.svg",
-      "name": "sparkles",
-      "set": "editor",
-      "label": "Sparkles"
-    },
-    {
-      "file": "play-circle.svg",
-      "name": "play-circle",
-      "set": "media",
-      "label": "Play circle"
-    },
-    {
-      "file": "play.svg",
-      "name": "play",
-      "set": "media",
-      "label": "Play"
-    },
-    {
-      "file": "arrow-down.svg",
-      "name": "arrow-down",
-      "set": "generic",
-      "label": "Arrow down"
-    },
-    {
-      "file": "arrow-up.svg",
-      "name": "arrow-up",
-      "set": "generic",
-      "label": "Arrow up"
-    },
-    {
-      "file": "arrow-left.svg",
-      "name": "arrow-left",
-      "set": "generic",
-      "label": "Arrow left"
-    },
-    {
-      "file": "arrow-right.svg",
-      "name": "arrow-right",
-      "set": "generic",
-      "label": "Arrow right"
-    },
-    {
-      "file": "chevron-down.svg",
-      "name": "chevron-down",
-      "set": "generic",
-      "label": "Chevron down"
-    },
-    {
-      "file": "chevron-up.svg",
-      "name": "chevron-up",
-      "set": "generic",
-      "label": "Chevron up"
-    },
-    {
-      "file": "chevron-right.svg",
-      "name": "chevron-right",
-      "set": "generic",
-      "label": "Chevron right"
-    },
-    {
-      "file": "chevron-left.svg",
-      "name": "chevron-left",
-      "set": "generic",
-      "label": "Chevron left"
-    },
-    {
-      "file": "more-horizontal.svg",
-      "name": "more-horizontal",
-      "set": "generic",
-      "label": "More"
-    },
-    {
-      "file": "layers.svg",
-      "name": "layers",
-      "set": "files",
-      "label": "Layers"
-    },
-    {
-      "file": "undo.svg",
-      "name": "undo",
-      "set": "editor",
-      "label": "Undo"
-    },
-    {
-      "file": "plus.svg",
-      "name": "plus",
-      "set": "generic",
-      "label": "Plus"
-    },
-    {
-      "file": "clock.svg",
-      "name": "clock",
-      "set": "generic",
-      "label": "Clock"
-    },
-    {
-      "file": "hard-drive.svg",
-      "name": "hard-drive",
-      "set": "devices",
-      "label": "Drive"
+      "kubai": "octagon-alert",
+      "variant": "svg-line"
     },
     {
       "file": "archive.svg",
       "name": "archive",
-      "set": "files",
-      "label": "Archive"
+      "kubai": "archive",
+      "variant": "svg-line"
     },
     {
-      "file": "box.svg",
-      "name": "box",
-      "set": "commerce",
-      "label": "Package"
+      "file": "arrow-down.svg",
+      "name": "arrow-down",
+      "kubai": "arrow-down",
+      "variant": "svg-line"
     },
     {
-      "file": "build.svg",
-      "name": "build",
-      "set": "dev",
-      "label": "Build"
+      "file": "arrow-left.svg",
+      "name": "arrow-left",
+      "kubai": "arrow-left",
+      "variant": "svg-line"
+    },
+    {
+      "file": "arrow-right.svg",
+      "name": "arrow-right",
+      "kubai": "arrow-right",
+      "variant": "svg-line"
+    },
+    {
+      "file": "arrow-up.svg",
+      "name": "arrow-up",
+      "kubai": "arrow-up",
+      "variant": "svg-line"
+    },
+    {
+      "file": "arrow-up-right.svg",
+      "name": "arrow-up-right",
+      "kubai": "arrow-up-right",
+      "variant": "svg-line"
+    },
+    {
+      "file": "atom.svg",
+      "name": "atom",
+      "kubai": "atom",
+      "variant": "svg-line"
     },
     {
       "file": "bar-chart.svg",
       "name": "bar-chart",
-      "set": "charts",
-      "label": "Bar chart"
+      "kubai": "chart-bar",
+      "variant": "svg-line"
     },
     {
-      "file": "server.svg",
-      "name": "server",
-      "set": "files",
-      "label": "Server"
+      "file": "bell.svg",
+      "name": "bell",
+      "kubai": "bell",
+      "variant": "svg-line"
+    },
+    {
+      "file": "bell-off.svg",
+      "name": "bell-off",
+      "kubai": "bell-off",
+      "variant": "svg-line"
+    },
+    {
+      "file": "bookmark.svg",
+      "name": "bookmark",
+      "kubai": "bookmark",
+      "variant": "svg-line"
+    },
+    {
+      "file": "box.svg",
+      "name": "box",
+      "kubai": "package",
+      "variant": "svg-line"
+    },
+    {
+      "file": "build.svg",
+      "name": "build",
+      "kubai": "wrench",
+      "variant": "svg-line"
+    },
+    {
+      "file": "calendar.svg",
+      "name": "calendar",
+      "kubai": "calendar",
+      "variant": "svg-line"
+    },
+    {
+      "file": "calendar-clock.svg",
+      "name": "calendar-clock",
+      "kubai": "calendar-clock",
+      "variant": "svg-line"
+    },
+    {
+      "file": "chart-pie.svg",
+      "name": "chart-pie",
+      "kubai": "chart-pie",
+      "variant": "svg-line"
+    },
+    {
+      "file": "check.svg",
+      "name": "check",
+      "kubai": "check",
+      "variant": "svg-line"
+    },
+    {
+      "file": "chevron-down.svg",
+      "name": "chevron-down",
+      "kubai": "chevron-down",
+      "variant": "svg-line"
+    },
+    {
+      "file": "chevron-left.svg",
+      "name": "chevron-left",
+      "kubai": "chevron-left",
+      "variant": "svg-line"
+    },
+    {
+      "file": "chevron-right.svg",
+      "name": "chevron-right",
+      "kubai": "chevron-right",
+      "variant": "svg-line"
+    },
+    {
+      "file": "chevron-up.svg",
+      "name": "chevron-up",
+      "kubai": "chevron-up",
+      "variant": "svg-line"
+    },
+    {
+      "file": "circle.svg",
+      "name": "circle",
+      "kubai": "circle",
+      "variant": "svg-line"
+    },
+    {
+      "file": "circle-arrow-down.svg",
+      "name": "circle-arrow-down",
+      "kubai": "circle-arrow-down",
+      "variant": "svg-line"
+    },
+    {
+      "file": "circle-arrow-right.svg",
+      "name": "circle-arrow-right",
+      "kubai": "circle-arrow-right",
+      "variant": "svg-line"
+    },
+    {
+      "file": "circle-arrow-up.svg",
+      "name": "circle-arrow-up",
+      "kubai": "circle-arrow-up",
+      "variant": "svg-line"
+    },
+    {
+      "file": "circle-check.svg",
+      "name": "circle-check",
+      "kubai": "circle-check",
+      "variant": "svg-line"
+    },
+    {
+      "file": "clock.svg",
+      "name": "clock",
+      "kubai": "clock",
+      "variant": "svg-line"
+    },
+    {
+      "file": "close.svg",
+      "name": "close",
+      "kubai": "x",
+      "variant": "svg-line"
+    },
+    {
+      "file": "cloud.svg",
+      "name": "cloud",
+      "kubai": "cloud",
+      "variant": "svg-line"
+    },
+    {
+      "file": "code.svg",
+      "name": "code",
+      "kubai": "code",
+      "variant": "svg-line"
+    },
+    {
+      "file": "copy.svg",
+      "name": "copy",
+      "kubai": "copy",
+      "variant": "svg-line"
+    },
+    {
+      "file": "cpu.svg",
+      "name": "cpu",
+      "kubai": "cpu",
+      "variant": "svg-line"
     },
     {
       "file": "edit.svg",
       "name": "edit",
-      "set": "generic",
-      "label": "Edit"
+      "kubai": "square-pen",
+      "variant": "svg-line"
+    },
+    {
+      "file": "external-link.svg",
+      "name": "external-link",
+      "kubai": "external-link",
+      "variant": "svg-line"
+    },
+    {
+      "file": "eye.svg",
+      "name": "eye",
+      "kubai": "eye",
+      "variant": "svg-line"
+    },
+    {
+      "file": "eye-off.svg",
+      "name": "eye-off",
+      "kubai": "eye-off",
+      "variant": "svg-line"
+    },
+    {
+      "file": "file-plus.svg",
+      "name": "file-plus",
+      "kubai": "file-plus",
+      "variant": "svg-line"
+    },
+    {
+      "file": "file-search.svg",
+      "name": "file-search",
+      "kubai": "file-search",
+      "variant": "svg-line"
+    },
+    {
+      "file": "file-text.svg",
+      "name": "file-text",
+      "kubai": "file-text",
+      "variant": "svg-line"
+    },
+    {
+      "file": "filter.svg",
+      "name": "filter",
+      "kubai": "filter",
+      "variant": "svg-line"
+    },
+    {
+      "file": "folder.svg",
+      "name": "folder",
+      "kubai": "folder",
+      "variant": "svg-line"
+    },
+    {
+      "file": "folder-minus.svg",
+      "name": "folder-minus",
+      "kubai": "folder-minus",
+      "variant": "svg-line"
+    },
+    {
+      "file": "folder-plus.svg",
+      "name": "folder-plus",
+      "kubai": "folder-plus",
+      "variant": "svg-line"
+    },
+    {
+      "file": "gamepad.svg",
+      "name": "gamepad",
+      "kubai": "gamepad",
+      "variant": "svg-line"
+    },
+    {
+      "file": "git-branch.svg",
+      "name": "git-branch",
+      "kubai": "git-branch",
+      "variant": "svg-line"
+    },
+    {
+      "file": "git-merge.svg",
+      "name": "git-merge",
+      "kubai": "git-merge",
+      "variant": "svg-line"
+    },
+    {
+      "file": "git-pull.svg",
+      "name": "git-pull",
+      "kubai": "git-pull-request",
+      "variant": "svg-line"
+    },
+    {
+      "file": "git-push.svg",
+      "name": "git-push",
+      "kubai": "upload",
+      "variant": "svg-line"
+    },
+    {
+      "file": "globe.svg",
+      "name": "globe",
+      "kubai": "globe",
+      "variant": "svg-line"
+    },
+    {
+      "file": "grid.svg",
+      "name": "grid",
+      "kubai": "layout-grid",
+      "variant": "svg-line"
+    },
+    {
+      "file": "grid-3x3.svg",
+      "name": "grid-3x3",
+      "kubai": "grid-3x3",
+      "variant": "svg-line"
+    },
+    {
+      "file": "hand.svg",
+      "name": "hand",
+      "kubai": "hand",
+      "variant": "svg-line"
+    },
+    {
+      "file": "hard-drive.svg",
+      "name": "hard-drive",
+      "kubai": "hard-drive",
+      "variant": "svg-line"
+    },
+    {
+      "file": "home.svg",
+      "name": "home",
+      "kubai": "home",
+      "variant": "svg-line"
+    },
+    {
+      "file": "image.svg",
+      "name": "image",
+      "kubai": "image",
+      "variant": "svg-line"
+    },
+    {
+      "file": "info.svg",
+      "name": "info",
+      "kubai": "info",
+      "variant": "svg-line"
+    },
+    {
+      "file": "key.svg",
+      "name": "key",
+      "kubai": "key",
+      "variant": "svg-line"
+    },
+    {
+      "file": "layers.svg",
+      "name": "layers",
+      "kubai": "layers",
+      "variant": "svg-line"
+    },
+    {
+      "file": "list-bullet.svg",
+      "name": "list-bullet",
+      "kubai": "list",
+      "variant": "svg-line"
+    },
+    {
+      "file": "mention.svg",
+      "name": "mention",
+      "kubai": "at-sign",
+      "variant": "svg-line"
+    },
+    {
+      "file": "message.svg",
+      "name": "message",
+      "kubai": "message-circle",
+      "variant": "svg-line"
+    },
+    {
+      "file": "monitor.svg",
+      "name": "monitor",
+      "kubai": "monitor",
+      "variant": "svg-line"
+    },
+    {
+      "file": "more-horizontal.svg",
+      "name": "more-horizontal",
+      "kubai": "more-horizontal",
+      "variant": "svg-line"
+    },
+    {
+      "file": "multi-select.svg",
+      "name": "multi-select",
+      "kubai": "list-checks",
+      "variant": "svg-line"
+    },
+    {
+      "file": "pin.svg",
+      "name": "pin",
+      "kubai": "pin",
+      "variant": "svg-line"
+    },
+    {
+      "file": "play.svg",
+      "name": "play",
+      "kubai": "play",
+      "variant": "svg-line"
+    },
+    {
+      "file": "play-circle.svg",
+      "name": "play-circle",
+      "kubai": "play-circle",
+      "variant": "svg-line"
+    },
+    {
+      "file": "plus.svg",
+      "name": "plus",
+      "kubai": "plus",
+      "variant": "svg-line"
+    },
+    {
+      "file": "power.svg",
+      "name": "power",
+      "kubai": "power",
+      "variant": "svg-line"
+    },
+    {
+      "file": "refresh.svg",
+      "name": "refresh",
+      "kubai": "rotate-cw",
+      "variant": "svg-line"
+    },
+    {
+      "file": "search.svg",
+      "name": "search",
+      "kubai": "search",
+      "variant": "svg-line"
+    },
+    {
+      "file": "server.svg",
+      "name": "server",
+      "kubai": "server",
+      "variant": "svg-line"
+    },
+    {
+      "file": "settings.svg",
+      "name": "settings",
+      "kubai": "settings",
+      "variant": "svg-line"
+    },
+    {
+      "file": "shield-alert.svg",
+      "name": "shield-alert",
+      "kubai": "shield-alert",
+      "variant": "svg-line"
+    },
+    {
+      "file": "shield-check.svg",
+      "name": "shield-check",
+      "kubai": "shield-check",
+      "variant": "svg-line"
+    },
+    {
+      "file": "shield-lock.svg",
+      "name": "shield-lock",
+      "kubai": "shield-lock",
+      "variant": "svg-line"
+    },
+    {
+      "file": "sidebar.svg",
+      "name": "sidebar",
+      "kubai": "sidebar",
+      "variant": "svg-line"
+    },
+    {
+      "file": "sliders.svg",
+      "name": "sliders",
+      "kubai": "sliders",
+      "variant": "svg-line"
+    },
+    {
+      "file": "sparkles.svg",
+      "name": "sparkles",
+      "kubai": "sparkles",
+      "variant": "svg-line"
+    },
+    {
+      "file": "star.svg",
+      "name": "star",
+      "kubai": "star",
+      "variant": "svg-line"
+    },
+    {
+      "file": "star-off.svg",
+      "name": "star-off",
+      "kubai": "star-off",
+      "variant": "svg-line"
+    },
+    {
+      "file": "stethoscope.svg",
+      "name": "stethoscope",
+      "kubai": "stethoscope",
+      "variant": "svg-line"
+    },
+    {
+      "file": "stop.svg",
+      "name": "stop",
+      "kubai": "stop",
+      "variant": "svg-line"
+    },
+    {
+      "file": "stop-circle.svg",
+      "name": "stop-circle",
+      "kubai": "circle-stop",
+      "variant": "svg-line"
+    },
+    {
+      "file": "sun-moon.svg",
+      "name": "sun-moon",
+      "kubai": "sun-moon",
+      "variant": "svg-line"
+    },
+    {
+      "file": "terminal.svg",
+      "name": "terminal",
+      "kubai": "terminal",
+      "variant": "svg-line"
+    },
+    {
+      "file": "trash.svg",
+      "name": "trash",
+      "kubai": "trash",
+      "variant": "svg-line"
+    },
+    {
+      "file": "triangle.svg",
+      "name": "triangle",
+      "kubai": "triangle",
+      "variant": "svg-line"
+    },
+    {
+      "file": "undo.svg",
+      "name": "undo",
+      "kubai": "undo",
+      "variant": "svg-line"
+    },
+    {
+      "file": "workflow.svg",
+      "name": "workflow",
+      "kubai": "workflow",
+      "variant": "svg-line"
+    },
+    {
+      "file": "x-circle.svg",
+      "name": "x-circle",
+      "kubai": "circle-x",
+      "variant": "svg-line"
+    },
+    {
+      "file": "zap.svg",
+      "name": "zap",
+      "kubai": "zap",
+      "variant": "svg-line"
     }
   ]
 }

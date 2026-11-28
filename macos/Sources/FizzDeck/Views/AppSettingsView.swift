@@ -4,10 +4,33 @@ import SwiftUI
 struct AppSettingsView: View {
     @AppStorage(AppearancePreferences.key) private var appearance: AppAppearance = .system
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dismissWindow) private var dismissWindow
     @State private var page: SettingsPage = .general
     @Namespace private var selectionNamespace
 
     var body: some View {
+        VStack(spacing: 0) {
+            FizzSheetHeader(title: "设置") { dismissWindow() }
+                .padding(.horizontal, FizzSpacing.page)
+                .padding(.vertical, FizzSpacing.grid)
+            Divider()
+
+            settingsBody
+
+            Divider()
+            FizzSheetFooter {
+                FizzActionButton(title: "完成", prominence: .primary, keyboardNavigation: true) { dismissWindow() }
+            }
+            .padding(.horizontal, FizzSpacing.page)
+            .padding(.vertical, FizzSpacing.grid)
+        }
+        .frame(width: 720, height: 500)
+        .background(FizzTheme.page)
+        .preferredColorScheme(appearance.colorScheme)
+        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: page)
+    }
+
+    private var settingsBody: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(SettingsPage.allCases) { item in
@@ -22,7 +45,7 @@ struct AppSettingsView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(12)
+            .padding(FizzSpacing.grid)
             .frame(width: 170)
             .background(FizzTheme.sidebar)
 
@@ -41,11 +64,7 @@ struct AppSettingsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(FizzTheme.page)
         }
-        .frame(width: 720, height: 500)
-        .preferredColorScheme(appearance.colorScheme)
-        .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: page)
     }
 }
 
@@ -86,17 +105,17 @@ private struct SettingsNavigationRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 9) {
-                FizzIcon(symbol: page.symbol, size: 13)
+            HStack(spacing: FizzSpacing.row) {
+                FizzIcon(.md, symbol: page.symbol)
                     .frame(width: 17)
 
                 Text(page.title)
-                    .font(.system(size: 13, weight: selected ? .medium : .regular))
+                    .font(FizzTypography.body(selected ? .medium : .regular))
 
                 Spacer(minLength: 0)
             }
             .foregroundStyle(selected ? Color.primary : Color.secondary)
-            .padding(.horizontal, 9)
+            .padding(.horizontal, FizzSpacing.row)
             .frame(height: 32)
             .background {
                 if selected {
@@ -116,6 +135,7 @@ private struct SettingsNavigationRow: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .onHover { hovering = $0 }
+        .fizzKeyboardAction(action: action)
     }
 }
 
@@ -129,7 +149,7 @@ private struct GeneralSettingsPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: FizzSpacing.section) {
                 SettingsCard {
                     SettingsPickerRow(
                         symbol: "circle.lefthalf.filled",
@@ -168,24 +188,23 @@ private struct GeneralSettingsPage: View {
                 }
 
                 SettingsCard {
-                    HStack(spacing: 12) {
+                    HStack(spacing: FizzSpacing.grid) {
                         SettingsIcon(symbol: "power")
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text("登录时启动")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(FizzTypography.body(.medium))
                             Text(loginDetail)
-                                .font(.system(size: 10.5))
+                                .font(FizzTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
 
-                        Spacer(minLength: 12)
+                        Spacer(minLength: FizzSpacing.grid)
 
                         if loginState == .requiresApproval {
-                            Button("打开系统设置") {
+                            FizzActionButton(title: "打开系统设置", height: .compact) {
                                 LoginItemService.openSettings()
                             }
-                            .controlSize(.small)
                         }
 
                         Toggle("", isOn: loginBinding)
@@ -196,8 +215,8 @@ private struct GeneralSettingsPage: View {
 
                     if let loginError {
                         Text(loginError)
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.orange)
+                            .font(FizzTypography.caption)
+                            .fizzStatus(FizzTheme.statusWarning)
                     }
                 }
 
@@ -230,7 +249,7 @@ private struct GeneralSettingsPage: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(28)
+            .padding(FizzSpacing.page)
         }
         .task {
             await refreshPermissions()
@@ -294,8 +313,8 @@ private struct GeneralSettingsPage: View {
 
     private var notificationStatusColor: Color {
         switch notificationPermission {
-        case .allowed: .green
-        case .denied: .orange
+        case .allowed: FizzTheme.statusSuccess
+        case .denied: FizzTheme.statusWarning
         case .notDetermined, .unknown: .secondary
         }
     }
@@ -318,8 +337,8 @@ private struct GeneralSettingsPage: View {
 
     private var fullDiskAccessColor: Color {
         switch fullDiskAccess {
-        case true: .green
-        case false: .orange
+        case true: FizzTheme.statusSuccess
+        case false: FizzTheme.statusWarning
         case nil: .secondary
         }
     }
@@ -350,7 +369,7 @@ private struct SessionsSettingsPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: FizzSpacing.section) {
                 SettingsCard {
                     SettingsPickerRow(
                         symbol: "terminal",
@@ -403,7 +422,7 @@ private struct SessionsSettingsPage: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(28)
+            .padding(FizzSpacing.page)
         }
         .task {
             refresh()
@@ -454,8 +473,8 @@ private struct SessionsSettingsPage: View {
     private var automationStatusColor: Color {
         if preferredTerminal == .warp { return .secondary }
         switch automationPermission {
-        case .granted: return .green
-        case .denied: return .orange
+        case .granted: return FizzTheme.statusSuccess
+        case .denied: return FizzTheme.statusWarning
         case .unknown: return .secondary
         }
     }
@@ -479,33 +498,33 @@ private struct AboutSettingsPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                VStack(spacing: 8) {
+            VStack(spacing: FizzSpacing.section) {
+                VStack(spacing: FizzSpacing.row) {
                     FizzLogo(size: 64)
 
                     Text("FizzDeck")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(FizzTypography.pageTitle)
                     Text("版本 \(AppVersion.display)")
-                        .font(.system(size: 10.5))
+                        .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.top, 12)
+                .padding(.top, FizzSpacing.grid)
 
                 SettingsCard {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: FizzSpacing.row) {
+                        HStack(spacing: FizzSpacing.grid) {
                             SettingsIcon(symbol: "arrow.triangle.2.circlepath")
 
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("检查更新")
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(FizzTypography.body(.medium))
                                 Text(updateStatusText)
-                                    .font(.system(size: 10.5))
-                                    .foregroundStyle(updateStatusColor)
+                                    .font(FizzTypography.caption)
+                                    .fizzStatus(updateStatusColor)
                             }
 
-                            Spacer(minLength: 12)
+                            Spacer(minLength: FizzSpacing.grid)
                             updateActions
                         }
 
@@ -513,7 +532,7 @@ private struct AboutSettingsPage: View {
                             VStack(alignment: .leading, spacing: 5) {
                                 ProgressView(value: progress)
                                     .progressViewStyle(.linear)
-                                    .tint(FizzTheme.accent)
+                                    .tint(Color.secondary)
                                     .animation(
                                         FizzMotion.resolved(reduceMotion, .easeOut(duration: 0.22)),
                                         value: progress
@@ -521,11 +540,10 @@ private struct AboutSettingsPage: View {
 
                                 HStack {
                                     Text("\(Format.bytes(received)) / \(Format.bytes(total))")
-                                    Spacer(minLength: 8)
+                                    Spacer(minLength: FizzSpacing.row)
                                     Text("\(Int((progress * 100).rounded()))%")
-                                        .monospacedDigit()
                                 }
-                                .font(.system(size: 10))
+                                .font(FizzTypography.micro)
                                 .foregroundStyle(.secondary)
                             }
                             .transition(.opacity.combined(with: .move(edge: .top)))
@@ -562,7 +580,7 @@ private struct AboutSettingsPage: View {
                     )
                 }
             }
-            .padding(28)
+            .padding(FizzSpacing.page)
             .animation(
                 FizzMotion.resolved(reduceMotion, FizzMotion.spring),
                 value: updater.state
@@ -591,89 +609,39 @@ private struct AboutSettingsPage: View {
     @ViewBuilder
     private var updateActions: some View {
         switch updater.state {
-        case .idle:
+        case .idle, .upToDate:
             checkButton
-        case .checking:
-            Button {
-            } label: {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.mini)
-                    Text("检查中…")
-                }
-            }
-            .buttonStyle(.glassProminent)
-            .tint(FizzTheme.accent)
-            .disabled(true)
-        case .upToDate:
-            checkButton
+        case .checking, .verifying, .installing:
+            ProgressView().controlSize(.small)
         case .available(let release):
-            Button("前往 Release") {
+            FizzActionButton(title: "前往 Release", height: .compact) {
                 openURL(release.pageURL)
             }
-            .buttonStyle(.glass)
 
-            Button("下载更新") {
+            FizzActionButton(title: "下载更新", height: .compact, prominence: .primary) {
                 updater.startDownload()
             }
-            .buttonStyle(.glassProminent)
-            .tint(FizzTheme.accent)
             .disabled(release.dmgAsset == nil)
             .help(release.dmgAsset == nil ? "这个版本没有可用的 arm64 DMG" : "下载更新")
         case .downloading:
-            Button("取消") {
+            FizzActionButton(title: "取消下载", height: .compact) {
                 updater.cancelDownload()
             }
-            .buttonStyle(.glass)
-
-            Button {
-            } label: {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.mini)
-                    Text("下载中…")
-                }
-            }
-            .buttonStyle(.glassProminent)
-            .tint(FizzTheme.accent)
-            .disabled(true)
-        case .verifying:
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.mini)
-                Text("校验中…")
-                    .font(.system(size: 11))
-            }
-            .foregroundStyle(.secondary)
         case .readyToInstall:
-            Button("安装并重启") {
+            FizzActionButton(title: "安装并重启", height: .compact, prominence: .primary) {
                 Task { await updater.installAndRestart() }
             }
-            .buttonStyle(.glassProminent)
-            .tint(FizzTheme.accent)
-        case .installing:
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.mini)
-                Text("正在安装…")
-                    .font(.system(size: 11))
-            }
-            .foregroundStyle(.secondary)
         case .failed:
-            Button("重新检查") {
+            FizzActionButton(title: "重新检查", height: .compact, prominence: .primary) {
                 Task { await updater.check() }
             }
-            .buttonStyle(.glassProminent)
-            .tint(FizzTheme.accent)
         }
     }
 
     private var checkButton: some View {
-        Button("立即检查") {
+        FizzActionButton(title: "立即检查", height: .compact, prominence: .primary) {
             Task { await updater.check() }
         }
-        .buttonStyle(.glassProminent)
-        .tint(FizzTheme.accent)
     }
 
     private var updateStatusText: String {
@@ -704,11 +672,11 @@ private struct AboutSettingsPage: View {
         case .idle, .checking:
             return .secondary
         case .upToDate:
-            return .green
+            return FizzTheme.statusSuccess
         case .available, .downloading, .verifying, .readyToInstall, .installing:
-            return FizzTheme.accent
+            return Color.secondary
         case .failed:
-            return .orange
+            return FizzTheme.statusWarning
         }
     }
 }
@@ -721,10 +689,10 @@ private struct SettingsCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: FizzSpacing.grid) {
             content
         }
-        .padding(16)
+        .padding(FizzSpacing.panel)
         .fizzCard(radius: FizzRadius.card)
     }
 }
@@ -733,7 +701,7 @@ private struct SettingsIcon: View {
     let symbol: String
 
     var body: some View {
-        FizzIcon(symbol: symbol, size: 15)
+        FizzIcon(.md, symbol: symbol)
             .foregroundStyle(.secondary)
             .frame(width: 22, height: 22)
     }
@@ -749,26 +717,25 @@ private struct SettingsPermissionRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: FizzSpacing.grid) {
             SettingsIcon(symbol: symbol)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(FizzTypography.body(.medium))
                 Text(detail)
-                    .font(.system(size: 10.5))
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: FizzSpacing.grid)
 
             Text(status)
-                .font(.system(size: 10.5))
-                .foregroundStyle(statusColor)
+                .font(FizzTypography.caption)
+                .fizzStatus(statusColor)
 
             if let actionTitle {
-                Button(actionTitle, action: action)
-                    .controlSize(.small)
+                FizzActionButton(title: actionTitle, height: .compact, action: action)
             }
         }
     }
@@ -793,18 +760,18 @@ private struct SettingsPickerRow<Content: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: FizzSpacing.grid) {
             SettingsIcon(symbol: symbol)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(FizzTypography.body(.medium))
                 Text(detail)
-                    .font(.system(size: 10.5))
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: FizzSpacing.grid)
 
             picker
         }
@@ -823,19 +790,19 @@ private struct AboutLinkRow: View {
         Button {
             openURL(url)
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: symbol)
 
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(FizzTypography.body(.medium))
 
-                Spacer(minLength: 12)
+                Spacer(minLength: FizzSpacing.grid)
 
                 Text(value)
-                    .font(.system(size: 10.5))
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
 
-                FizzIcon(symbol: "arrow.up.right", size: 9)
+                FizzIcon(.xs, symbol: "arrow.up.right")
                     .foregroundStyle(.tertiary)
             }
             .contentShape(Rectangle())
@@ -866,23 +833,25 @@ private struct AIAndMarksSettingsPage: View {
     @State private var testSucceeded = false
     @State private var keySavedFeedback: String?
 
+    private var canUseSummary: Bool { summaryEnabled && consentAccepted }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: FizzSpacing.section) {
                 Text("AI 与标记")
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(FizzTypography.pageTitle)
 
                 marksSection
                 aiSummarySection
 
-                if summaryEnabled {
+                if canUseSummary {
                     providerSection
                     diagnosticsSection
                 }
 
                 Spacer(minLength: 0)
             }
-            .padding(28)
+            .padding(FizzSpacing.page)
         }
         .onAppear {
             hasStoredAPIKey = !(KeychainStore.load(account: SummaryPreferences.keychainAccount) ?? "").isEmpty
@@ -907,19 +876,19 @@ private struct AIAndMarksSettingsPage: View {
     private var marksSection: some View {
         SettingsCard {
             Text("隐形标记与版本安全")
-                .font(.system(size: 12, weight: .semibold))
+                .font(FizzTypography.cardTitle)
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 12) {
+            HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "bookmark.circle")
                 VStack(alignment: .leading, spacing: 3) {
                     Text("AI 完成或出错时自动做一次轻量记录点")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(FizzTypography.body(.medium))
                     Text("默认使用 Git 原生对象留档，不会写入项目代码目录，也不影响提交记录。")
-                        .font(.system(size: 10.5))
+                        .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 12)
+                Spacer(minLength: FizzSpacing.grid)
                 Toggle("", isOn: $implicitMarksEnabled)
                     .labelsHidden()
                     .toggleStyle(.switch)
@@ -928,16 +897,16 @@ private struct AIAndMarksSettingsPage: View {
             Divider()
                 .padding(.leading, 34)
 
-            HStack(spacing: 12) {
+            HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "checkmark.bubble")
                 VStack(alignment: .leading, spacing: 3) {
                     Text("自动弹出「建议存个版本」提示")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(FizzTypography.body(.medium))
                     Text("关闭后仍可在进展卡片和顶部按钮手动存个版本。")
-                        .font(.system(size: 10.5))
+                        .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 12)
+                Spacer(minLength: FizzSpacing.grid)
                 Toggle("", isOn: Binding(
                     get: { !saveVersionToastDisabled },
                     set: { saveVersionToastDisabled = !$0 }
@@ -950,18 +919,18 @@ private struct AIAndMarksSettingsPage: View {
 
     private var aiSummarySection: some View {
         SettingsCard {
-            HStack(spacing: 12) {
+            HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "sparkles")
                 VStack(alignment: .leading, spacing: 3) {
                     Text("启用 AI 智能总结（实验性 · 默认关闭）")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(FizzTypography.body(.medium))
                     Text("用更通俗的语言概括每次对话成果与项目进度；未开启或调用失败时自动使用本地规则摘要。")
-                        .font(.system(size: 10.5))
+                        .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 12)
+                Spacer(minLength: FizzSpacing.grid)
                 Toggle("", isOn: Binding(
-                    get: { summaryEnabled },
+                    get: { canUseSummary },
                     set: { newValue in
                         if newValue && !consentAccepted {
                             showingConsentSheet = true
@@ -977,20 +946,19 @@ private struct AIAndMarksSettingsPage: View {
             Divider()
                 .padding(.leading, 34)
 
-            HStack(spacing: 12) {
+            HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "eye.slash")
                 VStack(alignment: .leading, spacing: 3) {
                     Text("仅发送最小脱敏字段，绝不上传源码与完整对话")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(FizzTypography.body(.medium))
                     Text("只包含项目名、文件名、变动计数与脱敏后的一句话意图。")
-                        .font(.system(size: 10.5))
+                        .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 12)
-                Button("查看发送示例") {
+                Spacer(minLength: FizzSpacing.grid)
+                FizzActionButton(title: "查看发送示例", height: .compact) {
                     showingPromptPreview = true
                 }
-                .controlSize(.small)
             }
         }
     }
@@ -1034,20 +1002,28 @@ private struct AIAndMarksSettingsPage: View {
                     .fixedSize()
                 }
             case .openAICompatible:
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: FizzSpacing.row) {
                     TextField("Base URL（如 https://api.openai.com/v1）", text: $apiBaseURL)
                         .textFieldStyle(.roundedBorder)
                     TextField("模型名称（如 gpt-4o-mini / deepseek-chat）", text: $apiModel)
                         .textFieldStyle(.roundedBorder)
 
-                    HStack(spacing: 8) {
+                    HStack(spacing: FizzSpacing.row) {
                         SecureField(
                             hasStoredAPIKey ? "已保存在钥匙串中（输入新 Key 可覆盖）" : "填入 API Key（存入 macOS 钥匙串）",
                             text: $apiKeyDraft
                         )
                         .textFieldStyle(.roundedBorder)
 
-                        Button("保存 Key") {
+                        if hasStoredAPIKey {
+                            FizzActionButton(title: "清除", height: .compact, role: .destructive) {
+                                KeychainStore.delete(account: SummaryPreferences.keychainAccount)
+                                hasStoredAPIKey = false
+                                keySavedFeedback = "已从钥匙串移除"
+                            }
+                        }
+
+                        FizzActionButton(title: "保存 Key", height: .compact, prominence: .primary) {
                             let ok = KeychainStore.save(
                                 account: SummaryPreferences.keychainAccount,
                                 secret: apiKeyDraft
@@ -1056,28 +1032,18 @@ private struct AIAndMarksSettingsPage: View {
                             apiKeyDraft = ""
                             keySavedFeedback = ok ? "已存入系统钥匙串" : "保存失败，请检查钥匙串权限"
                         }
-                        .controlSize(.small)
                         .disabled(apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                        if hasStoredAPIKey {
-                            Button("清除") {
-                                KeychainStore.delete(account: SummaryPreferences.keychainAccount)
-                                hasStoredAPIKey = false
-                                keySavedFeedback = "已从钥匙串移除"
-                            }
-                            .controlSize(.small)
-                        }
                     }
 
                     if let keySavedFeedback {
                         Text(keySavedFeedback)
-                            .font(.system(size: 10.5))
+                            .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .padding(.leading, 34)
             case .localModel:
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: FizzSpacing.row) {
                     TextField("本地服务地址（如 http://127.0.0.1:11434/v1）", text: $localBaseURL)
                         .textFieldStyle(.roundedBorder)
                     TextField("本地模型名称（如 qwen2.5:7b）", text: $localModel)
@@ -1089,22 +1055,23 @@ private struct AIAndMarksSettingsPage: View {
             Divider()
                 .padding(.leading, 34)
 
-            HStack(spacing: 12) {
+            HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "bolt.horizontal")
                 VStack(alignment: .leading, spacing: 2) {
                     if let testFeedback {
                         Text(testFeedback)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(testSucceeded ? .green : .orange)
+                            .font(FizzTypography.body)
+                            .fizzStatus(testSucceeded ? FizzTheme.statusSuccess : FizzTheme.statusWarning)
                     } else {
                         Text("发送极短的「回复 OK」测试，验证配置是否畅通。")
-                            .font(.system(size: 10.5))
+                            .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                Spacer(minLength: 12)
-                Button(isTestingConnection ? "测试中…" : "测试连接") {
+                Spacer(minLength: FizzSpacing.grid)
+                FizzActionButton(title: isTestingConnection ? "测试中…" : "测试连接", height: .compact) {
                     Task {
+                        guard canUseSummary, !isTestingConnection else { return }
                         isTestingConnection = true
                         defer { isTestingConnection = false }
                         let result = await summaryEngine.testConnection()
@@ -1118,7 +1085,6 @@ private struct AIAndMarksSettingsPage: View {
                         }
                     }
                 }
-                .controlSize(.small)
                 .disabled(isTestingConnection)
             }
         }
@@ -1126,32 +1092,31 @@ private struct AIAndMarksSettingsPage: View {
 
     private var diagnosticsSection: some View {
         SettingsCard {
-            HStack(spacing: 12) {
+            HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "chart.pie")
                 VStack(alignment: .leading, spacing: 3) {
                     Text("近 30 天 FizzDeck 自身汇总消耗")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(FizzTypography.body(.medium))
                     let usage = summaryEngine.monthlySelfUsage
                     let costText = usage.hasCostData ? (Format.cost(usage.estimatedCostUSD, estimated: true) ?? "$0") : "计入本地/CLI"
                     Text("共 \(usage.callCount) 次调用 · \(Format.tokens(usage.totalTokens)) · \(costText)")
-                        .font(.system(size: 10.5))
+                        .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 12)
-                Button("清空摘要缓存") {
+                Spacer(minLength: FizzSpacing.grid)
+                FizzActionButton(title: "清空摘要缓存", height: .compact) {
                     summaryEngine.clearCache()
                 }
-                .controlSize(.small)
             }
 
             if let lastError = summaryEngine.lastError, !lastError.isEmpty {
                 Divider()
                     .padding(.leading, 34)
-                HStack(spacing: 12) {
+                HStack(spacing: FizzSpacing.grid) {
                     SettingsIcon(symbol: "exclamationmark.circle")
                     Text("最近一次静默回退原因：\(lastError)")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.orange)
+                        .font(FizzTypography.caption)
+                        .fizzStatus(FizzTheme.statusWarning)
                         .textSelection(.enabled)
                 }
             }
@@ -1165,42 +1130,47 @@ private struct SummaryConsentSheet: View {
     let onAccept: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                FizzIcon(symbol: "lock.shield", size: 18)
-                    .foregroundStyle(FizzTheme.accent)
-                Text("开启 AI 智能总结前确认")
-                    .font(.system(size: 16, weight: .semibold))
-            }
+        VStack(spacing: 0) {
+            FizzSheetHeader(title: "开启 AI 智能总结前确认", onClose: cancel)
+                .padding(.horizontal, FizzSpacing.page)
+                .padding(.vertical, FizzSpacing.panel)
 
-            Text("开启后，FizzDeck 会调用你选择的模型把对话和改动翻译成更易懂的大白话：")
-                .font(.system(size: 12.5))
-                .foregroundStyle(.secondary)
+            Divider()
 
-            VStack(alignment: .leading, spacing: 6) {
-                Label("仅发送项目名、文件名、变更计数和脱敏后的起始意图", systemImage: "checkmark.circle")
-                Label("绝不发送完整代码、环境变量或完整聊天记录", systemImage: "checkmark.circle")
-                Label("自动过滤常见密钥与令牌；调用失败会静默回退到本地规则摘要", systemImage: "checkmark.circle")
-            }
-            .font(.system(size: 12))
+            VStack(alignment: .leading, spacing: FizzSpacing.grid) {
+                Text("开启后，FizzDeck 会调用你选择的模型把对话和改动翻译成更易懂的大白话：")
+                    .foregroundStyle(.secondary)
 
-            Spacer(minLength: 4)
-
-            HStack {
-                Spacer()
-                Button("暂不开启") {
-                    onCancel()
-                    dismiss()
+                VStack(alignment: .leading, spacing: FizzSpacing.row) {
+                    Label("仅发送项目名、文件名、变更计数和脱敏后的起始意图", systemImage: "checkmark.circle")
+                    Label("绝不发送完整代码、环境变量或完整聊天记录", systemImage: "checkmark.circle")
+                    Label("自动过滤常见密钥与令牌；调用失败会静默回退到本地规则摘要", systemImage: "checkmark.circle")
                 }
-                Button("我已知晓并开启") {
+            }
+            .font(FizzTypography.body)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(FizzSpacing.page)
+
+            Divider()
+
+            FizzSheetFooter {
+                FizzActionButton(title: "暂不开启", role: .cancel, action: cancel)
+                    .keyboardShortcut(.cancelAction)
+
+                FizzActionButton(title: "我已知晓并开启", prominence: .primary) {
                     onAccept()
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
             }
+            .padding(.horizontal, FizzSpacing.page)
+            .padding(.vertical, FizzSpacing.grid)
         }
-        .padding(22)
         .frame(width: 440)
+    }
+
+    private func cancel() {
+        onCancel()
+        dismiss()
     }
 }
 
@@ -1209,30 +1179,36 @@ private struct PromptPreviewSheet: View {
     let sampleText: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("实际发送内容示例（已脱敏）")
-                .font(.system(size: 15, weight: .semibold))
+        VStack(spacing: 0) {
+            FizzSheetHeader(title: "实际发送内容示例（已脱敏）") { dismiss() }
+                .padding(.horizontal, FizzSpacing.page)
+                .padding(.vertical, FizzSpacing.panel)
+
+            Divider()
 
             ScrollView {
                 Text(sampleText)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(FizzTypography.mono)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
-                    .padding(12)
+                    .padding(FizzSpacing.grid)
                     .background(
                         RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
                             .fill(FizzTheme.cardFill)
                     )
             }
             .frame(height: 220)
+            .padding(FizzSpacing.page)
 
-            HStack {
-                Spacer()
-                Button("关闭") { dismiss() }
-                    .buttonStyle(.borderedProminent)
+            Divider()
+
+            FizzSheetFooter {
+                FizzActionButton(title: "关闭", prominence: .primary, role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
             }
+            .padding(.horizontal, FizzSpacing.page)
+            .padding(.vertical, FizzSpacing.grid)
         }
-        .padding(20)
         .frame(width: 460)
     }
 }

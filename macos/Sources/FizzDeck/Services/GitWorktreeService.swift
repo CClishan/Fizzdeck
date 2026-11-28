@@ -1,8 +1,10 @@
+import Darwin
 import Foundation
+import os
 
 struct GitWorktree: Identifiable, Sendable, Hashable {
     let path: String
-    let head: String?
+    fileprivate let objectID: String?
     let branch: String?
     let isMain: Bool
     let isDetached: Bool
@@ -11,6 +13,7 @@ struct GitWorktree: Identifiable, Sendable, Hashable {
     let isPrunable: Bool
 
     var id: String { path }
+    var head: String? { objectID.map { String($0.prefix(12)) } }
 
     var displayName: String {
         URL(fileURLWithPath: path).lastPathComponent
@@ -18,23 +21,439 @@ struct GitWorktree: Identifiable, Sendable, Hashable {
 }
 
 enum GitWorktreeService {
-    static func list(in directory: URL) async -> [GitWorktree] {
-        guard let result = await Shell.run(
-            "git",
-            ["worktree", "list", "--porcelain"],
-            cwd: directory,
-            timeout: 20
-        ), result.succeeded else {
-            return []
+    struct Overview: Sendable {
+        let rows: [Row]
+        let mainBranch: String?
+    }
+
+    struct Row: Identifiable, Sendable {
+        let worktree: GitWorktree
+        let changedCount: Int?
+        let ahead: Int?
+        let behind: Int?
+
+        var id: String { worktree.id }
+        var canManage: Bool { worktree.canManage }
+    }
+
+    struct DiscardConfirmation: Sendable {
+        let changedCount: Int
+        let ignoredCount: Int
+        fileprivate let worktree: GitWorktree
+        fileprivate let entries: String
+        fileprivate let stamps: [FileStamp?]
+        fileprivate let unused = OSAllocatedUnfairLock(initialState: true)
+    }
+
+    enum Failure: LocalizedError {
+        case dirtyRemoval(DiscardConfirmation)
+        case mergeConflict(mainPath: String, rollbackSucceeded: Bool)
+        case blocked(String)
+        case git(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .dirtyRemoval:
+                "目录有未提交改动或被 Git 忽略的内容。确认丢弃后才能移除。"
+            case let .mergeConflict(_, rollbackSucceeded):
+                rollbackSucceeded
+                    ? "这次合并遇到冲突，已用 Git 中止，主仓恢复到合并前。可以在编辑器或终端处理后再合并。"
+                    : "这次合并未能自动恢复。请在主仓的编辑器或终端核对并处理现有合并，不要重复合并。"
+            case let .blocked(message), let .git(message):
+                message
+            }
         }
-        return parsePorcelain(result.text)
+    }
+
+    private static let activeWrites = OSAllocatedUnfairLock(initialState: Set<String>())
+    private static let gitLocationOverrides = [
+        "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_NAMESPACE",
+        "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_QUARANTINE_PATH",
+        "GIT_CONFIG", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_PREFIX", "GIT_CEILING_DIRECTORIES",
+    ]
+
+    static func list(in directory: URL) async -> [GitWorktree] {
+        (try? await inventory(in: directory)) ?? []
+    }
+
+    static func status(in directory: URL) async throws -> Overview {
+        let worktrees = try await inventory(in: directory)
+        let primary = try primaryDirectory(worktrees)
+        let base = await mainBranch(in: primary)
+        let baseID = if let base { await branchObject(base, in: primary) } else { nil as String? }
+        var rows: [Row] = []
+        for worktree in worktrees {
+            try Task.checkCancellation()
+            let checkout = URL(fileURLWithPath: worktree.path, isDirectory: true)
+            async let working = worktree.isBare || worktree.isPrunable ? nil : (try? await changes(in: checkout))
+            async let diverged = divergence(from: baseID, to: worktree.objectID, in: primary)
+            let (snapshot, counts) = await (working, diverged)
+            rows.append(Row(worktree: worktree, changedCount: snapshot?.changes.count, ahead: counts?.ahead, behind: counts?.behind))
+        }
+        return Overview(rows: rows, mainBranch: base)
+    }
+
+    static func destination(for branch: String, beside mainDirectory: URL) -> URL? {
+        guard plausibleBranch(branch) else { return nil }
+        let slug = branch.replacingOccurrences(of: "/", with: "-")
+        let parent = mainDirectory.deletingLastPathComponent()
+        let container = mainDirectory.lastPathComponent + "-wt"
+        guard !mainDirectory.lastPathComponent.isEmpty, parent.path != mainDirectory.path,
+              slug.utf8.count <= Int(NAME_MAX), container.utf8.count <= Int(NAME_MAX) else { return nil }
+        return parent.appendingPathComponent(container, isDirectory: true).appendingPathComponent(slug, isDirectory: true)
+    }
+
+    @discardableResult
+    static func create(_ branch: String, in directory: URL) async throws -> GitWorktree {
+        try await withWrite(in: directory) { primary, _ in
+            guard let target = destination(for: branch, beside: primary),
+                  (await command(["check-ref-format", "--branch", branch], in: primary))?.succeeded == true else {
+                throw Failure.blocked("分支名不合法。请使用 Git 分支名，例如 feature/layout。")
+            }
+            guard let base = await mainBranch(in: primary), let start = await branchObject(base, in: primary) else {
+                throw Failure.blocked("找不到已提交的主分支，不能新建并行目录。")
+            }
+            guard await branchObject(branch, in: primary) == nil else {
+                throw Failure.blocked("分支「\(branch)」已存在，请换一个名字。")
+            }
+
+            try Task.checkCancellation()
+            let container = target.deletingLastPathComponent()
+            try ensureContainer(container)
+            // Reserve the exact name first: Git will accept an existing empty directory on its own.
+            guard mkdir(target.path, 0o755) == 0 else {
+                if errno == EEXIST { throw Failure.blocked("目标位置已存在，不会覆盖：\(target.path)") }
+                throw Failure.blocked("无法创建并行目录：\(target.path)")
+            }
+            let reserved = FileStamp(target.path)
+            do {
+                _ = try await git(["worktree", "add", "-b", branch, "--", target.path, start], in: primary, timeout: 120)
+            } catch {
+                if reserved?.sameEntry(as: FileStamp(target.path)) == true { _ = rmdir(target.path) }
+                throw error
+            }
+            guard let created = try await inventory(in: primary).first(where: {
+                $0.branch == branch && PathTools.canonical($0.path) == target.path
+            }) else { throw Failure.git("Git 已创建目录，但暂时无法读取记录，请刷新后核对。") }
+            return created
+        }
+    }
+
+    @discardableResult
+    static func mergeIntoMain(_ worktree: GitWorktree, in directory: URL) async throws -> String {
+        try await withWrite(in: directory) { primary, worktrees in
+            let checkout = try await checkedDirectory(worktree, among: worktrees, primary: primary)
+            guard let branch = worktree.branch, let source = worktree.objectID,
+                  let base = await mainBranch(in: primary), let original = await branchObject(base, in: primary),
+                  worktrees.first?.branch == base, await currentBranch(in: primary) == base else {
+                throw Failure.blocked("请先在主仓检出主分支，再重新合并。FizzDeck 不会自动切换分支。")
+            }
+            try await requireIdleGit(in: checkout)
+            guard try await changes(in: checkout).changes.isEmpty else {
+                throw Failure.blocked("并行目录还有未提交的改动，请先提交，再合并。")
+            }
+            let gitDir = try await requireIdleGit(in: primary)
+            guard try await changes(in: primary).changes.isEmpty else {
+                throw Failure.blocked("主仓有未提交的改动，请先处理后再合并。")
+            }
+            guard await currentBranch(in: primary) == base, await branchObject(base, in: primary) == original,
+                  await currentBranch(in: checkout) == branch, await branchObject(branch, in: checkout) == source else {
+                throw Failure.blocked("分支已变化。请刷新并重新确认要合并的版本。")
+            }
+            try Task.checkCancellation()
+            let result = await command(
+                ["-c", "rerere.enabled=false", "merge", "--ff", "--no-autostash", "--no-overwrite-ignore", "--no-edit", "--no-gpg-sign",
+                 "-m", "Merge branch '\(branch)' into \(base)", "--", source],
+                in: primary, timeout: 120
+            )
+            if let result, result.succeeded, !result.timedOut {
+                return "已将「\(branch)」合并到「\(base)」。并行目录仍保留。"
+            }
+
+            let mergeHead = gitDir.appendingPathComponent("MERGE_HEAD")
+            // Only abort the merge that we started. Leave unrelated Git operations alone.
+            if (try? String(contentsOf: mergeHead, encoding: .utf8).trimmingCharacters(in: .newlines)) == source {
+                let conflict = (try? await changes(in: primary).changes.contains(where: \.conflicted)) == true
+                let abort = await command(["merge", "--abort"], in: primary, timeout: 60)
+                let restored: Bool
+                if abort?.succeeded == true, abort?.timedOut == false,
+                   await branchObject(base, in: primary) == original, !FileTools.exists(mergeHead) {
+                    restored = (try? await changes(in: primary).changes.isEmpty) == true
+                } else { restored = false }
+                if conflict || !restored {
+                    throw Failure.mergeConflict(mainPath: primary.path, rollbackSucceeded: restored)
+                }
+            }
+            throw gitFailure(result, fallback: "合并未完成，请在主仓的终端核对状态。")
+        }
+    }
+
+    static func remove(
+        _ worktree: GitWorktree,
+        in directory: URL,
+        confirmingDiscardOf reviewed: DiscardConfirmation? = nil,
+        managedActivity: @escaping @MainActor @Sendable (String) -> Bool = { _ in false }
+    ) async throws {
+        try await withWrite(in: directory) { primary, worktrees in
+            let checkout = try await checkedDirectory(worktree, among: worktrees, primary: primary)
+            try await requireIdleGit(in: checkout)
+            let snapshot = try await changes(in: checkout, includingIgnored: true)
+            guard try !hasProcess(in: checkout), await !managedActivity(checkout.path) else {
+                throw Failure.blocked("该目录仍有服务、测试或其他进程在使用。请先停止它们或让终端离开此目录。")
+            }
+            var arguments = ["worktree", "remove"]
+            if !snapshot.changes.isEmpty {
+                let paths = snapshot.changes.flatMap { [$0.path, $0.originalPath].compactMap { $0 } }
+                let stamps = [FileStamp(checkout.path), FileStamp(checkout.appendingPathComponent(".git").path)]
+                    + paths.map { FileStamp(checkout.appendingPathComponent($0).standardizedFileURL.path) }
+                let ignored = snapshot.changes.filter { $0.indexStatus == "!" }.count
+                let current = DiscardConfirmation(
+                    changedCount: snapshot.changes.count - ignored, ignoredCount: ignored,
+                    worktree: worktree, entries: snapshot.raw, stamps: stamps
+                )
+                guard let reviewed, reviewed.worktree == current.worktree, reviewed.entries == current.entries,
+                      reviewed.stamps == current.stamps, reviewed.unused.withLock({ available in
+                          defer { available = false }
+                          return available
+                      }) else { throw Failure.dirtyRemoval(current) }
+                arguments.append("--force")
+            }
+            try Task.checkCancellation()
+            _ = try await git(arguments + ["--", checkout.path], in: primary, timeout: 120)
+        }
+    }
+
+    private static func inventory(in directory: URL) async throws -> [GitWorktree] {
+        let current = URL(fileURLWithPath: PathTools.canonical(directory.path), isDirectory: true)
+        let raw = try await git(["worktree", "list", "--porcelain", "-z"], in: current)
+        let worktrees = parsePorcelain(raw)
+        guard raw.last == "\0", worktrees.contains(where: { PathTools.canonical($0.path) == current.path }) else {
+            throw Failure.blocked("当前目录不是 Git 登记的工作区，无法确认要操作的仓库。")
+        }
+        return worktrees
+    }
+
+    private static func primaryDirectory(_ worktrees: [GitWorktree]) throws -> URL {
+        guard let primary = worktrees.first, !primary.isBare, !primary.isPrunable else {
+            throw Failure.blocked("找不到可用的主工作区。")
+        }
+        return URL(fileURLWithPath: PathTools.canonical(primary.path), isDirectory: true)
+    }
+
+    private static func withWrite<T: Sendable>(
+        in directory: URL, _ operation: (URL, [GitWorktree]) async throws -> T
+    ) async throws -> T {
+        let worktrees = try await inventory(in: directory)
+        let primary = try primaryDirectory(worktrees)
+        guard activeWrites.withLock({ $0.insert(primary.path).inserted }) else {
+            throw Failure.blocked("这个仓库正在执行并行目录操作，请稍后再试。")
+        }
+        defer { _ = activeWrites.withLock { $0.remove(primary.path) } }
+        try await requireTopLevel(primary)
+        try Task.checkCancellation()
+        return try await operation(primary, worktrees)
+    }
+
+    private static func checkedDirectory(_ worktree: GitWorktree, among worktrees: [GitWorktree], primary: URL) async throws -> URL {
+        guard worktree.canManage, worktrees.contains(worktree) else {
+            throw Failure.blocked("目录、分支或版本已变化，或该目录已锁定。请先刷新再操作。")
+        }
+        guard FileStamp(worktree.path)?.isDirectory == true else {
+            throw Failure.blocked("并行目录已移走或是符号链接，不能操作。")
+        }
+        let directory = URL(fileURLWithPath: PathTools.canonical(worktree.path), isDirectory: true)
+        try await requireTopLevel(directory)
+        let common = ["rev-parse", "--path-format=absolute", "--git-common-dir"]
+        async let expected = git(common, in: primary)
+        async let actual = git(common, in: directory)
+        guard try await expected == actual else {
+            throw Failure.blocked("该位置已不是主仓登记的并行目录，已停止操作。")
+        }
+        return directory
+    }
+
+    private static func requireTopLevel(_ directory: URL) async throws {
+        var root = try await git(["rev-parse", "--show-toplevel"], in: directory)
+        if root.last == "\n" { root.removeLast() }
+        guard root.hasPrefix("/"), PathTools.canonical(root) == directory.path else {
+            throw Failure.blocked("Git 根目录和所选目录不一致，已停止操作。")
+        }
+    }
+
+    private static func plausibleBranch(_ name: String) -> Bool {
+        guard !name.isEmpty, name.utf8.count <= Int(NAME_MAX), name.uppercased() != "HEAD",
+              !name.hasPrefix("-"), !name.contains(".."), !name.contains("@{"),
+              name != "@", !name.hasSuffix(".") else { return false }
+        let invalid = CharacterSet.controlCharacters.union(.whitespacesAndNewlines)
+            .union(CharacterSet(charactersIn: "~^:?*[\\"))
+        guard name.rangeOfCharacter(from: invalid) == nil else { return false }
+        return name.split(separator: "/", omittingEmptySubsequences: false).allSatisfy {
+            !$0.isEmpty && !$0.hasPrefix(".") && !$0.hasSuffix(".lock")
+        }
+    }
+
+    private static func ensureContainer(_ directory: URL) throws {
+        if mkdir(directory.path, 0o755) != 0, errno != EEXIST {
+            throw Failure.blocked("无法创建并行目录的上级目录：\(directory.path)")
+        }
+        guard FileStamp(directory.path)?.isDirectory == true,
+              FileStamp(directory.appendingPathComponent(".git").path) == nil else {
+            throw Failure.blocked("上级位置必须是普通目录，不能是符号链接或另一个 Git 仓库。")
+        }
+    }
+
+    private static func mainBranch(in directory: URL) async -> String? {
+        let remotePrefix = "refs/remotes/origin/"
+        if let ref = try? await git(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], in: directory),
+           ref.hasPrefix(remotePrefix) {
+            let branch = String(ref.dropFirst(remotePrefix.count)).trimmingCharacters(in: .newlines)
+            if await branchObject(branch, in: directory) != nil { return branch }
+        }
+        for branch in ["main", "master"] {
+            if await branchObject(branch, in: directory) != nil { return branch }
+        }
+        return nil
+    }
+
+    private static func currentBranch(in directory: URL) async -> String? {
+        let prefix = "refs/heads/"
+        guard let ref = try? await git(["symbolic-ref", "--quiet", "HEAD"], in: directory),
+              ref.hasPrefix(prefix) else { return nil }
+        return String(ref.dropFirst(prefix.count)).trimmingCharacters(in: .newlines)
+    }
+
+    private static func branchObject(_ branch: String, in directory: URL) async -> String? {
+        guard plausibleBranch(branch),
+              let output = try? await git(["rev-parse", "--verify", "--end-of-options", "refs/heads/\(branch)^{commit}"], in: directory)
+        else { return nil }
+        let value = output.trimmingCharacters(in: .newlines)
+        return isObjectID(value) ? value : nil
+    }
+
+    private static func isObjectID(_ value: String) -> Bool {
+        (value.utf8.count == 40 || value.utf8.count == 64) && value.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
+    }
+
+    private static func divergence(from base: String?, to head: String?, in directory: URL) async -> GitTrackingCounts? {
+        guard let base, let head, isObjectID(head) else { return nil }
+        if base == head { return GitTrackingCounts() }
+        guard let output = try? await git(["rev-list", "--left-right", "--count", "\(base)...\(head)", "--"], in: directory),
+              output.split(whereSeparator: \.isWhitespace).count == 2,
+              output.split(whereSeparator: \.isWhitespace).allSatisfy({ Int($0) != nil }) else { return nil }
+        return GitService.trackingCounts(output)
+    }
+
+    @discardableResult
+    private static func requireIdleGit(in directory: URL) async throws -> URL {
+        var path = try await git(["rev-parse", "--absolute-git-dir"], in: directory)
+        if path.last == "\n" { path.removeLast() }
+        guard path.hasPrefix("/") else { throw Failure.blocked("无法确认 Git 状态，请先在终端核对。") }
+        let gitDir = URL(fileURLWithPath: path, isDirectory: true)
+        let states = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD", "rebase-apply", "rebase-merge", "sequencer", "BISECT_START"]
+        guard !states.contains(where: { FileStamp(gitDir.appendingPathComponent($0).path) != nil }) else {
+            throw Failure.blocked("这个目录有未完成的 Git 操作，请先在终端处理。")
+        }
+        return gitDir
+    }
+
+    private static func changes(in directory: URL, includingIgnored: Bool = false) async throws -> (raw: String, changes: [GitChange]) {
+        var arguments = ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignore-submodules=none"]
+        // Expand ignored directories so a change to an existing file invalidates its discard confirmation.
+        if includingIgnored { arguments.append("--ignored") }
+        let raw = try await git(arguments, in: directory)
+        let parsed = GitService.parseChanges(raw)
+        let statuses: Set<Character> = [" ", "M", "T", "A", "D", "R", "C", "U", "?", "!"]
+        guard raw.isEmpty || (raw.last == "\0" && !parsed.isEmpty && parsed.allSatisfy({
+            !$0.path.isEmpty && statuses.contains($0.indexStatus) && statuses.contains($0.worktreeStatus)
+        })) else { throw Failure.blocked("无法可靠读取工作区状态，请先在终端核对。") }
+        return (raw, parsed)
+    }
+
+    private static func hasProcess(in directory: URL) throws -> Bool {
+        // libproc reports the physical path even when Foundation displays /var or /tmp.
+        guard let physicalPath = realpath(directory.path, nil) else {
+            throw Failure.blocked("无法确认工作区路径，先取消移除。")
+        }
+        defer { free(physicalPath) }
+        let root = String(cString: physicalPath)
+        let count = proc_listpids(UInt32(PROC_UID_ONLY), getuid(), nil, 0)
+        guard count > 0 else { throw Failure.blocked("无法核对运行中的服务，先取消移除。") }
+        var pids = [pid_t](repeating: 0, count: Int(count) / MemoryLayout<pid_t>.stride + 64)
+        let read = pids.withUnsafeMutableBytes { proc_listpids(UInt32(PROC_UID_ONLY), getuid(), $0.baseAddress, Int32($0.count)) }
+        guard read > 0, Int(read) < pids.count * MemoryLayout<pid_t>.stride else {
+            throw Failure.blocked("无法核对运行中的服务，先取消移除。")
+        }
+        let nestedPrefix = root + "/"
+        for pid in pids.prefix(Int(read) / MemoryLayout<pid_t>.stride) where pid > 1 && pid != getpid() {
+            var info = proc_vnodepathinfo()
+            let bytes = Int32(MemoryLayout.size(ofValue: info))
+            guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, bytes) == bytes else { continue }
+            let cwd = withUnsafeBytes(of: &info.pvi_cdir.vip_path) {
+                String(decoding: $0.prefix(while: { $0 != 0 }), as: UTF8.self)
+            }
+            if cwd == root || cwd.hasPrefix(nestedPrefix) { return true }
+        }
+        return false
+    }
+
+    private static func command(_ arguments: [String], in directory: URL, timeout: TimeInterval = 20) async -> ShellOutput? {
+        await Shell.run("/usr/bin/env", gitLocationOverrides.flatMap { ["-u", $0] } + [
+            DoctorCommand.git ?? "/usr/bin/git", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
+        ] + arguments, cwd: directory, timeout: timeout, extraEnvironment: [
+            "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0", "GIT_NO_REPLACE_OBJECTS": "1",
+            "GIT_NO_LAZY_FETCH": "1", "GIT_ALLOW_PROTOCOL": "", "LC_ALL": "C",
+        ])
+    }
+
+    private static func git(_ arguments: [String], in directory: URL, timeout: TimeInterval = 20) async throws -> String {
+        let result = await command(arguments, in: directory, timeout: timeout)
+        guard let result, result.succeeded, !result.timedOut, result.hasUTF8Output else {
+            throw gitFailure(result, fallback: "Git 操作未完成。")
+        }
+        return result.text
+    }
+
+    private static func gitFailure(_ result: ShellOutput?, fallback: String) -> Failure {
+        guard let result, !result.timedOut else { return .git("\(fallback) Git 超时或无法启动。") }
+        let lines = result.text.split(whereSeparator: \.isNewline)
+        let detail = lines.first(where: { $0.hasPrefix("fatal:") || $0.hasPrefix("error:") }) ?? lines.last
+        let explanation = detail.map { " \(SecretRedactor.redact(String($0.prefix(200))).text)" } ?? ""
+        return .git(fallback + explanation)
+    }
+
+    fileprivate struct FileStamp: Equatable, Sendable {
+        let device: dev_t
+        let inode: ino_t
+        let mode: mode_t
+        let bytes: off_t
+        let modified: Int
+        let nanoseconds: Int
+        let changed: Int
+        let changedNanoseconds: Int
+
+        init?(_ path: String) {
+            var value = stat()
+            guard lstat(path, &value) == 0 else { return nil }
+            device = value.st_dev
+            inode = value.st_ino
+            mode = value.st_mode
+            bytes = value.st_size
+            modified = value.st_mtimespec.tv_sec
+            nanoseconds = value.st_mtimespec.tv_nsec
+            changed = value.st_ctimespec.tv_sec
+            changedNanoseconds = value.st_ctimespec.tv_nsec
+        }
+
+        var isDirectory: Bool { mode & S_IFMT == S_IFDIR }
+        func sameEntry(as other: Self?) -> Bool { device == other?.device && inode == other?.inode }
     }
 
     static func parsePorcelain(_ output: String) -> [GitWorktree] {
         var records: [[String]] = []
         var current: [String] = []
 
-        for rawLine in output.split(whereSeparator: \.isNewline).map(String.init) {
+        let fields = output.contains("\0") ? output.split(separator: "\0") : output.split(whereSeparator: \.isNewline)
+        for rawLine in fields.map(String.init) {
             if rawLine.hasPrefix("worktree ") {
                 if !current.isEmpty {
                     records.append(current)
@@ -83,7 +502,7 @@ enum GitWorktreeService {
             let normalizedPath = PathTools.normalize(path)
             return GitWorktree(
                 path: normalizedPath,
-                head: head.map { String($0.prefix(12)) },
+                objectID: head,
                 branch: branch,
                 isMain: index == 0,
                 isDetached: detached || (branch == nil && !bare),
@@ -93,4 +512,8 @@ enum GitWorktreeService {
             )
         }
     }
+}
+
+private extension GitWorktree {
+    var canManage: Bool { !isMain && !isBare && !isLocked && !isPrunable && !isDetached && branch != nil && objectID != nil }
 }

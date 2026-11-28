@@ -63,7 +63,28 @@ struct DashboardKPISummary: Equatable, Sendable {
     let costIsEstimate: Bool
     let weeklyTokens: Int
     let weekOverWeekCostDeltaPercent: Double?
-    var weeklyTouchedFiles: Int = 0
+    let weeklyTouchedFiles: Int
+    let commits: DashboardTrend
+    let sessions: DashboardTrend
+    let touchedFiles: DashboardTrend
+    let cost: DashboardTrend
+    let tokens: DashboardTrend
+}
+
+struct DashboardTrend: Equatable, Sendable {
+    let samples: [Double]
+    let change: Double?
+
+    init(samples: [Double], current: Double?, previous: Double?, minimumPrevious: Double = 0) {
+        self.samples = samples
+        guard let current, current.isFinite, current >= 0,
+              let previous, previous.isFinite, previous > 0, previous >= minimumPrevious else {
+            change = nil
+            return
+        }
+        let ratio = (current - previous) / previous
+        change = ratio.isFinite && ratio <= 2 ? ratio : nil
+    }
 }
 
 enum CostBreakdownMode: String, CaseIterable, Identifiable, Sendable {
@@ -84,9 +105,8 @@ struct CostSegment: Identifiable, Equatable, Sendable {
     let id: String
     let label: String
     let costUSD: Double
-    let tokens: Int
+    let tokens: Double
     let fraction: Double
-    let tintKey: String
 }
 
 struct ContinueWorkItem: Identifiable, Sendable {
@@ -379,152 +399,157 @@ enum DashboardMetrics {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> DashboardKPISummary {
+        struct Day {
+            var sessions = 0
+            var files: Set<String> = []
+            var tokens: Int?
+            var cost: Double?
+        }
+
         let today = calendar.startOfDay(for: now)
         let weekStart = sevenDayWindowStart(now: now, calendar: calendar)
         let prevWeekStart = calendar.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
         let monthStart = calendar.date(byAdding: .day, value: -29, to: today) ?? today
+        let dayKeys = (0..<14).map { offset in
+            let date = calendar.date(byAdding: .day, value: offset, to: prevWeekStart) ?? today
+            return WorkbenchMetrics.dayKey(date, calendar: calendar)
+        }
+        let indices = Dictionary(dayKeys.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        var days = Array(repeating: Day(), count: dayKeys.count)
 
-        let perDay = aggregateDailyProjectCommits(
+        let dailyCommits = aggregateDailyProjectCommits(
             snapshot: commitActivity,
             projects: projects,
             calendar: calendar
         )
-        var weeklyCommits = 0
-        for offset in 0..<7 {
-            let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? today
-            let key = WorkbenchMetrics.dayKey(day, calendar: calendar)
-            weeklyCommits += (perDay[key] ?? []).reduce(0) { $0 + $1.count }
+        let commits = dayKeys.map { key in
+            (dailyCommits[key] ?? []).reduce(0) { $0 + $1.count }
         }
 
-        var weeklySessions = 0
-        var weeklyTokens = 0
-        var weeklyCost = 0.0
-        var hasWeeklyCost = false
-        var prevWeekCost = 0.0
-        var hasPrevWeekCost = false
-        var monthlyCost = 0.0
-        var hasMonthlyCost = false
+        var monthlyCost: Double?
         var costIsEstimate = false
 
-        var touchedPairs = Set<String>()
         for project in projects {
-            for session in project.sessions.recentSessions {
-                if session.modified >= weekStart {
-                    weeklySessions += 1
-                    weeklyTokens += max(0, session.usage?.totalTokens ?? 0)
-                    for file in session.touchedFiles where !file.isEmpty {
-                        touchedPairs.insert("\(project.path)::\(file)")
-                    }
-                    if let cost = session.costUSD {
-                        weeklyCost += max(0, cost)
-                        hasWeeklyCost = true
-                    }
-                    if session.costIsEstimate == true {
-                        costIsEstimate = true
-                    }
-                } else if session.modified >= prevWeekStart {
-                    if let cost = session.costUSD {
-                        prevWeekCost += max(0, cost)
-                        hasPrevWeekCost = true
-                    }
+            for session in project.sessions.recentSessions
+            where session.modified >= monthStart && session.modified <= now && !session.isWorkspaceSummary {
+                let cost = session.costUSD.flatMap { $0.isFinite ? max(0, $0) : nil }
+                if let cost {
+                    monthlyCost = (monthlyCost ?? 0) + cost
                 }
 
-                if session.modified >= monthStart, let cost = session.costUSD {
-                    monthlyCost += max(0, cost)
-                    hasMonthlyCost = true
+                guard session.modified >= prevWeekStart,
+                      let index = indices[WorkbenchMetrics.dayKey(session.modified, calendar: calendar)] else { continue }
+                days[index].sessions += 1
+                if let tokens = session.usage?.totalTokens {
+                    days[index].tokens = (days[index].tokens ?? 0) + max(0, tokens)
+                }
+                for file in session.touchedFiles where !file.isEmpty {
+                    days[index].files.insert("\(project.path)::\(file)")
+                }
+                if let cost {
+                    days[index].cost = (days[index].cost ?? 0) + cost
+                    costIsEstimate = costIsEstimate || (index >= 7 && session.costIsEstimate == true)
                 }
             }
         }
 
-        let delta: Double?
-        if hasWeeklyCost && hasPrevWeekCost && prevWeekCost > 0 {
-            delta = ((weeklyCost - prevWeekCost) / prevWeekCost) * 100
-        } else {
-            delta = nil
+        let current = days.suffix(7)
+        let previous = days.prefix(7)
+        let weeklyCommits = commits.suffix(7).reduce(0, +)
+        let weeklySessions = current.reduce(0) { $0 + $1.sessions }
+        let weeklyFiles = current.reduce(into: Set<String>()) { $0.formUnion($1.files) }.count
+        let previousFiles = previous.reduce(into: Set<String>()) { $0.formUnion($1.files) }.count
+        let weeklyCost = sumIfRecorded(current.map(\.cost))
+        let previousCost = sumIfRecorded(previous.map(\.cost))
+        let weeklyTokens = sumIfRecorded(current.map(\.tokens))
+        let previousTokens = sumIfRecorded(previous.map(\.tokens))
+        let costTrend = DashboardTrend(
+            samples: weeklyCost == nil ? [] : current.map { $0.cost ?? 0 },
+            current: weeklyCost,
+            previous: previousCost,
+            minimumPrevious: 0.5
+        )
+
+        func trend(_ samples: [Int], current: Int, previous: Int, minimum: Double = 0) -> DashboardTrend {
+            DashboardTrend(samples: samples.map(Double.init), current: Double(current),
+                           previous: Double(previous), minimumPrevious: minimum)
         }
 
         return DashboardKPISummary(
             weeklyCommits: weeklyCommits,
             weeklySessions: weeklySessions,
-            weeklyCostUSD: hasWeeklyCost ? weeklyCost : nil,
-            previousWeekCostUSD: hasPrevWeekCost ? prevWeekCost : nil,
-            monthlyCostUSD: hasMonthlyCost ? monthlyCost : nil,
+            weeklyCostUSD: weeklyCost,
+            previousWeekCostUSD: previousCost,
+            monthlyCostUSD: monthlyCost,
             costIsEstimate: costIsEstimate,
-            weeklyTokens: weeklyTokens,
-            weekOverWeekCostDeltaPercent: delta,
-            weeklyTouchedFiles: touchedPairs.count
+            weeklyTokens: weeklyTokens ?? 0,
+            weekOverWeekCostDeltaPercent: costTrend.change.map { $0 * 100 },
+            weeklyTouchedFiles: weeklyFiles,
+            commits: trend(Array(commits.suffix(7)), current: weeklyCommits, previous: commits.prefix(7).reduce(0, +)),
+            sessions: trend(current.map(\.sessions), current: weeklySessions,
+                            previous: previous.reduce(0) { $0 + $1.sessions }, minimum: 3),
+            touchedFiles: trend(current.map { $0.files.count }, current: weeklyFiles, previous: previousFiles),
+            cost: costTrend,
+            tokens: DashboardTrend(
+                samples: weeklyTokens == nil ? [] : current.map { Double($0.tokens ?? 0) },
+                current: weeklyTokens.map(Double.init),
+                previous: previousTokens.map(Double.init)
+            )
         )
     }
 
-    static func costBreakdown(
-        projects: [RepoProject],
-        mode: CostBreakdownMode,
-        selfUsage: SelfUsageTotals? = nil,
-        now: Date = Date(),
-        calendar: Calendar = .current
-    ) -> [CostSegment] {
-        let cutoff = sevenDayWindowStart(now: now, calendar: calendar)
-        var buckets: [String: (label: String, cost: Double, tokens: Int, tintKey: String)] = [:]
+    private static func sumIfRecorded<Value: AdditiveArithmetic>(_ values: [Value?]) -> Value? {
+        let recorded = values.compactMap { $0 }
+        return recorded.isEmpty ? nil : recorded.reduce(.zero, +)
+    }
 
+    static func weeklyConversationTotals(
+        projects: [RepoProject], now: Date = Date(), calendar: Calendar = .current
+    ) -> WeeklyRecapTotals {
+        let start = sevenDayWindowStart(now: now, calendar: calendar)
+        var totals = WeeklyRecapTotals()
         for project in projects {
-            for session in project.sessions.recentSessions where session.modified >= cutoff {
-                let cost = max(0, session.costUSD ?? 0)
-                let tokens = max(0, session.usage?.totalTokens ?? 0)
-                guard cost > 0 || tokens > 0 else { continue }
-
-                let key: String
-                let label: String
-                let tintKey: String
-                switch mode {
-                case .byTool:
-                    key = session.tool
-                    label = HomeDashboardModel.toolTitle(session.tool)
-                    tintKey = session.tool
-                case .byProject:
-                    key = project.path
-                    label = project.displayName
-                    tintKey = project.group
-                }
-
-                var entry = buckets[key] ?? (label, 0, 0, tintKey)
-                entry.cost += cost
-                entry.tokens += tokens
-                buckets[key] = entry
+            for session in project.sessions.recentSessions
+            where session.kind == .conversation && (start...now).contains(session.modified) {
+                totals.add(session)
             }
         }
+        return totals
+    }
 
+    static func costBreakdown(
+        sessions: [WeeklyRecapSession],
+        mode: CostBreakdownMode,
+        selfUsage: SelfUsageTotals? = nil
+    ) -> [CostSegment] {
+        var buckets: [String: (label: String, totals: WeeklyRecapTotals)] = [:]
+        for row in sessions {
+            let key = mode == .byTool ? row.record.tool : row.projectPath
+            let label = mode == .byTool ? HomeDashboardModel.toolTitle(row.record.tool) : row.projectName
+            buckets[key, default: (label, WeeklyRecapTotals())].totals.add(row.record)
+        }
+        var entries = buckets.map { key, value in
+            (id: key, label: value.label, cost: value.totals.cost.subtotal, tokens: value.totals.tokens)
+        }
         if mode == .byTool,
            let selfUsage,
            (selfUsage.estimatedCostUSD > 0 || selfUsage.totalTokens > 0) {
-            var entry = buckets["fizzdeck-self"] ?? ("FizzDeck 自身", 0, 0, "fizzdeck-self")
-            entry.cost += max(0, selfUsage.estimatedCostUSD)
-            entry.tokens += max(0, selfUsage.totalTokens)
-            buckets["fizzdeck-self"] = entry
+            entries.append(("fizzdeck-self", "FizzDeck 自身", selfUsage.estimatedCostUSD, Double(selfUsage.totalTokens)))
         }
 
-        guard !buckets.isEmpty else { return [] }
-        let totalCost = buckets.values.reduce(0.0) { $0 + $1.cost }
+        let totalCost = entries.reduce(0.0) { $0 + $1.cost }
         let useCost = totalCost > 0
-        let total = useCost
-            ? totalCost
-            : Double(max(1, buckets.values.reduce(0) { $0 + $1.tokens }))
-
-        let sorted = buckets.map { key, value in
-            (
-                id: key,
-                label: value.label,
-                cost: value.cost,
-                tokens: value.tokens,
-                tintKey: value.tintKey,
-                metric: useCost ? value.cost : Double(value.tokens)
-            )
-        }
+        let sorted = entries.map { (id: $0.id, label: $0.label, cost: $0.cost, tokens: $0.tokens,
+                                    metric: useCost ? $0.cost : $0.tokens) }
+        .filter { $0.metric > 0 }
         .sorted { left, right in
             if left.metric != right.metric {
                 return left.metric > right.metric
             }
-            return left.label < right.label
+            return left.label == right.label ? left.id < right.id : left.label < right.label
         }
+        let total = sorted.reduce(0.0) { $0 + $1.metric }
+        guard total > 0 else { return [] }
 
         var result: [CostSegment] = sorted.prefix(5).map { item in
             CostSegment(
@@ -532,23 +557,21 @@ enum DashboardMetrics {
                 label: item.label,
                 costUSD: item.cost,
                 tokens: item.tokens,
-                fraction: item.metric / total,
-                tintKey: item.tintKey
+                fraction: item.metric / total
             )
         }
 
         if sorted.count > 5 {
             let tail = sorted.dropFirst(5)
             let otherCost = tail.reduce(0.0) { $0 + $1.cost }
-            let otherTokens = tail.reduce(0) { $0 + $1.tokens }
+            let otherTokens = tail.reduce(0.0) { $0 + $1.tokens }
             let otherMetric = tail.reduce(0.0) { $0 + $1.metric }
             result.append(CostSegment(
                 id: "other",
                 label: "其他",
                 costUSD: otherCost,
                 tokens: otherTokens,
-                fraction: otherMetric / total,
-                tintKey: "other"
+                fraction: otherMetric / total
             ))
         }
 

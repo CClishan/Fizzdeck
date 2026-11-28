@@ -18,14 +18,14 @@ import {
 } from 'lucide-react';
 import fizzDeckLogo from '../assets/fizzdeck-logo-light.svg';
 import studioDisplay from '../assets/studio-display.webp';
-import workbenchShot from '../assets/native-075-workbench.webp';
+import workbenchShot from '../assets/native-090-workbench.webp';
+import progressShot from '../assets/native-090-progress.webp';
+import versionShot from '../assets/native-090-version.webp';
+import doctorShot from '../assets/native-090-doctor.webp';
 import { COPY, DMG_URL, REPO_URL } from './i18n.js';
-import progressShot from '../assets/native-075-progress.webp';
-import versionShot from '../assets/native-075-version.webp';
-import doctorShot from '../assets/native-075-doctor.webp';
-const screenshots = { workbench: progressShot, git: versionShot, services: doctorShot };
 import './landing.css';
 
+const screenshots = { workbench: progressShot, git: versionShot, services: doctorShot };
 const STORAGE_KEY = 'fizzdeck.landing.lang';
 
 function resolveInitialLang() {
@@ -53,12 +53,22 @@ function useLang() {
     const dict = COPY[lang];
     document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
     document.title = dict.meta.title;
-    const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', dict.meta.description);
+    for (const tag of document.querySelectorAll('meta[name="description"], meta[property="og:description"], meta[name="twitter:description"]')) {
+      tag.content = dict.meta.description;
+    }
+    for (const tag of document.querySelectorAll('meta[property="og:title"], meta[name="twitter:title"]')) {
+      tag.content = dict.meta.title;
+    }
   }, [lang]);
 
-  const toggleLang = () => setLang((prev) => (prev === 'zh' ? 'en' : 'zh'));
-  return { lang, setLang, toggleLang, t: COPY[lang] };
+  const toggleLang = () => {
+    const next = lang === 'zh' ? 'en' : 'zh';
+    const url = new URL(window.location.href);
+    url.searchParams.set('lang', next);
+    window.history.replaceState(window.history.state, '', url);
+    setLang(next);
+  };
+  return { toggleLang, t: COPY[lang] };
 }
 
 function AppleMark({ size = 14 }) {
@@ -96,12 +106,12 @@ function FloatingPillNav({ t, onToggleLang }) {
 
   return (
     <div className="pill-nav-wrap" data-visible={visible ? 'true' : 'false'}>
-      <header className="pill-nav" aria-label="Floating navigation">
+      <header className="pill-nav">
         <a className="brand-link" href="#top">
           <img src={fizzDeckLogo} alt="" />
           <span>FizzDeck</span>
         </a>
-        <nav className="pill-links">
+        <nav className="pill-links" aria-label={t.nav.label}>
           <a href="#views">{t.nav.views}</a>
           <a href="#features">{t.nav.features}</a>
           <a href="#shortcut">{t.nav.shortcut}</a>
@@ -116,8 +126,8 @@ function FloatingPillNav({ t, onToggleLang }) {
           >
             {t.nav.langSwitch}
           </button>
-          <a className="pill-cta" href={DMG_URL} target="_blank" rel="noreferrer">
-            <Download size={13} strokeWidth={2} />
+          <a className="pill-cta" href={DMG_URL} target="_blank" rel="noreferrer" aria-label={t.nav.download}>
+            <Download size={13} strokeWidth={2} aria-hidden="true" />
             <span>{t.nav.download}</span>
           </a>
         </div>
@@ -248,7 +258,7 @@ function Hero({ t, onToggleLang }) {
 
       <div className="hero-gallery-well">
         <div className="hero-zoom-inner" ref={zoomRef}>
-          <figure className="hero-figure">
+          <figure className="hero-figure" aria-label={t.hero.stageCaption}>
             <img src={studioDisplay} alt="" width="2400" height="1610" fetchPriority="high" decoding="async" />
             <img className="studio-window" src={workbenchShot} alt={t.hero.heroAlt} width="1600" height="1042" fetchPriority="high" decoding="async" />
           </figure>
@@ -266,7 +276,7 @@ function Showcase({ t }) {
         <span className="ink-faint">{t.showcase.rest}</span>
       </h2>
 
-      <div className="showcase-grid">
+      <div className="showcase-grid" role="group" aria-label={t.showcase.hint}>
         {t.showcase.tiles.map((tile) => (
           <article className="showcase-col" key={tile.id}>
             <div className="showcase-media">
@@ -431,10 +441,10 @@ export function Landing() {
   return (
     <div className="landing-page">
       <a className="skip-link" href="#main">
-        Skip to content
+        {t.nav.skip}
       </a>
       <FloatingPillNav t={t} onToggleLang={toggleLang} />
-      <main id="main">
+      <main id="main" tabIndex={-1}>
         <Hero t={t} onToggleLang={toggleLang} />
         <Showcase t={t} />
         <FeatureGrid t={t} />

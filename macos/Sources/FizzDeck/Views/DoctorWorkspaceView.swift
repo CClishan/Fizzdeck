@@ -17,16 +17,6 @@ struct DoctorWorkspaceView: View {
         ProjectFocusPolicy.partition(projects: store.projects)
     }
 
-    private var focusedHealthyCount: Int {
-        partition.focused.filter { entry in
-            store.doctorReports[entry.project.path]?.severity == .healthy
-        }.count
-    }
-
-    private var focusedAttentionCount: Int {
-        partition.focused.filter { (store.doctorReports[$0.id]?.actionableCount ?? 0) > 0 }.count
-    }
-
     private var cleanableProjects: [RepoProject] {
         store.projects
             .filter { !$0.cleanup.items.isEmpty }
@@ -111,76 +101,58 @@ struct DoctorWorkspaceView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("体检")
-                    .font(.system(size: 27, weight: .semibold))
-                    .accessibilityAddTraits(.isHeader)
+        let focused = partition.focused
+        let summary: String
+        if focused.isEmpty {
+            summary = "还没有关注或近期活跃项目，先关注几个在做的项目吧"
+        } else {
+            let healthy = focused.count { store.doctorReports[$0.id]?.severity == .healthy }
+            let attention = focused.count { (store.doctorReports[$0.id]?.actionableCount ?? 0) > 0 }
+            summary = "关注的 \(focused.count) 个项目：\(healthy) 个状态良好，\(attention) 个需要处理"
+        }
+        let checkedAt = store.lastDoctorCheckAt.map { " · 上次检查 \(Format.relative($0))" } ?? ""
 
-                HStack(spacing: 6) {
-                    if partition.focused.isEmpty {
-                        Text("还没有关注或近期活跃项目，先关注几个在做的项目吧")
-                    } else {
-                        Text("关注的 \(partition.focused.count) 个项目：\(focusedHealthyCount) 个状态良好，\(focusedAttentionCount) 个需要处理")
-                    }
-                    if let checkedAt = store.lastDoctorCheckAt {
-                        Text("· 上次检查 \(Format.relative(checkedAt))")
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 12)
-
-            Button {
+        return FizzPageHeader(title: "体检", subtitle: summary + checkedAt) {
+            FizzActionButton(
+                title: store.isRunningDoctor ? "检查中…" : "重新检查",
+                symbol: "arrow.clockwise", prominence: .primary, keyboardNavigation: true
+            ) {
                 Task { await refreshAll() }
-            } label: {
-                if store.isRunningDoctor {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Label("重新检查", systemImage: "arrow.clockwise")
-                }
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
             .disabled(store.isRunningDoctor)
         }
     }
 
     private var focusedSection: some View {
-        Panel(title: "关注项目（随时能跑起来）", symbol: "stethoscope") {
-            if partition.focused.isEmpty {
+        let focus = partition
+        return Panel(title: "关注项目（随时能跑起来）", symbol: "stethoscope") {
+            if focus.focused.isEmpty {
                 Text("当你在做项目时，这里会自动盯住「缺依赖」「端口占用」「密钥风险」和「没开版本保护」。")
-                    .font(.callout)
+                    .font(FizzTypography.body)
                     .foregroundStyle(.secondary)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(partition.focused) { entry in
+                    ForEach(focus.focused) { entry in
                         focusedProjectRow(entry.project)
-                        if entry.id != partition.focused.last?.id {
+                        if entry.id != focus.focused.last?.id {
                             Divider()
                                 .opacity(0.25)
                         }
                     }
 
-                    if partition.overflowActiveCount > 0 {
-                        HStack {
-                            Text("还有 \(partition.overflowActiveCount) 个近期活跃项目未列入关注上限")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Button("查看项目库") {
-                                store.openLibrary()
-                            }
-                            .buttonStyle(.plain)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(FizzTheme.accent)
-                        }
-                        .padding(.top, 10)
+                    if focus.overflowActiveCount > 0 {
+                        Text("还有 \(focus.overflowActiveCount) 个近期活跃项目未列入关注上限")
+                            .font(FizzTypography.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, FizzSpacing.row)
                     }
+                }
+            }
+        } accessory: {
+            if focus.overflowActiveCount > 0 {
+                FizzActionButton(title: "查看项目库", height: .compact) {
+                    store.openLibrary()
                 }
             }
         }
@@ -190,55 +162,70 @@ struct DoctorWorkspaceView: View {
         let report = store.doctorReports[project.path]
         let topIssue = report?.issues.first { $0.kind != .cloudBehind }
         let severity = report?.severity ?? .healthy
+        let fix = topIssue?.fixAction
+        let hasCloudUpdate = project.behind > 0 && !store.doctorExemptions(for: project).contains(.cloudBehind)
+        let exemptibleKinds = store.exemptibleIssues(for: project)
+        let statusText: String = if let topIssue {
+            topIssue.title
+        } else if report == nil {
+            "尚未检查"
+        } else {
+            hasCloudUpdate ? "云端有新提交" : "未发现问题"
+        }
 
-        return HStack(spacing: 12) {
-            Circle()
-                .fill(severityColor(severity))
-                .frame(width: 8, height: 8)
+        return HStack(spacing: FizzSpacing.grid) {
+            FizzStatusDot(tint: severityColor(severity))
 
             ProjectBadgeIcon(project: project, size: 24, framed: false)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(project.displayName)
-                    .font(.system(size: 13, weight: .semibold))
-                if let topIssue {
-                    Text(topIssue.title)
-                        .font(.caption)
-                        .foregroundStyle(severityColor(topIssue.severity))
-                        .lineLimit(1)
-                } else {
-                    Text(report == nil ? "尚未检查" : project.behind > 0 && !store.doctorExemptions(for: project).contains(.cloudBehind) ? "云端有新提交" : "未发现问题")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    .font(FizzTypography.cardTitle)
+                    .lineLimit(1)
+                Text(statusText)
+                    .font(FizzTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: FizzSpacing.row)
+
+            HStack(spacing: 6) {
+                DoctorTrialMenu(project: project)
+
+                if fix != nil || hasCloudUpdate || !exemptibleKinds.isEmpty {
+                    FizzMenuButton(title: "\(project.displayName)的更多操作") {
+                        if fix != nil || hasCloudUpdate {
+                            Button("打开运行页", systemImage: "play.circle") {
+                                store.openProject(project, tab: .run)
+                            }
+                        }
+                        if !exemptibleKinds.isEmpty {
+                            Section("体检豁免") {
+                                DoctorExemptionItems(project: project, kinds: exemptibleKinds)
+                            }
+                        }
+                    }
+                }
+
+                if hasCloudUpdate {
+                    FizzActionButton(title: "云端领先 \(project.behind)", height: .compact) {
+                        store.openProject(project, tab: .version)
+                    }
+                    .accessibilityLabel("云端领先 \(project.behind) 个提交，查看版本")
+                }
+
+                if let fix {
+                    issueQuickButton(fix: fix, for: project)
+                } else if !hasCloudUpdate {
+                    FizzIconButton(title: "打开 \(project.displayName) 运行页", symbol: "chevron.right", height: .compact) {
+                        store.openProject(project, tab: .run)
+                    }
                 }
             }
-
-            Spacer(minLength: 8)
-
-            if let topIssue, let fix = topIssue.fixAction {
-                issueQuickButton(fix: fix, for: project)
-            }
-
-            if project.behind > 0, !store.doctorExemptions(for: project).contains(.cloudBehind) {
-                Button("云端领先 \(project.behind)") { store.openProject(project, tab: .version) }
-                    .buttonStyle(.glass).controlSize(.small)
-                    .accessibilityLabel("云端领先 \(project.behind) 个提交，查看版本")
-            }
-            DoctorTrialMenu(project: project)
-            DoctorExemptionMenu(project: project)
-
-            Button {
-                store.openProject(project, tab: .run)
-            } label: {
-                FizzIcon(symbol: "chevron.right", size: 11)
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 24, height: 24)
-            }
-            .buttonStyle(.plain)
-            .help("打开 \(project.displayName) 运行页")
+            .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, FizzSpacing.row)
     }
 
     @ViewBuilder
@@ -246,7 +233,7 @@ struct DoctorWorkspaceView: View {
         switch fix {
         case .installDependencies(let command):
             let isInstalling = actions.installRun(for: project, command: command)?.status == .running
-            Button(isInstalling ? "查看安装" : "安装依赖") {
+            FizzActionButton(title: isInstalling ? "查看安装" : "安装依赖", height: .compact) {
                 if isInstalling {
                     store.openProject(project, tab: .run)
                 } else if DoctorPreferences.hasConfirmedFirstInstall() {
@@ -256,56 +243,44 @@ struct DoctorWorkspaceView: View {
                     pendingInstallTarget = (project, command)
                 }
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
         case .createEnvFromExample:
-            Button("生成 .env") {
+            FizzActionButton(title: "生成 .env", height: .compact) {
                 Task {
                     if let url = DoctorService.createEnvFromExample(in: URL(fileURLWithPath: project.path)) {
                         SystemActions.open(url.path)
-                        ToastCenter.shared.show("已根据模板生成 .env", symbol: "doc.badge.plus", tint: .green)
+                        ToastCenter.shared.show("已根据模板生成 .env", symbol: "doc.badge.plus", tint: FizzTheme.statusSuccess)
                     }
                     await store.refreshDoctor(for: project, scope: .focused)
                 }
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
         case .addEnvToGitignore:
-            Button("加入忽略") {
+            FizzActionButton(title: "加入忽略", height: .compact) {
                 Task {
                     if LightweightProjectCheckService.addEnvFilesToGitignore(in: URL(fileURLWithPath: project.path)) {
-                        ToastCenter.shared.show("已把 .env 加入忽略列表", symbol: "checkmark.shield.fill", tint: .green)
+                        ToastCenter.shared.show("已把 .env 加入忽略列表", symbol: "checkmark.shield.fill", tint: FizzTheme.statusSuccess)
                     }
                     await store.refreshGit(for: project.path)
                     await store.refreshDoctor(for: project, scope: .focused)
                 }
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
         case .initGitRepository:
-            EnableVersionProtectionButton(project: project).buttonStyle(.glass)
+            EnableVersionProtectionButton(project: project)
         case .resolvePortConflict:
-            Button("去处理") {
+            FizzActionButton(title: "去处理", height: .compact) {
                 store.openProject(project, tab: .run)
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
         case .inspectTrackedSecrets:
-            Button("去处理") {
+            FizzActionButton(title: "去处理", height: .compact) {
                 store.openProject(project, tab: .version)
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
         case .copyShellCommand(let command):
-            Button("复制切换命令") {
+            FizzActionButton(title: "复制切换命令", height: .compact) {
                 SystemActions.copy(
                     command,
                     feedback: "运行版本切换命令已复制",
                     microViz: .compact(state: .done)
                 )
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
             .accessibilityLabel("复制运行时版本切换命令")
         }
     }
@@ -315,36 +290,35 @@ struct DoctorWorkspaceView: View {
             title: "闲置整理与腾空间",
             symbol: "archivebox"
         ) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: FizzSpacing.grid) {
                 if !idleSecretRiskProjects.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(idleSecretRiskProjects, id: \.project.id) { entry in
-                            HStack(spacing: 8) {
-                                FizzIcon(symbol: "exclamationmark.shield.fill", size: 12)
-                                    .foregroundStyle(.orange)
+                            HStack(spacing: FizzSpacing.row) {
+                                FizzIcon(.sm, symbol: "exclamationmark.shield.fill")
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
                                 Text("闲置项目「\(entry.project.displayName)」存在密钥或未忽略 .env 风险")
-                                    .font(.caption.weight(.medium))
+                                    .font(FizzTypography.caption(.medium))
                                 Spacer()
-                                Button("去处理") {
+                                FizzActionButton(title: "去处理", height: .compact) {
                                     store.openProject(entry.project, tab: .version)
                                 }
-                                .buttonStyle(.glass)
-                                .controlSize(.small)
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
-                            .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
+                            .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
                         }
                     }
                 }
 
                 if cleanableProjects.isEmpty {
                     Text("没有命中依赖、缓存或构建产物的可腾空间目录。")
-                        .font(.callout)
+                        .font(FizzTypography.body)
                         .foregroundStyle(.secondary)
                 } else {
                     Text("默认「移到废纸篓」（可随时在系统废纸篓放回或重新安装恢复）；共发现 \(cleanableProjects.count) 个项目、可腾出 \(Format.bytes(totalReusableBytes))。")
-                        .font(.caption)
+                        .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
 
                     Divider()
@@ -352,43 +326,43 @@ struct DoctorWorkspaceView: View {
 
                     VStack(spacing: 0) {
                         ForEach(cleanableProjects) { project in
-                            HStack(spacing: 10) {
+                            HStack(spacing: FizzSpacing.grid) {
                                 ProjectBadgeIcon(project: project, size: 22, framed: false)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(project.displayName)
-                                        .font(.system(size: 13, weight: .medium))
+                                        .font(FizzTypography.cardTitle)
+                                        .lineLimit(1)
                                     Text("\(project.cleanup.items.count) 个目录 · \(project.cleanup.items.map(\.label).prefix(3).joined(separator: ", "))")
-                                        .font(.caption2)
+                                        .font(FizzTypography.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
 
-                                Spacer(minLength: 8)
+                                Spacer(minLength: FizzSpacing.row)
 
                                 Text(Format.bytes(project.cleanup.reusableBytes))
-                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(.orange)
+                                    .font(FizzTypography.mono(.semibold))
+                                    .foregroundStyle(.secondary)
 
-                                if copyMode == .pro {
-                                    Button("复制命令") {
-                                        SystemActions.copy(
-                                            "# \(project.displayName)\n\(project.cleanup.removalCommand)",
-                                            microViz: .compact(state: .done)
-                                        )
-                                        ToastCenter.shared.show("已复制清理命令", symbol: "doc.on.doc", tint: FizzTheme.accent, subtitle: project.displayName)
+                                HStack(spacing: 6) {
+                                    if copyMode == .pro {
+                                        FizzIconButton(title: "复制清理命令", symbol: "doc.on.doc", height: .compact) {
+                                            SystemActions.copy(
+                                                "# \(project.displayName)\n\(project.cleanup.removalCommand)",
+                                                microViz: .compact(state: .done)
+                                            )
+                                            ToastCenter.shared.show("已复制清理命令", symbol: "doc.on.doc", tint: Color.secondary, subtitle: project.displayName)
+                                        }
                                     }
-                                    .buttonStyle(.glass)
-                                    .controlSize(.small)
-                                }
 
-                                Button("移到废纸篓") {
-                                    pendingTrashProject = project
+                                    FizzActionButton(title: "移到废纸篓", height: .compact, role: .destructive) {
+                                        pendingTrashProject = project
+                                    }
                                 }
-                                .buttonStyle(.glass)
-                                .controlSize(.small)
+                                .fixedSize(horizontal: true, vertical: false)
                             }
-                            .padding(.vertical, 8)
+                            .padding(.vertical, FizzSpacing.row)
 
                             if project.id != cleanableProjects.last?.id {
                                 Divider()
@@ -400,7 +374,7 @@ struct DoctorWorkspaceView: View {
             }
         } accessory: {
             if !cleanableProjects.isEmpty {
-                TagChip(text: "可省 \(Format.bytes(totalReusableBytes))", tint: .orange, compact: true)
+                TagChip(text: "可省 \(Format.bytes(totalReusableBytes))", tint: FizzTheme.statusWarning, compact: true)
             }
         }
     }
@@ -408,63 +382,62 @@ struct DoctorWorkspaceView: View {
     private var machineEnvironmentSection: some View {
         Panel(title: "本机环境", symbol: "desktopcomputer") {
             if let env = store.machineEnv {
-                VStack(alignment: .leading, spacing: 10) {
-                    FlowLayout(spacing: 8) {
+                VStack(alignment: .leading, spacing: FizzSpacing.grid) {
+                    FlowLayout(spacing: FizzSpacing.row) {
                         TagChip(
                             text: env.gitInstalled ? "✓ Git 已就绪" : "⚠ 缺少 Git",
-                            tint: env.gitInstalled ? .green : .red,
+                            tint: env.gitInstalled ? FizzTheme.statusSuccess : FizzTheme.statusDanger,
                             compact: true
                         )
                         TagChip(
                             text: env.nodeVersion.map { "✓ Node \($0)" } ?? "○ 未检测到 Node",
-                            tint: env.nodeVersion != nil ? .green : .secondary,
+                            tint: env.nodeVersion != nil ? FizzTheme.statusSuccess : .secondary,
                             compact: true
                         )
                         TagChip(
                             text: env.pythonVersion.map { "✓ Python \($0)" } ?? "○ 未检测到 Python",
-                            tint: env.pythonVersion != nil ? .green : .secondary,
+                            tint: env.pythonVersion != nil ? FizzTheme.statusSuccess : .secondary,
                             compact: true
                         )
                         ForEach(env.cliTools) { tool in
                             TagChip(
                                 text: tool.available ? "✓ \(tool.title)" : "○ \(tool.title) 未安装",
-                                tint: tool.available ? .green : .secondary,
+                                tint: tool.available ? FizzTheme.statusSuccess : .secondary,
                                 compact: true
                             )
                         }
                         if let disk = env.disk {
                             TagChip(
                                 text: "磁盘剩余 \(Format.bytes(disk.free))",
-                                tint: disk.free < 10_000_000_000 ? .orange : .secondary,
+                                tint: disk.free < 10_000_000_000 ? FizzTheme.statusWarning : .secondary,
                                 compact: true
                             )
                         }
                     }
 
                     if env.needsGitIdentity {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 8) {
-                                FizzIcon(symbol: "exclamationmark.triangle.fill", size: 12)
-                                    .foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: FizzSpacing.row) {
+                            HStack(spacing: FizzSpacing.row) {
+                                FizzIcon(.sm, symbol: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
                                 Text("Git 还没设置你的名字和邮箱（首次「存个版本」时需要）")
-                                    .font(.caption.weight(.medium))
+                                    .font(FizzTypography.caption(.medium))
                                 Spacer()
-                                Button(showGitIdentityForm ? "收起" : "去设置") {
+                                FizzActionButton(title: showGitIdentityForm ? "收起" : "去设置", height: .compact) {
                                     gitNameDraft = env.gitUserName ?? ""
                                     gitEmailDraft = env.gitUserEmail ?? ""
                                     showGitIdentityForm.toggle()
                                 }
-                                .buttonStyle(.glass)
-                                .controlSize(.small)
                             }
 
                             if showGitIdentityForm {
-                                HStack(spacing: 8) {
+                                HStack(spacing: FizzSpacing.row) {
                                     TextField("你的名字（如 Zhang San）", text: $gitNameDraft)
                                         .textFieldStyle(.roundedBorder)
                                     TextField("你的邮箱（如 you@example.com）", text: $gitEmailDraft)
                                         .textFieldStyle(.roundedBorder)
-                                    Button(isSavingIdentity ? "保存中…" : "保存") {
+                                    FizzActionButton(title: isSavingIdentity ? "保存中…" : "保存", height: .compact, prominence: .primary) {
                                         Task {
                                             isSavingIdentity = true
                                             defer { isSavingIdentity = false }
@@ -475,7 +448,7 @@ struct DoctorWorkspaceView: View {
                                             ToastCenter.shared.show(
                                                 res.message,
                                                 symbol: res.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                                                tint: res.succeeded ? .green : .orange
+                                                tint: res.succeeded ? FizzTheme.statusSuccess : FizzTheme.statusWarning
                                             )
                                             if res.succeeded {
                                                 showGitIdentityForm = false
@@ -483,23 +456,20 @@ struct DoctorWorkspaceView: View {
                                             }
                                         }
                                     }
-                                    .buttonStyle(.glassProminent)
-                                    .tint(FizzTheme.accent)
-                                    .controlSize(.small)
                                     .disabled(isSavingIdentity)
                                 }
                             }
                         }
                         .padding(10)
-                        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
+                        .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
                     }
                 }
             } else {
-                HStack(spacing: 8) {
+                HStack(spacing: FizzSpacing.row) {
                     ProgressView()
                         .controlSize(.small)
                     Text("正在检查本机工具链…")
-                        .font(.callout)
+                        .font(FizzTypography.body)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -515,12 +485,12 @@ struct DoctorWorkspaceView: View {
         let dir = URL(fileURLWithPath: project.path)
         let result = DoctorService.trashCleanupItems(project.cleanup.items, in: dir)
         if let err = result.error {
-            ToastCenter.shared.show(err, symbol: "exclamationmark.triangle.fill", tint: .orange)
+            ToastCenter.shared.show(err, symbol: "exclamationmark.triangle.fill", tint: FizzTheme.statusWarning)
         } else {
             ToastCenter.shared.show(
                 "已移入废纸篓（\(Format.bytes(result.freedBytes))）",
                 symbol: "trash.fill",
-                tint: .green,
+                tint: FizzTheme.statusSuccess,
                 subtitle: "\(project.displayName) · 清理了 \(result.trashedCount) 个目录"
             )
         }
@@ -530,9 +500,9 @@ struct DoctorWorkspaceView: View {
 
     private func severityColor(_ severity: DoctorSeverity) -> Color {
         switch severity {
-        case .critical: .red
-        case .warning: .orange
-        case .healthy: .green
+        case .critical: FizzTheme.statusDanger
+        case .warning: FizzTheme.statusWarning
+        case .healthy: FizzTheme.statusSuccess
         }
     }
 }
@@ -544,16 +514,25 @@ struct DoctorExemptionMenu: View {
     var body: some View {
         let kinds = store.exemptibleIssues(for: project)
         if !kinds.isEmpty {
-            Menu {
-                ForEach(kinds, id: \.self) { kind in
-                    let exempt = store.doctorExemptions(for: project).contains(kind)
-                    Button("\(exempt ? "恢复" : "忽略")：\(kind.exemptionTitle)") {
-                        store.setDoctorExemption(kind, exempt: !exempt, for: project)
-                    }
-                }
-            } label: { Image(systemName: "ellipsis.circle") }
-            .menuStyle(.button).buttonStyle(.glass).controlSize(.small)
-            .help("此项目的体检豁免").accessibilityLabel("\(project.displayName)的体检豁免")
+            FizzMenuButton(title: "\(project.displayName)的体检豁免") {
+                DoctorExemptionItems(project: project, kinds: kinds)
+            }
+        }
+    }
+}
+
+private struct DoctorExemptionItems: View {
+    @Environment(RepositoryStore.self) private var store
+    let project: RepoProject
+    let kinds: [DoctorIssueKind]
+
+    var body: some View {
+        let exemptions = store.doctorExemptions(for: project)
+        ForEach(kinds, id: \.self) { kind in
+            let exempt = exemptions.contains(kind)
+            Button("\(exempt ? "恢复" : "忽略")：\(kind.exemptionTitle)") {
+                store.setDoctorExemption(kind, exempt: !exempt, for: project)
+            }
         }
     }
 }

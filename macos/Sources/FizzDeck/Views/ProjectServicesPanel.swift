@@ -63,25 +63,19 @@ struct ServicesPanel: View {
 
     private var services: some View {
         Panel(title: "服务", symbol: "bolt.horizontal") {
-            VStack(alignment: .leading, spacing: 8) {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 220, maximum: 340), spacing: FizzSpacing.grid)],
-                    spacing: FizzSpacing.grid
-                ) {
-                    if let run = project.run {
-                        devCard(run)
-                    }
-                    if showTestCard, let test = project.test {
-                        testCard(test)
-                    }
+            VStack(alignment: .leading, spacing: FizzSpacing.grid) {
+                if let run = project.run {
+                    devCard(run)
                 }
                 if let conflict = actions.portConflict(for: project.path), !devRunning {
                     conflictNotice(conflict)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
+                if showTestCard, let test = project.test {
+                    testCard(test)
+                }
                 if !pinnedScripts.isEmpty {
                     Divider()
-                        .padding(.vertical, 2)
                     scriptsSection
                 }
                 feedback
@@ -93,11 +87,11 @@ struct ServicesPanel: View {
         } accessory: {
             HStack(spacing: 8) {
                 Text(runningCount > 0 ? "\(runningCount) 运行中" : "空闲")
-                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(runningCount > 0 ? Color.green : Color.secondary)
+                    .font(FizzTypography.monoSmall(.medium))
+                    .foregroundStyle(.secondary)
 
-                if !scripts.isEmpty, pinnedScripts.isEmpty {
-                    scriptPinMenu(compact: true)
+                if !scripts.isEmpty {
+                    scriptPinMenu
                 }
             }
         }
@@ -127,20 +121,19 @@ struct ServicesPanel: View {
                 serviceStatus(active: devRunning, busy: busy)
 
                 Text("dev")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(FizzTypography.cardTitle)
 
                 Spacer(minLength: 4)
 
                 if run.port > 0 {
                     Text(verbatim: ":\(run.port)")
-                        .font(.system(size: 11, design: .monospaced))
-                        .monospacedDigit()
+                        .font(FizzTypography.mono)
                         .foregroundStyle(.secondary)
                 }
             }
 
             Text(run.command)
-                .font(.system(size: 11, design: .monospaced))
+                .font(FizzTypography.mono)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -150,79 +143,65 @@ struct ServicesPanel: View {
                 DeveloperPortList(project: project) { devRunning = $0 }
                     .id(project.path)
             } else {
-                Text("未配置预览端口").font(.caption).foregroundStyle(.secondary)
+                Text("未配置预览端口").font(FizzTypography.caption).foregroundStyle(.secondary)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            devRunning ? FizzTheme.selectedFill : FizzTheme.recessedFill,
-            in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                .strokeBorder(FizzTheme.hairline, lineWidth: 1)
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(FizzSpacing.card)
+        .fizzCard(radius: FizzRadius.card, fill: devRunning ? FizzTheme.selectedFill : FizzTheme.recessedFill)
     }
 
     private func conflictNotice(_ conflict: PortConflict) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            FizzIcon(symbol: "exclamationmark.triangle", size: 12)
-                .foregroundStyle(.orange)
-                .padding(.top, 1)
+        HStack(spacing: FizzSpacing.row) {
+            FizzIcon(.sm, symbol: "exclamationmark.triangle")
+                .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("端口 :\(conflict.port) 被占用")
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(FizzTypography.cardTitle)
                 Text(conflict.occupantSummary)
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(FizzTypography.monoSmall)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .textSelection(.enabled)
                 if let note = conflict.note {
                     Text(note)
-                        .font(.caption2)
+                        .font(FizzTypography.micro)
                         .foregroundStyle(.tertiary)
                 }
             }
 
             Spacer(minLength: 8)
 
-            serviceButton("结束占用进程并启动", help: "确认后向占用 PID 发送 SIGTERM 并启动服务") {
+            FizzActionButton(title: "结束占用进程并启动", height: .compact) {
                 pendingConflict = conflict
             }
             .disabled(busy || !conflict.canStop)
+            .help("确认后向占用 PID 发送 SIGTERM 并启动服务")
         }
         .padding(10)
         .background(
-            Color.orange.opacity(0.09),
+            FizzTheme.mutedFill,
             in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                .strokeBorder(Color.orange.opacity(0.28), lineWidth: 1)
+                .strokeBorder(FizzTheme.stroke, lineWidth: 1)
         }
     }
 
     private var scriptsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: FizzSpacing.row) {
             HStack(spacing: 7) {
                 Text("脚本")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(FizzTypography.cardTitle)
                 Text("\(scripts.count)")
-                    .font(.caption.monospacedDigit())
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.tertiary)
-                Spacer(minLength: 8)
-                scriptPinMenu(compact: false)
             }
 
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 220, maximum: 340), spacing: FizzSpacing.grid)],
-                spacing: FizzSpacing.grid
-            ) {
-                ForEach(pinnedScripts) { script in
-                    scriptCard(script)
-                }
+            ForEach(pinnedScripts) { script in
+                scriptCard(script)
             }
 
             if let selectedScript {
@@ -236,8 +215,8 @@ struct ServicesPanel: View {
         )
     }
 
-    private func scriptPinMenu(compact: Bool) -> some View {
-        Menu {
+    private var scriptPinMenu: some View {
+        FizzMenuButton(title: "固定脚本", symbol: "plus") {
             if unpinnedScripts.isEmpty {
                 Text("全部脚本已固定")
             } else {
@@ -246,115 +225,79 @@ struct ServicesPanel: View {
                     if !items.isEmpty {
                         Section(source.label) {
                             ForEach(items) { script in
-                                Button {
-                                    pin(script)
-                                } label: {
-                                    Text("固定 \(script.name)")
-                                }
+                                Button("固定 \(script.name)") { pin(script) }
                             }
                         }
                     }
                 }
             }
-        } label: {
-            Label("固定脚本", systemImage: compact ? "plus" : "star")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.primary)
         }
-        .menuStyle(.button)
-        .buttonStyle(.glass)
-        .controlSize(.mini)
-        .fixedSize()
-        .help("固定常用脚本")
     }
 
     private func scriptCard(_ script: ProjectScript) -> some View {
         let run = actions.scriptRun(for: project, script: script)
         let running = run?.status == .running
 
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                serviceStatus(active: running, busy: false)
+        return HStack(spacing: FizzSpacing.row) {
+            serviceStatus(active: running, busy: false)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: FizzSpacing.row) {
+                    Text(script.name)
+                        .font(FizzTypography.cardTitle)
+                        .lineLimit(1)
 
-                Text(script.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-
-                Spacer(minLength: 4)
-
-                if let run, let text = scriptStatusText(run) {
-                    Text(text)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(scriptStatusColor(run.status))
+                    if let run, let text = scriptStatusText(run) {
+                        Text(text)
+                            .font(FizzTypography.monoSmall)
+                            .fizzStatus(scriptStatusColor(run.status))
+                            .lineLimit(1)
+                    }
                 }
 
-                Button {
-                    unpin(script)
-                } label: {
-                    FizzIcon(symbol: "star.fill", size: 10)
-                        .foregroundStyle(FizzTheme.accent)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
+                HStack(spacing: 5) {
+                    TagChip(text: script.source.label, compact: true)
+                    Text(script.command)
+                        .font(FizzTypography.monoSmall)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(script.command)
                 }
-                .buttonStyle(.plain)
-                .disabled(running)
-                .help("取消固定 \(script.name)")
-                .accessibilityLabel("取消固定 \(script.name)")
             }
 
-            HStack(spacing: 5) {
-                Text(script.source.label)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(FizzTheme.recessedFill, in: Capsule())
-                Text(script.command)
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(script.command)
-            }
+            Spacer(minLength: 0)
 
-            HStack(spacing: 6) {
-                serviceButton("输出", help: "查看 \(script.name) 输出") {
+            FizzMenuButton(title: "\(script.name) 的更多操作") {
+                Button(selectedScriptID == script.id ? "收起输出" : "查看输出", systemImage: "terminal") {
                     withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                         selectedScriptID = selectedScriptID == script.id ? nil : script.id
                     }
                 }
-
-                serviceButton("日志", help: "打开 \(script.name) 日志") {
+                Button("打开完整日志", systemImage: "arrow.up.right.square") {
                     actions.openScriptLog(script, project: project)
                 }
+                Button("取消固定", systemImage: "star.slash") { unpin(script) }
+                    .disabled(running)
+            }
 
-                Spacer(minLength: 0)
-
-                if running {
-                    serviceButton("停止", help: "停止 \(script.name)") {
-                        actions.stopScript(script, project: project)
-                    }
-                } else {
-                    serviceButton("运行", help: "运行 \(script.command)") {
-                        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
-                            selectedScriptID = script.id
-                        }
-                        actions.runScript(script, project: project, store: store)
-                    }
-                    .disabled(ProjectTrialService.shared.runs[project.path].map { $0.status == .running && $0.choice.command == script.command } == true)
+            if running {
+                FizzActionButton(title: "停止", height: .compact) {
+                    actions.stopScript(script, project: project)
                 }
+                .help("停止 \(script.name)")
+            } else {
+                FizzActionButton(title: "运行", height: .compact) {
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
+                        selectedScriptID = script.id
+                    }
+                    actions.runScript(script, project: project, store: store)
+                }
+                .disabled(ProjectTrialService.shared.runs[project.path].map { $0.status == .running && $0.choice.command == script.command } == true)
+                .help("运行 \(script.command)")
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            running ? FizzTheme.selectedFill : FizzTheme.recessedFill,
-            in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                .strokeBorder(FizzTheme.hairline, lineWidth: 1)
-        }
+        .padding(FizzSpacing.card)
+        .fizzCard(radius: FizzRadius.card, fill: running ? FizzTheme.selectedFill : FizzTheme.recessedFill)
     }
 
     private func scriptOutput(_ script: ProjectScript) -> some View {
@@ -364,31 +307,21 @@ struct ServicesPanel: View {
         return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
                 Text(script.name)
-                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .font(FizzTypography.monoSmall(.semibold))
                 if let run {
-                    Text(scriptStatusText(run) ?? "")
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(scriptStatusColor(run.status))
+                    TagChip(text: scriptStatusText(run) ?? "", tint: scriptStatusColor(run.status), compact: true)
                 }
                 Spacer(minLength: 8)
-                Button {
+                FizzIconButton(title: "收起脚本输出", symbol: "xmark", height: .compact) {
                     withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                         selectedScriptID = nil
                     }
-                } label: {
-                    FizzIcon(symbol: "xmark", size: 8)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 18, height: 18)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help("收起输出")
-                .accessibilityLabel("收起脚本输出")
             }
 
             ScrollView {
                 Text(text.isEmpty ? "暂无输出" : text)
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(FizzTypography.monoSmall)
                     .foregroundStyle(text.isEmpty ? Color.secondary : Color.primary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -422,8 +355,8 @@ struct ServicesPanel: View {
     private func scriptStatusColor(_ status: ScriptRunStatus) -> Color {
         switch status {
         case .running: .secondary
-        case .succeeded: .green
-        case .failed: .red
+        case .succeeded: FizzTheme.statusSuccess
+        case .failed: FizzTheme.statusDanger
         case .stopped: .secondary
         }
     }
@@ -438,7 +371,7 @@ struct ServicesPanel: View {
         ToastCenter.shared.show(
             "已固定 \(script.name)",
             symbol: "star.fill",
-            tint: FizzTheme.accent
+            tint: Color.secondary
         )
     }
 
@@ -475,53 +408,41 @@ struct ServicesPanel: View {
     }
 
     private func testCard(_ test: TestCommand) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                serviceStatus(active: testRunning, busy: false)
+        HStack(spacing: FizzSpacing.row) {
+            serviceStatus(active: testRunning, busy: false)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: FizzSpacing.row) {
+                    Text(test.label)
+                        .font(FizzTypography.cardTitle)
 
-                Text(test.label)
-                    .font(.system(size: 13, weight: .semibold))
-
-                Spacer(minLength: 4)
-
-                if let testRun, let text = testStatusText(testRun) {
-                    Text(text)
-                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                        .foregroundStyle(testStatusColor(testRun.status))
+                    if let testRun, let text = testStatusText(testRun) {
+                        Text(text)
+                            .font(FizzTypography.monoSmall)
+                            .fizzStatus(testStatusColor(testRun.status))
+                    }
                 }
+
+                Text(test.command)
+                    .font(FizzTypography.mono)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(test.command)
             }
+            Spacer(minLength: 0)
 
-            Text(test.command)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(test.command)
-
-            HStack(spacing: 6) {
-                Spacer(minLength: 0)
-
+            FizzActionButton(title: testRunning ? "停止" : "运行", height: .compact) {
                 if testRunning {
-                    serviceButton("停止", help: "停止测试运行") {
-                        actions.stopTests(project)
-                    }
+                    actions.stopTests(project)
                 } else {
-                    serviceButton("运行", help: "运行测试命令") {
-                        actions.runTests(project, store: store)
-                    }
+                    actions.runTests(project, store: store)
                 }
             }
+            .help(testRunning ? "停止测试运行" : "运行测试命令")
+            .accessibilityLabel(testRunning ? "停止测试运行" : "运行测试命令")
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            testRunning ? FizzTheme.selectedFill : FizzTheme.recessedFill,
-            in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                .strokeBorder(FizzTheme.hairline, lineWidth: 1)
-        }
+        .padding(FizzSpacing.card)
+        .fizzCard(radius: FizzRadius.card, fill: testRunning ? FizzTheme.selectedFill : FizzTheme.recessedFill)
     }
 
     @ViewBuilder
@@ -531,7 +452,7 @@ struct ServicesPanel: View {
                 .controlSize(.mini)
                 .frame(width: 10, height: 10)
         } else if active {
-            RunningPulseDot(size: 7)
+            RunningPulseDot()
                 .frame(width: 10, height: 10)
         } else {
             Circle()
@@ -540,23 +461,6 @@ struct ServicesPanel: View {
                 .frame(width: 10, height: 10)
                 .accessibilityHidden(true)
         }
-    }
-
-    private func serviceButton(
-        _ title: String,
-        help: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 2)
-        }
-        .buttonStyle(.glass)
-        .controlSize(.mini)
-        .help(help)
-        .accessibilityLabel(help)
     }
 
     private func testStatusText(_ run: TestRunState) -> String? {
@@ -573,8 +477,8 @@ struct ServicesPanel: View {
     private func testStatusColor(_ status: TestStatus) -> Color {
         switch status {
         case .running: .secondary
-        case .passed: .green
-        case .failed: .red
+        case .passed: FizzTheme.statusSuccess
+        case .failed: FizzTheme.statusDanger
         }
     }
 
@@ -603,10 +507,10 @@ struct ServicesPanel: View {
 
     private func feedbackLine(_ text: String) -> some View {
         HStack(spacing: 5) {
-            FizzIcon(symbol: "info.circle", size: 9)
+            FizzIcon(.xs, symbol: "info.circle")
                 .foregroundStyle(.tertiary)
             Text(text)
-                .font(.system(size: 11))
+                .font(FizzTypography.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -681,35 +585,24 @@ struct ProjectLogsPanel: View {
                     sourceSwitcher
                 } else if devAvailable || testAvailable {
                     Text(source.title)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(FizzTypography.monoSmall)
                         .foregroundStyle(.secondary)
                 }
 
-                Button {
+                FizzIconButton(
+                    title: expanded ? "折叠日志" : "展开日志",
+                    symbol: expanded ? "chevron.up" : "chevron.down",
+                    height: .compact
+                ) {
                     withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
                         expanded.toggle()
                     }
-                } label: {
-                    FizzIcon(symbol: expanded ? "chevron.up" : "chevron.down", size: 9)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help(expanded ? "折叠日志" : "展开日志")
-                .accessibilityLabel(expanded ? "折叠日志" : "展开日志")
+                .accessibilityValue(expanded ? "已展开" : "已折叠")
 
-                Button {
+                FizzIconButton(title: "打开完整日志", symbol: "arrow.up.forward.square", height: .compact) {
                     actions.openLog(for: project, test: source == .test)
-                } label: {
-                    FizzIcon(symbol: "arrow.up.forward.square", size: 11)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help("打开完整日志")
-                .accessibilityLabel("打开完整日志")
             }
         }
         .task(id: pollKey) {
@@ -734,24 +627,26 @@ struct ProjectLogsPanel: View {
         }
         .sheet(isPresented: $showingErrorSheet) {
             if let match = LogErrorHelper.extractError(from: text) {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 8) {
-                        FizzIcon(symbol: "exclamationmark.triangle.fill", size: 16)
-                            .foregroundStyle(.orange)
-                        Text("这是什么意思")
-                            .font(.system(size: 16, weight: .semibold))
+                VStack(alignment: .leading, spacing: FizzSpacing.panel) {
+                    FizzSheetHeader(title: "这是什么意思") {
+                        showingErrorSheet = false
                     }
 
-                    Text(match.plainExplanation)
-                        .font(.system(size: 14, weight: .medium))
+                    Label {
+                        Text(match.plainExplanation)
+                            .font(FizzTypography.sectionTitle)
+                    } icon: {
+                        FizzIcon(.lg, symbol: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.secondary)
+                    }
 
                     Text("建议动作：\(match.suggestedAction)")
-                        .font(.callout)
+                        .font(FizzTypography.body)
                         .foregroundStyle(.secondary)
 
                     ScrollView {
                         Text(verbatim: match.contextBlock)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(FizzTypography.mono)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(10)
@@ -759,25 +654,18 @@ struct ProjectLogsPanel: View {
                     .frame(height: 180)
                     .background(FizzTheme.recessedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
 
-                    HStack {
-                        Spacer()
-                        Button("关闭") {
+                    FizzSheetFooter {
+                        FizzActionButton(title: "关闭", role: .cancel) {
                             showingErrorSheet = false
                         }
-                        .buttonStyle(.glass)
-                        Button {
-                            let prompt = LogErrorHelper.buildHelpPrompt(project: project, match: match)
-                            SystemActions.copy(prompt)
-                            ToastCenter.shared.show("已复制求助 prompt，可直接粘贴给 AI", symbol: "doc.on.clipboard.fill", tint: FizzTheme.accent)
+                        .keyboardShortcut(.cancelAction)
+                        FizzActionButton(title: "复制求助 prompt", symbol: "doc.on.clipboard", prominence: .primary) {
+                            copyHelpPrompt(match)
                             showingErrorSheet = false
-                        } label: {
-                            Label("复制求助 prompt", systemImage: "doc.on.clipboard")
                         }
-                        .buttonStyle(.glassProminent)
-                        .tint(FizzTheme.accent)
                     }
                 }
-                .padding(22)
+                .padding(FizzSpacing.page)
                 .frame(width: 520)
             }
         }
@@ -785,57 +673,54 @@ struct ProjectLogsPanel: View {
 
     private func errorCallout(_ match: LogErrorMatch) -> some View {
         HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color.orange)
-                .frame(width: 3, height: 32)
+            FizzStatusDot(tint: FizzTheme.statusWarning)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(match.matchedLine)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.orange)
+                    .font(FizzTypography.mono(.medium))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text(match.plainExplanation)
-                    .font(.caption2)
+                    .font(FizzTypography.micro)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
             Spacer(minLength: 8)
 
-            Button("这是什么意思") {
+            FizzActionButton(title: "这是什么意思", height: .compact) {
                 showingErrorSheet = true
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
 
-            Button("复制求助 prompt") {
-                let prompt = LogErrorHelper.buildHelpPrompt(project: project, match: match)
-                SystemActions.copy(prompt)
-                ToastCenter.shared.show("已复制求助 prompt，可直接粘贴给 AI", symbol: "doc.on.clipboard.fill", tint: FizzTheme.accent)
+            FizzActionButton(title: "复制求助 prompt", height: .compact, prominence: .primary) {
+                copyHelpPrompt(match)
             }
-            .buttonStyle(.glassProminent)
-            .tint(FizzTheme.accent)
-            .controlSize(.small)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
+        .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
+    }
+
+    private func copyHelpPrompt(_ match: LogErrorMatch) {
+        let prompt = LogErrorHelper.buildHelpPrompt(project: project, match: match)
+        SystemActions.copy(prompt, feedback: nil)
+        ToastCenter.shared.show("已复制求助 prompt，可直接粘贴给 AI", symbol: "doc.on.clipboard.fill", tint: Color.secondary)
     }
 
     private var sourceSwitcher: some View {
-        FizzSegmentedCapsule(
-            items: ProjectLogSource.allCases,
-            selection: $source,
-            height: 20,
-            horizontalPadding: 7
-        ) { item, selected in
-            Text(item.title)
-                .font(.system(size: 10, weight: selected ? .semibold : .medium))
-                .accessibilityLabel(item == .dev ? "开发日志" : "测试日志")
+        Picker("日志来源", selection: $source) {
+            ForEach(ProjectLogSource.allCases) { item in
+                Text(item.title)
+                    .accessibilityLabel(item == .dev ? "开发日志" : "测试日志")
+                    .tag(item)
+            }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("日志来源")
+        .labelsHidden()
+        .pickerStyle(.segmented)
+        .controlSize(.small)
+        .frame(width: 94, height: FizzControlHeight.compact.rawValue)
+        .focusable(interactions: .edit)
     }
 
     private var viewport: some View {
@@ -843,7 +728,7 @@ struct ProjectLogsPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(text.isEmpty ? "暂无日志输出" : text)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(FizzTypography.mono)
                         .foregroundStyle(text.isEmpty ? Color.secondary : Color.primary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)

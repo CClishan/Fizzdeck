@@ -31,27 +31,22 @@ struct HomeHeaderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title)
-                        .font(.system(size: 27, weight: .semibold))
-                    Text(detail)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-                .layoutPriority(1)
+            FizzPageHeader(
+                title: title,
+                subtitle: detail,
+                primaryAction: FizzActionButton(
+                    title: selectionMode ? "完成选择" : "批量选择",
+                    symbol: selectionMode ? "checkmark" : "checklist",
+                    action: onToggleSelection
+                )
+            )
 
-                Spacer(minLength: 12)
-
-                HStack(spacing: 8) {
-                    modePicker
-                    coverPreviewToggle
-                    filterMenu
-                    selectionToggle
-                }
-                .fixedSize()
-                .padding(.top, 2)
+            HStack(spacing: FizzSpacing.row) {
+                modePicker
+                coverPreviewToggle
+                filterMenu
             }
+            .frame(height: FizzControlHeight.compact.rawValue)
 
             if facets.hasAny || selectedFramework != nil {
                 activeFilterChips
@@ -65,35 +60,15 @@ struct HomeHeaderView: View {
     }
 
     private var modePicker: some View {
-        GlassEffectContainer(spacing: 2) {
-            HStack(spacing: 1) {
-                ForEach(HomeViewMode.allCases) { item in
-                    let selected = mode == item
-
-                    Button {
-                        onSelectMode(item)
-                    } label: {
-                        FizzIcon(symbol: item.symbol, size: 13)
-                            .foregroundStyle(selected ? FizzTheme.accent : Color.secondary)
-                            .frame(width: 30, height: 26)
-                            .background {
-                                if selected {
-                                    Capsule()
-                                        .fill(FizzTheme.elevatedFill)
-                                        .fizzAdaptiveShadow(.subtle)
-                                }
-                            }
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .help(item.title)
-                    .accessibilityLabel(item.title)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                    .accessibilityRemoveTraits(selected ? [] : .isSelected)
-                }
-            }
-            .padding(2)
-            .glassEffect(.regular.interactive(), in: Capsule())
+        FizzSegmentedCapsule(
+            items: HomeViewMode.allCases,
+            selection: Binding(get: { mode }, set: { onSelectMode($0) }),
+            height: .compact,
+            keyboardNavigation: true
+        ) { item, _ in
+            FizzIcon(.sm, symbol: item.symbol)
+                .help(item.title)
+                .accessibilityLabel(item.title)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("布局")
@@ -106,19 +81,21 @@ struct HomeHeaderView: View {
                 set: { _ in onToggleCoverPreview() }
             )
         ) {
-            FizzIcon(symbol: "photo.on.rectangle.angled", size: 12)
-                .foregroundStyle(showsCoverPreview ? FizzTheme.accent : Color.secondary)
+            Text("封面")
+                .font(FizzTypography.caption)
+                .foregroundStyle(.secondary)
         }
         .toggleStyle(.switch)
-        .labelsHidden()
-        .controlSize(.mini)
+        .controlSize(.small)
+        .fixedSize(horizontal: true, vertical: false)
         .help(showsCoverPreview ? "隐藏封面预览" : "显示封面预览")
         .accessibilityLabel("显示封面预览")
         .accessibilityValue(showsCoverPreview ? "开启" : "关闭")
+        .fizzKeyboardAction(action: onToggleCoverPreview)
     }
 
     private var filterMenu: some View {
-        Menu {
+        FizzMenuButton(title: "排序与筛选", symbol: "line.3.horizontal.decrease") {
             Section("排序") {
                 ForEach(HomeSort.allCases) { item in
                     Button {
@@ -251,50 +228,11 @@ struct HomeHeaderView: View {
                     Label("清除筛选", systemImage: "xmark.circle")
                 }
             }
-        } label: {
-            filterMenuLabel
-                .padding(.horizontal, 10)
-                .frame(height: 30)
-                .contentShape(Capsule())
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.visible)
-        .controlSize(.small)
-        .glassEffect(.regular.interactive(), in: Capsule())
-        .help("排序与筛选")
-        .animation(
-            FizzMotion.resolved(reduceMotion, FizzMotion.quick),
-            value: facets.hasAny || selectedFramework != nil || extraActiveFilterCount > 0
-        )
-    }
-
-    private var selectionToggle: some View {
-        Button(action: onToggleSelection) {
-            FizzIcon(symbol: selectionMode ? "checkmark.circle.fill" : "checkmark.circle", size: 13)
-                .foregroundStyle(selectionMode ? FizzTheme.accent : Color.secondary)
-                .frame(width: 24, height: 24)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-        .controlSize(.small)
-        .help(selectionMode ? "退出批量选择" : "批量选择项目")
-        .accessibilityLabel(selectionMode ? "退出批量选择" : "批量选择项目")
-        .accessibilityAddTraits(selectionMode ? .isSelected : [])
-    }
-
-    private var filterMenuLabel: some View {
-        HStack(spacing: 5) {
-            FizzIcon(symbol: "line.3.horizontal.decrease", size: 12)
-            Text("筛选")
-                .font(.system(size: 11, weight: .medium))
-        }
-        .foregroundStyle(.primary)
     }
 
     private var activeFilterChips: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: FizzSpacing.row) {
             if let group = facets.group {
                 ActiveFilterChip(
                     text: group,
@@ -309,23 +247,17 @@ struct HomeHeaderView: View {
                 }
             }
             if let tool = facets.tool {
-                ActiveFilterChip(text: HomeDashboardModel.toolTitle(tool), tint: .purple) {
+                ActiveFilterChip(text: HomeDashboardModel.toolTitle(tool), tint: Color.secondary) {
                     onSetTool(nil)
                 }
             }
             if let selectedFramework {
-                ActiveFilterChip(text: selectedFramework, tint: .teal) {
+                ActiveFilterChip(text: selectedFramework, tint: Color.secondary) {
                     onSetFramework(nil)
                 }
             }
 
-            Button("清除") {
-                onClearFacets()
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 10.5, weight: .medium))
-            .foregroundStyle(.secondary)
-            .padding(.leading, 2)
+            FizzActionButton(title: "清除", height: .compact, action: onClearFacets)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("活动筛选")
@@ -346,14 +278,14 @@ private struct ActiveFilterChip: View {
                     .fill(tint)
                     .frame(width: 5, height: 5)
                 Text(text)
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(FizzTypography.micro)
                     .lineLimit(1)
-                FizzIcon(symbol: "xmark", size: 8)
+                FizzIcon(.xs, symbol: "xmark")
                     .foregroundStyle(.tertiary)
             }
             .foregroundStyle(.secondary)
             .padding(.horizontal, 7)
-            .frame(height: 20)
+            .frame(height: FizzControlHeight.compact.rawValue)
             .background(
                 hovering ? FizzTheme.selectedFill : FizzTheme.mutedFill,
                 in: Capsule()

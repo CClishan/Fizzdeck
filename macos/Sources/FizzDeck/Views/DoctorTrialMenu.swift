@@ -6,15 +6,15 @@ struct DoctorTrialMenu: View {
 
     var body: some View {
         let run = ProjectTrialService.shared.runs[project.path]
-        Button(run.map { "\($0.choice.kind.rawValue) · \($0.summary)" } ?? "试跑一下") { open = true }
-            .buttonStyle(.glass)
-            .controlSize(.small)
-            .popover(isPresented: $open) {
-                TrialControls(project: project)
-                    .id(project.path)
-                    .padding(14)
-                    .frame(width: 380)
-            }
+        FizzActionButton(title: run.map { "\($0.choice.kind.rawValue) · \($0.summary)" } ?? "试跑一下", height: .compact) {
+            open = true
+        }
+        .popover(isPresented: $open) {
+            TrialControls(project: project)
+                .id(project.path)
+                .padding(FizzSpacing.panel)
+                .frame(width: 380)
+        }
     }
 }
 
@@ -35,21 +35,24 @@ private struct TrialControls: View {
     @State private var choices: [TrialCommand]?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: FizzSpacing.row) {
             let run = trials.runs[project.path]
             if let choices {
                 if choices.isEmpty {
                     Text("未识别到 build、typecheck 或 test 命令")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(FizzTypography.body)
+                        .foregroundStyle(.secondary)
                 }
                 ForEach(choices) { choice in
-                    HStack {
+                    HStack(spacing: FizzSpacing.row) {
                         Text(verbatim: choice.command)
-                            .font(.callout.monospaced()).textSelection(.enabled)
-                        Spacer(minLength: 8)
-                        Button("试跑 \(choice.kind.rawValue)") {
+                            .font(FizzTypography.mono)
+                            .textSelection(.enabled)
+                        Spacer(minLength: 0)
+                        FizzActionButton(title: "试跑 \(choice.kind.rawValue)", height: .compact) {
                             trials.start(choice, for: project, store: store)
                         }
+                        .fixedSize(horizontal: true, vertical: false)
                         .disabled(run?.status == .running || actions.testRun(for: project.path)?.status == .running
                                   || actions.scriptRuns.values.contains { $0.projectPath == project.path && $0.status == .running && $0.script.command == choice.command })
                     }
@@ -59,22 +62,21 @@ private struct TrialControls: View {
             }
             if let run {
                 Divider()
-                HStack {
+                HStack(spacing: FizzSpacing.row) {
                     Text("\(run.choice.kind.rawValue) · \(run.summary)")
-                        .font(.callout.weight(.medium))
+                        .font(FizzTypography.body(.medium))
                     Spacer()
-                    Button("完整日志") { SystemActions.open(run.logURL.path) }
+                    FizzActionButton(title: "完整日志", height: .compact) { SystemActions.open(run.logURL.path) }
                         .disabled(!FileTools.exists(run.logURL))
                     if run.status == .running {
-                        Button("停止") { trials.stop(project.path) }.disabled(run.stopRequested)
+                        FizzActionButton(title: "停止", height: .compact) { trials.stop(project.path) }
+                            .disabled(run.stopRequested)
                     }
                 }
-                if let error = run.error { Text(error).font(.caption).foregroundStyle(.orange) }
+                if let error = run.error { Text(error).font(FizzTypography.caption).fizzStatus(FizzTheme.statusWarning) }
                 TrialLog(run: run).id(run.id)
             }
         }
-        .buttonStyle(.glass)
-        .controlSize(.small)
         .task(id: project.path) {
             let dir = URL(fileURLWithPath: project.path)
             let found = await Task.detached(priority: .utility) { TrialCommand.available(in: dir) }.value
@@ -90,7 +92,7 @@ private struct TrialLog: View {
     var body: some View {
         ScrollView {
             Text(verbatim: text.isEmpty ? "等待日志输出…" : text)
-                .font(.caption.monospaced()).textSelection(.enabled)
+                .font(FizzTypography.monoSmall).textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(8)
         }
         .defaultScrollAnchor(.bottom)

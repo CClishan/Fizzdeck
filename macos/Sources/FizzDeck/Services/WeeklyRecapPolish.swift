@@ -18,7 +18,7 @@ struct WeeklyRecapFigures: Equatable, Sendable {
 
     var request: SummaryRequest {
         SummaryRequest(
-            systemPrompt: "用一两句简短中文润色这份七天活动统计。只使用给出的数字，不推断项目内容、成效或阻塞。不调用工具。返回 JSON 对象，唯一字段 summary 是润色后的文字。",
+            systemPrompt: "用一两句简短中文润色这份活动统计。只使用给出的数字，不推断项目内容、成效或阻塞。不调用工具。返回 JSON 对象，唯一字段 summary 是润色后的文字。",
             userPrompt: SecretRedactor.redact("活跃项目：\(projects)；对话：\(sessions)；涉及文件：\(files)；提交：\(versions)；估算费用：\(cost.description)。").text,
             maxOutputTokens: 180, jsonMode: true
         )

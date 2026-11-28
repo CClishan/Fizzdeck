@@ -16,6 +16,7 @@ struct AttentionQueueView: View {
 
     var showsTabs = false
     var focusedOnly = false
+    var fillHeight = false
     private let collapsedLimit = 4
 
     private var effectiveCollapsedLimit: Int {
@@ -66,142 +67,80 @@ struct AttentionQueueView: View {
         }
     }
 
-    private var projectCount: Int {
-        Set(items.map(\.project.path)).count
-    }
-
     var body: some View {
-        if !items.isEmpty || !suppressedItems.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    FizzIcon(symbol: "exclamationmark.circle", size: 13)
-                        .foregroundStyle(FizzTheme.accent)
-                    Text(FizzCopy.attentionTitle(copyMode))
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("\(projectCount)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                    Text("个项目")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    Spacer(minLength: 8)
-                    Text("\(items.count) 项")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
-                    if !suppressedItems.isEmpty {
-                        suppressedMenu
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-
-                Divider()
-                    .padding(.horizontal, 14)
-                    .opacity(0.55)
-
-                if showsTabs && copyMode == .pro && availableKinds.count > 1 {
-                    categoryTabs
-                    Divider()
-                        .padding(.horizontal, 14)
-                        .opacity(0.45)
-                }
-
-                ForEach(visibleItems) { item in
-                    AttentionRow(
-                        item: item,
-                        inlineAction: item.inlineAction,
-                        isActing: isActing(item),
-                        copied: copiedItemID == item.id,
-                        feedback: feedback[item.id],
-                        copyMode: copyMode,
-                        open: {
-                            store.openProject(item.project, tab: item.kind.tab)
-                        },
-                        perform: { action in
-                            perform(action, for: item)
-                        }
-                    )
-                    .contextMenu {
-                        Menu("稍后提醒") {
-                            Button("1 小时后") {
-                                snooze(item, until: Date().addingTimeInterval(60 * 60))
+        let rows = visibleItems
+        Panel(title: FizzCopy.attentionTitle(copyMode), symbol: "exclamationmark.circle", fillHeight: fillHeight) {
+            if showsTabs && copyMode == .pro && availableKinds.count > 1 {
+                categoryTabs
+            }
+            if rows.isEmpty {
+                Text("没有待处理项")
+                    .font(FizzTypography.body)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, FizzSpacing.row)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(rows) { item in
+                        AttentionRow(
+                            item: item,
+                            inlineAction: item.inlineAction,
+                            isActing: isActing(item),
+                            copied: copiedItemID == item.id,
+                            feedback: feedback[item.id],
+                            copyMode: copyMode,
+                            open: { store.openProject(item.project, tab: item.kind.tab) },
+                            perform: { perform($0, for: item) }
+                        )
+                        .contextMenu {
+                            Menu("稍后提醒") {
+                                Button("1 小时后") { snooze(item, until: Date().addingTimeInterval(60 * 60)) }
+                                Button("明天 9:00") { snooze(item, until: tomorrowMorning) }
                             }
-                            Button("明天 9:00") {
-                                snooze(item, until: tomorrowMorning)
-                            }
+                            Divider()
+                            Button("忽略此提醒", systemImage: "bell.slash") { mute(item) }
                         }
-                        Divider()
-                        Button("忽略此提醒", systemImage: "bell.slash") {
-                            mute(item)
-                        }
-                    }
 
-                    if item.id != visibleItems.last?.id {
-                        Divider()
-                            .padding(.leading, 50)
-                            .opacity(0.38)
-                    }
-                }
-
-                if items.isEmpty {
-                    HStack(spacing: 6) {
-                        FizzIcon(symbol: "checkmark.circle", size: 12)
-                            .foregroundStyle(.green)
-                        Text("没有待处理项")
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.system(size: 11))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                }
-
-                if filteredItems.count > effectiveCollapsedLimit {
-                    Button {
-                        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
-                            expanded.toggle()
+                        if item.id != rows.last?.id {
+                            Divider().opacity(0.38)
                         }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text(expanded ? "收起" : "还有 \(filteredItems.count - effectiveCollapsedLimit) 项")
-                            FizzIcon(symbol: expanded ? "chevron.up" : "chevron.down", size: 8)
-                        }
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 29)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .overlay(alignment: .top) {
-                        Divider()
-                            .padding(.horizontal, 14)
-                            .opacity(0.38)
                     }
                 }
             }
-        .fizzCard(radius: FizzRadius.panel)
-            .alert(item: $pendingGitAction) { pending in
-                Alert(
-                    title: Text("\(pending.action.title) \(pending.item.project.displayName)？"),
-                    message: Text(pending.action.confirmation),
-                    primaryButton: .cancel(Text("取消")),
-                    secondaryButton: .default(Text(pending.action.title)) {
-                        Task { await performGit(pending) }
-                    }
-                )
-            }
-            .task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(60))
-                    if Task.isCancelled { break }
-                    now = Date()
+        } accessory: {
+            Text("\(items.count) 项")
+                .font(FizzTypography.caption)
+                .foregroundStyle(.secondary)
+            if !suppressedItems.isEmpty { suppressedMenu }
+            if filteredItems.count > effectiveCollapsedLimit {
+                FizzIconButton(
+                    title: expanded ? "收起" : "展开全部 \(filteredItems.count) 项",
+                    symbol: expanded ? "chevron.up" : "chevron.down",
+                    height: .compact
+                ) {
+                    withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) { expanded.toggle() }
                 }
             }
-            .onChange(of: items.count) {
-                if let selectedKind, !availableKinds.contains(where: { $0.kind == selectedKind }) {
-                    self.selectedKind = nil
+        }
+        .alert(item: $pendingGitAction) { pending in
+            Alert(
+                title: Text("\(pending.action.title) \(pending.item.project.displayName)？"),
+                message: Text(pending.action.confirmation),
+                primaryButton: .cancel(Text("取消")),
+                secondaryButton: .default(Text(pending.action.title)) {
+                    Task { await performGit(pending) }
                 }
+            )
+        }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                if Task.isCancelled { break }
+                now = Date()
+            }
+        }
+        .onChange(of: items.count) {
+            if let selectedKind, !availableKinds.contains(where: { $0.kind == selectedKind }) {
+                self.selectedKind = nil
             }
         }
     }
@@ -211,21 +150,16 @@ struct AttentionQueueView: View {
             FizzSegmentedCapsule(
                 items: [nil] + availableKinds.map(\.kind),
                 selection: $selectedKind,
-                height: 22,
-                horizontalPadding: 9,
-                selectionFill: FizzTheme.accent,
-                selectionForeground: .white
-            ) { kind, selected in
+                height: .compact,
+                horizontalPadding: 9
+            ) { kind, _ in
                 HStack(spacing: 4) {
                     Text(kind?.shortTitle ?? "全部")
                     Text("\(tabCount(for: kind))")
-                        .monospacedDigit()
-                        .foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
+                        .foregroundStyle(.secondary)
                 }
-                .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
+                .font(FizzTypography.caption(.medium))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
         }
     }
 
@@ -235,7 +169,7 @@ struct AttentionQueueView: View {
     }
 
     private var suppressedMenu: some View {
-        Menu {
+        FizzMenuButton(title: "已静默 \(suppressedItems.count) 项", symbol: "bell.slash") {
             Section("已静默") {
                 ForEach(suppressedItems) { entry in
                     Button {
@@ -248,22 +182,9 @@ struct AttentionQueueView: View {
                     }
                 }
             }
-
             Divider()
-
-            Button("全部恢复", systemImage: "bell") {
-                restoreAll()
-            }
-        } label: {
-            Label("\(suppressedItems.count)", systemImage: "bell.slash")
-                .font(.system(size: 10.5, weight: .medium).monospacedDigit())
-                .foregroundStyle(.secondary)
+            Button("全部恢复", systemImage: "bell", action: restoreAll)
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("\(suppressedItems.count) 项已静默")
     }
 
     private var tomorrowMorning: Date {
@@ -364,95 +285,67 @@ private struct AttentionRow: View {
 
     @State private var hovering = false
 
+    @ViewBuilder private var nameAndTag: some View {
+        Text(item.project.displayName)
+            .font(FizzTypography.cardTitle)
+            .foregroundStyle(.primary)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+        TagChip(text: item.title, tint: item.kind.tint, compact: true)
+    }
+
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: FizzSpacing.row) {
             Button(action: open) {
-                HStack(spacing: 9) {
-                    FizzIcon(symbol: item.kind.symbol, size: 13)
-                        .foregroundStyle(item.kind.tint)
-                        .frame(width: 24, height: 27)
+                HStack(spacing: FizzSpacing.row) {
+                    FizzIcon(.sm, symbol: item.kind.symbol)
+                        .foregroundStyle(.secondary)
+                        .frame(width: FizzControlHeight.compact.rawValue)
+                        .accessibilityHidden(true)
 
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 5) {
-                            Text(item.project.displayName)
-                                .font(.system(size: 12.5, weight: .semibold))
-                                .lineLimit(1)
-                            Text(item.title)
-                                .font(.system(size: 11.5))
-                                .foregroundStyle(item.kind.tint)
-                                .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 4) { nameAndTag }.fixedSize()
+                            VStack(alignment: .leading, spacing: 2) { nameAndTag }
                         }
-
-                        Text(feedback?.message ?? item.detail)
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(feedback?.failed == true ? Color.red : Color.secondary)
-                            .lineLimit(2)
+                        HStack(spacing: 4) {
+                            if feedback?.failed == true { FizzStatusDot(tint: FizzTheme.statusDanger) }
+                            Text(feedback?.message ?? item.detail)
+                                .font(FizzTypography.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
                     }
-
-                    Spacer(minLength: 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("打开 \(item.project.displayName) 的\(item.kind.destinationTitle)；右键可稍后或忽略")
 
-            if let inlineAction {
-                if copyMode == .plain {
-                    Button {
-                        perform(inlineAction)
-                    } label: {
-                        if isActing {
-                            ProgressView()
-                                .controlSize(.mini)
-                        } else {
-                            Text(copied ? "已复制" : inlineAction.plainTitle)
-                                .font(.system(size: 10.5, weight: .medium))
-                        }
-                    }
-                    .buttonStyle(.glass)
+            if isActing {
+                ProgressView()
                     .controlSize(.mini)
-                    .disabled(isActing)
-                    .help(inlineAction.plainTitle)
-                } else {
-                    Button {
+                    .frame(width: FizzControlHeight.compact.rawValue, height: FizzControlHeight.compact.rawValue)
+            } else if let inlineAction {
+                if copyMode == .plain {
+                    FizzActionButton(title: copied ? "已复制" : inlineAction.plainTitle, height: .compact) {
                         perform(inlineAction)
-                    } label: {
-                        Group {
-                            if isActing {
-                                ProgressView()
-                                    .controlSize(.mini)
-                            } else {
-                                FizzIcon(
-                                    symbol: copied ? "checkmark" : inlineAction.symbol,
-                                    size: 11
-                                )
-                                    .foregroundStyle(copied ? Color.green : item.kind.tint)
-                            }
-                        }
-                        .frame(width: 25, height: 25)
-                        .contentShape(Circle())
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isActing)
-                    .help(inlineAction.title)
-                    .accessibilityLabel(inlineAction.title)
+                } else {
+                    FizzIconButton(title: inlineAction.title, symbol: copied ? "checkmark" : inlineAction.symbol, height: .compact) {
+                        perform(inlineAction)
+                    }
                 }
-            }
-
-            FizzIcon(symbol: "chevron.right", size: 8)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background {
-            if hovering {
-                RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                    .fill(FizzTheme.mutedFill.opacity(0.8))
-                    .padding(.horizontal, 5)
+            } else {
+                FizzIconButton(title: "查看\(item.kind.destinationTitle)", symbol: "chevron.right", height: .compact, action: open)
             }
         }
+        .padding(.vertical, FizzSpacing.row)
+        .background(hovering ? FizzTheme.mutedFill : Color.clear, in: RoundedRectangle(cornerRadius: FizzRadius.inset))
         .onHover { hovering = $0 }
     }
+
 }
 
 private enum AttentionInlineAction {
@@ -544,11 +437,11 @@ private extension ProjectAttentionKind {
 
     var tint: Color {
         switch self {
-        case .doctorCritical, .testFailed: .red
-        case .sessionError, .dirty: .orange
-        case .behind: .blue
-        case .unpushed: .purple
-        case .cleanup: .teal
+        case .doctorCritical, .testFailed: FizzTheme.statusDanger
+        case .sessionError, .dirty: FizzTheme.statusWarning
+        case .behind: Color.secondary
+        case .unpushed: Color.secondary
+        case .cleanup: Color.secondary
         }
     }
 

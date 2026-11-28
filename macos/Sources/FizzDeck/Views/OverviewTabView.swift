@@ -113,7 +113,7 @@ struct OverviewTabView: View {
             WorkbenchMetricCard(
                 title: "本周提交",
                 symbol: "arrow.triangle.branch",
-                tint: .green,
+                tint: FizzTheme.statusSuccess,
                 value: project.gitLoadState == .ready ? "\(weekTotal)" : "",
                 unit: "次",
                 bars: project.gitLoadState == .ready
@@ -133,7 +133,7 @@ struct OverviewTabView: View {
             WorkbenchMetricCard(
                 title: "AI 会话",
                 symbol: "bubble.left.and.bubble.right",
-                tint: .purple,
+                tint: Color.secondary,
                 value: "\(project.sessions.sessionCount)",
                 unit: "会话",
                 bars: WorkbenchMetrics.normalized(sessionValues),
@@ -144,7 +144,7 @@ struct OverviewTabView: View {
             WorkbenchMetricCard(
                 title: "最近活动",
                 symbol: "clock",
-                tint: .blue,
+                tint: Color.secondary,
                 value: Format.relative(project.recent),
                 detail: lastActiveText
             )
@@ -166,7 +166,7 @@ struct OverviewTabView: View {
         return WorkbenchMetricCard(
             title: "磁盘占用",
             symbol: "internaldrive",
-            tint: .indigo,
+            tint: Color.secondary,
             value: ready ? parts.value : "",
             unit: ready ? parts.unit : "",
             bars: ready ? WorkbenchMetrics.normalized(cleanupValues) : Array(repeating: 0, count: 7),
@@ -201,7 +201,7 @@ struct OverviewTabView: View {
                 title: commit.subject,
                 detail: "\(commit.hash.prefix(7)) · 提交",
                 symbol: "arrow.triangle.branch",
-                tint: .green
+                tint: FizzTheme.statusSuccess
             ))
         }
         for session in project.sessions.recentSessions.prefix(4) {
@@ -211,7 +211,7 @@ struct OverviewTabView: View {
                 title: session.lastUser ?? "\(DetectedTool(rawValue: session.tool)?.title ?? session.tool) 会话",
                 detail: DetectedTool(rawValue: session.tool)?.title ?? session.tool,
                 symbol: DetectedTool(rawValue: session.tool)?.symbol ?? "bubble.left.and.bubble.right",
-                tint: DetectedTool(rawValue: session.tool)?.tint ?? .secondary
+                tint: .secondary
             ))
         }
         return entries.sorted { $0.date > $1.date }
@@ -222,17 +222,17 @@ struct OverviewTabView: View {
             VStack(spacing: 0) {
                 ForEach(Array(activityEntries.enumerated()), id: \.element.id) { index, entry in
                     HStack(alignment: .top, spacing: 10) {
-                        FizzIcon(symbol: entry.symbol, size: 12)
+                        FizzIcon(.sm, symbol: entry.symbol)
                             .foregroundStyle(entry.tint)
                             .frame(width: 16, height: 18)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.title)
-                                .font(.callout)
+                                .font(FizzTypography.font(12))
                                 .lineLimit(2)
                             if let detail = entry.detail {
                                 Text(detail)
-                                    .font(.caption2)
+                                    .font(FizzTypography.micro)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -240,7 +240,7 @@ struct OverviewTabView: View {
                         Spacer(minLength: 8)
 
                         Text(Format.relative(entry.date))
-                            .font(.caption2)
+                            .font(FizzTypography.micro)
                             .foregroundStyle(.tertiary)
                     }
                     .padding(.vertical, 8)
@@ -346,12 +346,12 @@ struct OverviewTabView: View {
             onPickImage: {
                 if let url = ArtworkFilePicker.pickImageURL(),
                    store.setCustomArtwork(from: url, for: project) {
-                    ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: FizzTheme.accent)
+                    ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: Color.secondary)
                 }
             },
             onDropImage: { url in
                 if store.setCustomArtwork(from: url, for: project) {
-                    ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: FizzTheme.accent)
+                    ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: Color.secondary)
                 }
             },
             onResetCustom: {
@@ -377,16 +377,16 @@ struct OverviewTabView: View {
         VStack(alignment: .leading, spacing: 7) {
             if project.intro.text.isEmpty {
                 Text("还没有项目简介")
-                    .font(.callout)
+                    .font(FizzTypography.font(12))
                     .foregroundStyle(.secondary)
             } else {
                 Text(project.intro.text)
-                    .font(.callout)
+                    .font(FizzTypography.font(12))
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let source = project.intro.source {
                     Text(source)
-                        .font(.caption2)
+                        .font(FizzTypography.micro)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -397,19 +397,19 @@ struct OverviewTabView: View {
         Group {
             if project.stacks.isEmpty {
                 Text("未识别技术栈")
-                    .font(.callout)
+                    .font(FizzTypography.font(12))
                     .foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(project.stacks) { group in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(group.label)
-                                .font(.caption)
+                                .font(FizzTypography.micro(.regular))
                                 .foregroundStyle(.secondary)
                                 .frame(width: 54, alignment: .leading)
                             FlowLayout(spacing: 5) {
                                 ForEach(group.items, id: \.self) { item in
-                                    TagChip(text: item, tint: group.color)
+                                    TagChip(text: item)
                                 }
                             }
                         }
@@ -422,19 +422,19 @@ struct OverviewTabView: View {
     private var notePanel: some View {
         HStack(spacing: 10) {
             HStack(spacing: 6) {
-                FizzIcon(symbol: "note.text", size: 12)
+                FizzIcon(.sm, symbol: "note.text")
                     .foregroundStyle(.secondary)
                 Text("备注")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(FizzTypography.font(12, weight: .semibold))
             }
 
             TextField("给这个项目留一句话", text: $noteDraft)
                 .textFieldStyle(.plain)
-                .font(.callout)
+                .font(FizzTypography.font(12))
                 .onSubmit(saveNote)
 
             Text("\(noteDraft.count)/200")
-                .font(.caption2.monospacedDigit())
+                .font(FizzTypography.micro)
                 .foregroundStyle(.tertiary)
 
             Button {
@@ -485,10 +485,10 @@ private struct WorkbenchMetricCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                FizzIcon(symbol: symbol, size: 13)
+                FizzIcon(.md, symbol: symbol)
                     .foregroundStyle(tint)
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(FizzTypography.caption(.medium))
                     .foregroundStyle(.secondary)
             }
 
@@ -498,14 +498,13 @@ private struct WorkbenchMetricCard: View {
                         .padding(.vertical, 3)
                 } else {
                     Text(value)
-                        .font(.system(size: 23, weight: .semibold))
-                        .monospacedDigit()
+                        .font(FizzTypography.font(23, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.62)
 
                     if !unit.isEmpty {
                         Text(unit)
-                            .font(.system(size: 12))
+                            .font(FizzTypography.font(12))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -517,7 +516,7 @@ private struct WorkbenchMetricCard: View {
 
             if let detail, !detail.isEmpty {
                 Text(detail)
-                    .font(.system(size: 11))
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .help(detail)
@@ -594,14 +593,14 @@ private struct ArtworkThumbnail: View {
                             .interpolation(.high)
                             .scaledToFill()
                     } else if path != nil {
-                        FizzIcon(symbol: "photo", size: 18)
+                        FizzIcon(.lg, symbol: "photo")
                             .foregroundStyle(.secondary)
                     } else {
                         VStack(spacing: 5) {
-                            FizzIcon(symbol: "photo.badge.plus", size: 17)
+                            FizzIcon(.lg, symbol: "photo.badge.plus")
                                 .foregroundStyle(.secondary)
                             Text("上传项目截图")
-                                .font(.system(size: 10.5, weight: .medium))
+                                .font(FizzTypography.monoSmall(.medium))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -610,10 +609,10 @@ private struct ArtworkThumbnail: View {
                         ZStack {
                             Rectangle().fill(.ultraThinMaterial)
                             VStack(spacing: 4) {
-                                FizzIcon(symbol: "photo.badge.plus", size: 16)
-                                    .foregroundStyle(FizzTheme.accent)
+                                FizzIcon(.md, symbol: "photo.badge.plus")
+                                    .foregroundStyle(Color.secondary)
                                 Text("松开以替换封面")
-                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .font(FizzTypography.monoSmall(.semibold))
                                     .foregroundStyle(.primary)
                             }
                         }
@@ -643,10 +642,10 @@ private struct ArtworkThumbnail: View {
                     onPickImage()
                 } label: {
                     Label("替换", systemImage: "photo.badge.plus")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(FizzTypography.micro(.semibold))
                 }
                 .buttonStyle(.glass)
-                .controlSize(.mini)
+                .controlSize(.small)
                 .padding(6)
                 .help("替换项目截图")
             }

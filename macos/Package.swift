@@ -13,6 +13,7 @@ let package = Package(
         .executableTarget(
             name: "FizzDeck",
             path: "Sources/FizzDeck",
+            resources: [.copy("../../Resources/Fonts")],
             swiftSettings: [
                 .swiftLanguageMode(.v5),
             ]

@@ -6,3 +6,9 @@ or branding is granted here. All other rights are reserved by their holders.
 
 Third-party software and assets remain subject to their own licenses and
 notices, including the notices in src/stageshow/kit/brands/.
+
+The four unmodified Obel Mono fonts are copyright 2026 The Obel Mono Project
+Authors (https://typographic.systems) and distributed under the SIL Open
+Font License 1.1. See macos/Resources/Fonts/OFL.txt. The Kubai icons are
+copyright (c) 2026 Kubai087 and the Kubai Icons contributors; see the MIT
+license in macos/Resources/Icons/LICENSE. Both notices ship inside the app.

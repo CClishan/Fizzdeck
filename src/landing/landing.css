@@ -3,8 +3,8 @@
   --bg: #ffffff;
   --well: #f5f5f5;
   --ink-strong: #111111;
-  --ink-muted: rgba(17, 17, 17, 0.52);
-  --ink-faint: rgba(17, 17, 17, 0.28);
+  --ink-muted: #666666;
+  --ink-faint: #707070;
   --line: rgba(17, 17, 17, 0.06);
   --line-hover: rgba(17, 17, 17, 0.14);
   --surface-soft: rgba(17, 17, 17, 0.045);
@@ -85,7 +85,6 @@ button:not(:where(.ss-stage *)) {
 }
 
 .landing-page {
-  overflow-x: clip;
   padding-bottom: 64px;
 }
 
@@ -247,10 +246,21 @@ button:not(:where(.ss-stage *)) {
 
 .two-tone-h1 {
   display: block;
-  font-size: clamp(34px, 4.4vw, 54px);
+  font-size: clamp(1.75rem, 6.8vw, 3.375rem);
   font-weight: 500;
   line-height: 1.14;
   letter-spacing: -0.03em;
+}
+
+:is(.two-tone-h1, .two-tone-h2, .two-tone-h3) .ink-faint {
+  display: block;
+  margin-top: 0.18em;
+  line-height: 1.35;
+  letter-spacing: -0.012em;
+}
+
+.two-tone-h1 .ink-faint {
+  font-size: clamp(1.0625rem, 3vw, 2rem);
 }
 
 .hero-ctas {
@@ -298,6 +308,7 @@ button:not(:where(.ss-stage *)) {
   margin-top: 16px;
   font-size: 13px;
   color: var(--ink-muted);
+  text-wrap: balance;
 }
 
 .hero-gallery-well {
@@ -344,10 +355,15 @@ button:not(:where(.ss-stage *)) {
 .two-tone-h2 {
   display: block;
   max-width: 760px;
-  font-size: clamp(26px, 2.8vw, 34px);
+  font-size: clamp(1.3125rem, 4.8vw, 2.125rem);
   font-weight: 500;
   line-height: 1.24;
   letter-spacing: -0.025em;
+}
+
+.two-tone-h2 .ink-faint,
+.two-tone-h3 .ink-faint {
+  font-size: clamp(1rem, 2vw, 1.375rem);
 }
 
 /* Showcase 3-Column Stageshow Row */
@@ -628,6 +644,11 @@ button:not(:where(.ss-stage *)) {
 
   .hero-brand-bar {
     margin-bottom: 40px;
+  }
+
+  /* The longer English shortcut sentence can start beside its lead at reading size. */
+  .two-tone-h3:lang(en) .ink-faint {
+    display: inline;
   }
 
   .pill-nav {

@@ -132,15 +132,15 @@ private struct ToastCardView: View {
             if let microViz = message.microViz {
                 ToastMicroVizView(viz: microViz)
             } else {
-                FizzIcon(symbol: message.symbol, size: 14)
-                    .foregroundStyle(message.tint)
+                FizzIcon(.md, symbol: message.symbol)
+                    .foregroundStyle(.primary)
                     .frame(width: 30, height: 32)
-                    .background(message.tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 8))
+                    .background(message.tint.opacity(0.11), in: Capsule())
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(message.title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(FizzTypography.font(12, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
@@ -154,12 +154,12 @@ private struct ToastCardView: View {
                 } label: {
                     HStack(spacing: 4) {
                         if let symbol = action.symbol {
-                            FizzIcon(symbol: symbol, size: 9)
+                            FizzIcon(.xs, symbol: symbol)
                         }
                         Text(action.title)
                             .lineLimit(1)
                     }
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(FizzTypography.monoSmall(.medium))
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 8)
                     .frame(height: 24)
@@ -177,7 +177,7 @@ private struct ToastCardView: View {
 
             if expanded {
                 Button(action: onClose) {
-                    FizzIcon(symbol: "xmark", size: 8)
+                    FizzIcon(.xs, symbol: "xmark")
                         .foregroundStyle(.secondary)
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
@@ -214,17 +214,17 @@ private struct ToastCardView: View {
                         .foregroundStyle(.secondary)
                 }
                 if added > 0 {
-                    Text("+\(added)").foregroundStyle(.green)
+                    TagChip(text: "+\(added)", tint: FizzTheme.statusSuccess, compact: true)
                 }
                 if removed > 0 {
-                    Text("−\(removed)").foregroundStyle(.red)
+                    TagChip(text: "−\(removed)", tint: FizzTheme.statusDanger, compact: true)
                 }
             }
-            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+            .font(FizzTypography.monoSmall(.medium))
             .lineLimit(1)
         } else if let subtitle = message.subtitle {
             Text(subtitle)
-                .font(.system(size: 10.5))
+                .font(FizzTypography.monoSmall)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)

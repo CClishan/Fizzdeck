@@ -612,7 +612,7 @@ final class RepositoryStore {
             ToastCenter.shared.show(
                 "已为这次对话记下开始前的样子，保留约 14 天",
                 symbol: "bookmark.circle.fill",
-                tint: FizzTheme.accent,
+                tint: .secondary,
                 duration: 4.0,
                 subtitle: "以后随时可在进度时间线对比或还原"
             )
@@ -1134,7 +1134,7 @@ final class RepositoryStore {
         var meta = metadata[project.path] ?? ProjectMeta()
         if exempt { meta.doctorExemptions.insert(kind) } else { meta.doctorExemptions.remove(kind) }
         do { try MetaStore.saveDoctorExemptions(meta.doctorExemptions, for: project.path) } catch {
-            ToastCenter.shared.show("未能保存体检豁免", symbol: "exclamationmark.triangle", tint: .orange)
+            ToastCenter.shared.show("未能保存体检豁免", symbol: "exclamationmark.triangle", tint: FizzTheme.statusWarning)
             return
         }
         metadata[project.path] = meta
@@ -1289,7 +1289,7 @@ final class RepositoryStore {
             ToastCenter.shared.show(
                 "「\(updatedProject.displayName)」的对话以报错结束",
                 symbol: "exclamationmark.triangle.fill",
-                tint: .orange,
+                tint: FizzTheme.statusWarning,
                 subtitle: errSubtitle,
                 action: ToastAction(title: "去看看", symbol: "arrow.right.circle") { [weak self] in
                     self?.openProject(updatedProject, tab: .progress, sessionID: session.id)
@@ -1327,7 +1327,7 @@ final class RepositoryStore {
         ToastCenter.shared.show(
             "\(toolTitle) 刚在 \(updatedProject.displayName) 改了 \(max(1, changedCount)) 个文件",
             symbol: "sparkles",
-            tint: FizzTheme.accent,
+            tint: .secondary,
             subtitle: subtitle,
             action: action
         )

@@ -5,11 +5,13 @@ export const DMG_URL = `${RELEASES_URL}/latest`;
 export const COPY = {
   zh: {
     meta: {
-      title: 'FizzDeck — AI 写的项目，记得住、回得去、跑得起',
+      title: 'FizzDeck — 记得住、回得去、跑得起。',
       description:
-        'FizzDeck 是给 Vibe Coder 的本地优先 macOS 工作台：记得住每次 AI 对话，改坏了回得去，项目跑不起来时先做体检。无需账号，数据留在本机。',
+        '给 AI 项目的原生 Mac 工作台。接上进度、退回改坏、本机跑起。实机截图来自 FizzDeck v0.9.0（Build 23）。',
     },
     nav: {
+      skip: '跳到主要内容',
+      label: '主导航',
       views: '核心切面',
       features: '能力',
       shortcut: '快捷键',
@@ -19,18 +21,18 @@ export const COPY = {
       langAria: 'Switch to English',
     },
     hero: {
-      lead: 'AI 写的项目，记得住、回得去、跑得起。',
-      rest: '原生 macOS 工作台，用人话看懂每次对话，改坏了也能退回。',
+      lead: '记得住、回得去、跑得起。',
+      rest: '给 AI 项目的原生 Mac 工作台。',
       primaryCta: '下载 macOS 公开版',
       secondaryCta: 'GitHub 源码',
-      note: 'v0.8.0（Build 16）· Apple Silicon · macOS 26+ · 截图来自 v0.7.5（Build 13）',
-      stageCaption: 'FizzDeck v0.7.5 · 工作台实机截图',
-      heroAlt: 'Studio Display 样机中的 FizzDeck v0.7.5 工作台：关注项目、本周活动和待处理事项，显示器旁是 Mac Studio',
+      note: 'Apple Silicon · macOS 26+ · 实机截图：v0.9.0（Build 23）',
+      stageCaption: 'FizzDeck v0.9.0（Build 23）工作台实机截图',
+      heroAlt: 'Studio Display 上的 FizzDeck v0.9.0（Build 23）浅色工作台，显示器旁是 Mac Studio。',
     },
     showcase: {
-      lead: '先让 AI 项目不再失控。',
-      rest: '记得住上次做到哪，回得去改坏之前，跑得起本机环境。',
-      hint: '原生应用实机截图',
+      lead: '让 AI 项目不再失控。',
+      rest: '接上进度、退回改坏、本机跑起。',
+      hint: 'FizzDeck v0.9.0（Build 23）实机截图',
       tiles: [
         {
           id: 'workbench',
@@ -53,8 +55,8 @@ export const COPY = {
       ],
     },
     grid: {
-      lead: '从对话到运行，围着小白重排。',
-      rest: '三件小事都留在本机，不需要先学会 Git。',
+      lead: '围绕对话重排，不说 Git 黑话。',
+      rest: '本地优先，用人话就能管好项目。',
       items: [
         {
           icon: 'folder',
@@ -120,13 +122,13 @@ export const COPY = {
       ],
     },
     shortcut: {
-      lead: '⌘K 现在也能找对话。',
-      rest: '项目、分支、命令和跨项目会话一起搜，中文短词也能命中。',
+      lead: '⌘K 也能直接搜对话。',
+      rest: '跨项目直达任意分支、命令与会话，支持中英文。',
       boundary: '本地 FTS5 索引 · 仅监听 127.0.0.1 · 零遥测无账号',
     },
     faq: {
       title: '常见问题。',
-      subtitle: '关于人话模式、对话标记、运行体检与安装签名的直接回答。',
+      subtitle: '隐私边界、人话模式与本机运行细节。',
       items: [
         {
           q: 'FizzDeck 会上传我的代码或 AI 对话记录吗？',
@@ -226,11 +228,13 @@ export const COPY = {
   },
   en: {
     meta: {
-      title: 'FizzDeck — AI-built projects that remember, rewind, and run',
+      title: 'FizzDeck — Remember, rewind, and run.',
       description:
-        'FizzDeck is a local-first macOS workbench for vibe coders: remember every AI conversation, rewind changes, and get projects running again. No account, data stays on your Mac.',
+        'A native Mac workbench for AI-built projects. Resume context, undo mistakes, and run locally. Native screenshots: FizzDeck v0.9.0 (Build 23).',
     },
     nav: {
+      skip: 'Skip to content',
+      label: 'Main navigation',
       views: 'Views',
       features: 'Features',
       shortcut: 'Shortcut',
@@ -240,18 +244,18 @@ export const COPY = {
       langAria: '切换为中文',
     },
     hero: {
-      lead: 'AI-built projects that remember, rewind, and run.',
-      rest: 'A native Mac workbench in plain language—pick up where you left off and undo what broke.',
-      primaryCta: 'Download the Mac release',
+      lead: 'Remember, rewind, and run.',
+      rest: 'A native Mac workbench for AI-built projects.',
+      primaryCta: 'Download for Mac',
       secondaryCta: 'View on GitHub',
-      note: 'v0.8.0 (Build 16) · Apple Silicon · macOS 26+ · Screenshots from v0.7.5 (Build 13)',
-      stageCaption: 'FizzDeck v0.7.5 · Native workbench',
-      heroAlt: 'FizzDeck v0.7.5 on a Studio Display beside a Mac Studio, showing focused projects, weekly activity and items that need attention',
+      note: 'Screenshots: v0.9.0 (Build 23) · Apple Silicon · macOS 26+',
+      stageCaption: 'FizzDeck v0.9.0 (Build 23) native workbench screenshot',
+      heroAlt: 'The light FizzDeck v0.9.0 (Build 23) workbench on a Studio Display beside a Mac Studio.',
     },
     showcase: {
-      lead: 'Stop losing control of AI projects.',
-      rest: 'Remember where you left off, rewind what broke, and get the local environment running again.',
-      hint: 'Hover any tile to preview the interaction',
+      lead: 'Stay in control of AI projects.',
+      rest: 'Resume context, undo mistakes, and run locally.',
+      hint: 'FizzDeck v0.9.0 (Build 23) native screenshots',
       tiles: [
         {
           id: 'workbench',
@@ -274,8 +278,8 @@ export const COPY = {
       ],
     },
     grid: {
-      lead: 'Rebuilt around the conversation, not Git jargon.',
-      rest: 'Three essentials stay local—no Git degree required.',
+      lead: 'Built for conversations, not Git jargon.',
+      rest: 'Local-first tools in plain language.',
       items: [
         {
           icon: 'folder',
@@ -341,13 +345,13 @@ export const COPY = {
       ],
     },
     shortcut: {
-      lead: '⌘K now finds conversations too.',
-      rest: 'Search projects, branches, actions, and sessions across projects—even short Chinese queries.',
+      lead: '⌘K finds conversations too.',
+      rest: 'Jump to any project, branch, or session—English or Chinese.',
       boundary: 'Local FTS5 index · 127.0.0.1 only · Zero telemetry',
     },
     faq: {
       title: 'Questions? Answers.',
-      subtitle: 'Direct answers on plain language, conversation marks, run checks, and signing.',
+      subtitle: 'Privacy, plain language, and local-first details.',
       items: [
         {
           q: 'Does FizzDeck ever upload my code or AI transcripts?',

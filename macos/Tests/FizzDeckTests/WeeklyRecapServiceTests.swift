@@ -163,6 +163,94 @@ final class WeeklyRecapServiceTests: XCTestCase {
         XCTAssertTrue(recap.markdown.contains("[已脱敏]"))
     }
 
+    func testRangesCompareDisjointNaturalDaysAcrossDaylightSaving() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)))
+        let today = calendar.startOfDay(for: now)
+        let path = "/tmp/recap-ranges"
+        func session(_ offset: Int, secondsAtStart: Double = 0, kind: SessionRecordKind = .conversation) -> SessionRecord {
+            let date = calendar.date(byAdding: .day, value: offset, to: today)!.addingTimeInterval(secondsAtStart)
+            return SessionRecord(tool: "codex", id: "\(offset):\(secondsAtStart)", cwd: path, startedAt: nil, modified: date, kind: kind)
+        }
+        let project = makeProject(path: path, name: "Ranges", sessions: [
+            session(0), session(-6), session(-6, secondsAtStart: -1), session(-13),
+            session(-13, secondsAtStart: -1), session(-29), session(-89), session(-99),
+            session(0, secondsAtStart: 80_000), session(-1, kind: .workspaceSummary),
+        ])
+
+        let seven = WeeklyRecapService.build(projects: [project], now: now, calendar: calendar)
+        XCTAssertEqual(seven.sessionCount, 2)
+        XCTAssertEqual(seven.analysis.previous?.sessions, 2)
+        XCTAssertNil(seven.analysis.trend(.sessions).change)
+        XCTAssertEqual(DashboardMetrics.weeklyConversationTotals(projects: [project], now: now, calendar: calendar), seven.analysis.totals)
+        XCTAssertEqual(seven.analysis.bucketStarts.count, 7)
+        XCTAssertTrue(seven.analysis.bucketStarts.allSatisfy { calendar.component(.hour, from: $0) == 0 })
+        XCTAssertEqual(WeeklyRecapService.build(projects: [project], range: .month, now: now, calendar: calendar).sessionCount, 6)
+        XCTAssertEqual(WeeklyRecapService.build(projects: [project], range: .quarter, now: now, calendar: calendar).sessionCount, 7)
+        let all = WeeklyRecapService.build(projects: [project], range: .all, now: now, calendar: calendar)
+        XCTAssertEqual(all.sessionCount, 8)
+        XCTAssertNil(all.analysis.previous)
+        XCTAssertNil(all.analysis.trend(.sessions).change)
+        XCTAssertLessThanOrEqual(all.analysis.bucketStarts.count, 45)
+    }
+
+    func testRecapKeepsMissingMeasurementsAndCountsOnlyEvidenceInAverages() {
+        let calendar = Calendar.current
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+        func day(_ offset: Int) -> Date { calendar.date(byAdding: .day, value: offset, to: today)! }
+        let alpha = "/tmp/recap-alpha"
+        let beta = "/tmp/recap-beta"
+        let logged = SessionRecord(tool: "codex", id: "a", cwd: alpha, startedAt: day(-4), modified: day(-1),
+                                   usage: TokenUsage(inputTokens: 150, outputTokens: 50, totalTokens: 200), costUSD: 0.12,
+                                   endedWithError: true, turnCount: 2, agentTimeSeconds: 80, testResult: .failed)
+        let missing = SessionRecord(tool: "codex", id: "b", cwd: alpha, startedAt: day(-6), modified: today,
+                                    costUSD: 0, durationMinutes: 1_000)
+        let other = SessionRecord(tool: "opencode", id: "c", cwd: beta, startedAt: nil, modified: day(-1),
+                                  agentTimeSeconds: 40, testResult: .notRun)
+        let recap = WeeklyRecapService.build(projects: [
+            makeProject(path: alpha, name: "Alpha", sessions: [logged, missing]),
+            makeProject(path: beta, name: "Beta", sessions: [other]),
+        ], now: now, calendar: calendar)
+        let analysis = recap.analysis
+
+        XCTAssertEqual(analysis.projects.map(\.id), [alpha, beta])
+        XCTAssertEqual(analysis.projects[0].buckets[5]?.value(.agentTime), 80)
+        XCTAssertNil(analysis.projects[0].buckets[6]?.value(.agentTime))
+        XCTAssertEqual(analysis.samples(.agentTime), [nil, nil, nil, nil, nil, 120, nil])
+        XCTAssertEqual(analysis.samples(.cost), [nil, nil, nil, nil, nil, 0.12, nil])
+        XCTAssertEqual(analysis.totals.value(.tokens), 200)
+        XCTAssertEqual(analysis.totals.cost.unpriced, 2)
+        XCTAssertEqual(analysis.totals.averageSeconds, 60)
+        XCTAssertEqual(analysis.totals.averageCost, 0.12)
+        XCTAssertNil(analysis.trend(.cost).change)
+        XCTAssertEqual(analysis.tools.map { $0.totals.errorRate }, [0.5, 0])
+        XCTAssertEqual(analysis.activeDays, 2)
+        XCTAssertEqual(analysis.streak, 2)
+        XCTAssertEqual(analysis.busiestDay?.date, day(-1))
+        XCTAssertEqual(analysis.longestSession?.record.id, "a")
+        XCTAssertEqual(analysis.sessions.first?.record.id, "b")
+    }
+
+    func testCurrentStreakCanEndYesterdayButStopsAtAFullInactiveDay() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let path = "/tmp/recap-streak"
+        let sessions = [-1, -2, -4].map { offset in
+            SessionRecord(tool: "codex", id: "\(offset)", cwd: path, startedAt: nil,
+                          modified: calendar.date(byAdding: .day, value: offset, to: today)!)
+        }
+        func build(_ offset: Int) -> WeeklyRecapAnalysis {
+            WeeklyRecapService.build(projects: [makeProject(path: path, name: "Streak", sessions: sessions)],
+                                     now: calendar.date(byAdding: .day, value: offset, to: today)!, calendar: calendar).analysis
+        }
+        XCTAssertEqual(build(0).activeDays, 3)
+        XCTAssertEqual(build(0).streak, 2)
+        XCTAssertEqual(build(1).streak, 0)
+        XCTAssertEqual(build(1).heatmap.last?.sessions, 0)
+    }
+
     @MainActor
     func testPolishRequiresBothConsentsAndSendsOnlyTotalsToSelectedProvider() async throws {
         let suite = "fixture.recap.\(UUID().uuidString)"

@@ -1,74 +1,156 @@
 import SwiftUI
 
 struct WeeklyRecapSheet: View {
-    @State private var recap: WeeklyRecap
+    let projects: [RepoProject]
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openSettings) private var openSettings
     @AppStorage(SummaryPreferences.enabledKey) private var aiEnabled = false
     @AppStorage(SummaryPreferences.consentAcceptedKey) private var summaryConsent = false
     @AppStorage(SummaryPreferences.providerKindKey) private var providerKind: SummaryProviderKind = .agentCLI
+    @State private var range: WeeklyRecapRange = .week
+    @State private var snapshot: (recap: WeeklyRecap, byTool: [CostSegment], byProject: [CostSegment])?
+    @State private var chartMetric: WeeklyRecapMetric = .agentTime
+    @State private var hiddenProjects = Set<String>()
+    @State private var showingShare = false
     @State private var showConsent = false
     @State private var consentFor: SummaryProviderKind?
     @State private var polished: String?
     @State private var polishing = false
 
-    init(projects: [RepoProject]) {
-        _recap = State(initialValue: WeeklyRecapService.build(projects: projects))
-    }
+    private var recap: WeeklyRecap? { snapshot?.recap.range == range ? snapshot?.recap : nil }
 
     var body: some View {
         VStack(spacing: 0) {
             header
                 .padding(.horizontal, FizzSpacing.page)
                 .padding(.vertical, FizzSpacing.panel)
-
-            Divider()
-                .opacity(0.35)
-
+            Divider().opacity(0.35)
             ScrollView {
                 VStack(alignment: .leading, spacing: FizzSpacing.section) {
-                    if recap.hasActivity {
-                        summaryGrid
-                        polishControls
-                        activeProjects
-                        if !recap.topFiles.isEmpty {
-                            topFiles
-                        }
+                    if let recap {
+                        dashboard(recap)
                     } else {
-                        emptyState
+                        ProgressView("正在汇总本机记录…")
+                            .frame(maxWidth: .infinity, minHeight: 280)
                     }
                 }
                 .padding(FizzSpacing.page)
             }
-
-            Divider()
-                .opacity(0.35)
-
+            .defaultScrollAnchor(.top, for: .sizeChanges)
+            Divider().opacity(0.35)
             footer
                 .padding(.horizontal, FizzSpacing.page)
-                .padding(.vertical, 14)
+                .padding(.vertical, FizzSpacing.grid)
         }
-        .frame(width: 580, height: 620)
+        .frame(width: 900, height: 700)
         .background(FizzTheme.page)
-        .alert("允许润色这份周报？", isPresented: $showConsent) {
+        .sheet(isPresented: $showingShare) {
+            if let recap {
+                WeeklyRecapShareSheet(data: shareData(recap))
+            }
+        }
+        .alert("允许润色这份复盘？", isPresented: $showConsent) {
             Button("取消", role: .cancel) {}
             Button("同意并润色") { consentFor = providerKind }
         } message: {
-            Text("只向当前 AI 提供方（\(providerKind.title)）发送项目、会话、文件和提交数量及估算费用。不发送名称、路径、周报原文或聊天内容。仅本次有效。")
+            Text("只向当前 AI 提供方（\(providerKind.title)）发送项目、会话、文件和提交数量及估算费用。不发送名称、路径、复盘原文或聊天内容。仅本次有效。")
         }
         .onChange(of: aiEnabled && summaryConsent) { if !aiEnabled || !summaryConsent { resetPolish() } }
         .onChange(of: providerKind) { resetPolish() }
+        .task(id: range) {
+            let selected = range
+            let task = Task.detached(priority: .userInitiated) { [projects] in
+                let recap = WeeklyRecapService.build(projects: projects, range: selected)
+                let usage = SelfUsageLedger.totals(since: selected == .all ? .distantPast : recap.windowStart,
+                                                   through: recap.generatedAt)
+                let sessions = recap.analysis.sessions
+                return (recap, DashboardMetrics.costBreakdown(sessions: sessions, mode: .byTool, selfUsage: usage),
+                        DashboardMetrics.costBreakdown(sessions: sessions, mode: .byProject))
+            }
+            let result = await task.value
+            if !Task.isCancelled, range == selected { snapshot = result }
+        }
         .task(id: consentFor) {
-            guard let consentFor else { return }
+            guard let consentFor, let recap else { return }
             polishing = true
             let result = await WeeklyRecapService.polish(WeeklyRecapFigures(recap), consentFor: consentFor)
-            guard !Task.isCancelled, self.consentFor == consentFor else { return }
+            guard !Task.isCancelled, self.consentFor == consentFor, range == recap.range else { return }
             SummaryEngine.shared.refreshUsageTotals()
             polished = result
             polishing = false
             if result == nil { self.consentFor = nil }
         }
+    }
+
+    private var header: some View {
+        FizzPageHeader(title: "跨 Agent 复盘", subtitle: periodSubtitle) {
+            FizzSegmentedCapsule(items: WeeklyRecapRange.allCases, selection: Binding(
+                get: { range }, set: { selected in
+                    guard range != selected else { return }
+                    resetPolish()
+                    snapshot = nil
+                    range = selected
+                }
+            ), keyboardNavigation: true) { item, _ in
+                Text(item.rawValue)
+                    .font(FizzTypography.caption)
+                    .accessibilityLabel(item.periodTitle)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("复盘周期")
+            FizzIconButton(title: "关闭复盘", symbol: "xmark", height: .compact) { dismiss() }
+        }
+    }
+
+    private var periodSubtitle: String {
+        guard let recap else { return range.periodTitle }
+        let span = dateSpan(recap.windowStart, recap.generatedAt)
+        guard let previous = recap.analysis.previousStart,
+              let end = Calendar.current.date(byAdding: .day, value: -1, to: recap.windowStart) else {
+            return "\(span) · 全部已索引历史"
+        }
+        return "\(span) · 较上期 \(dateSpan(previous, end))"
+    }
+
+    private func dateSpan(_ first: Date, _ last: Date) -> String {
+        let style = Date.FormatStyle().month(.defaultDigits).day()
+        let firstStyle = Calendar.current.isDate(first, equalTo: last, toGranularity: .year) ? style : style.year()
+        let lastStyle = Calendar.current.isDate(last, equalTo: Date(), toGranularity: .year) ? style : style.year()
+        return "\(first.formatted(firstStyle))–\(last.formatted(lastStyle))"
+    }
+
+    @ViewBuilder private func dashboard(_ recap: WeeklyRecap) -> some View {
+        let analysis = recap.analysis
+        HStack(spacing: FizzSpacing.grid) {
+            ForEach(WeeklyRecapMetric.allCases, id: \.self) { metric in
+                FizzHeroMetricCard(
+                    title: metric.title,
+                    value: metric.label(analysis.totals.value(metric)),
+                    subtitle: analysis.totals.detail(metric),
+                    change: analysis.trend(metric).change,
+                    samples: analysis.samples(metric)
+                )
+            }
+        }
+
+        if analysis.sessions.isEmpty {
+            Panel(title: "这个周期没有对话", symbol: "bubble.left.and.bubble.right") {
+                Text("切换到更长的周期，可以查看此前已索引的本机对话。")
+                    .font(FizzTypography.body)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            HStack(alignment: .top, spacing: FizzSpacing.grid) {
+                WeeklyRecapTrendPanel(analysis: analysis, metric: $chartMetric, hiddenProjects: $hiddenProjects)
+                    .frame(maxWidth: .infinity)
+                WeeklyRecapRhythmPanel(analysis: analysis)
+                    .frame(width: 290)
+            }
+            WeeklyRecapDetails(analysis: analysis)
+        }
+        if let snapshot { AICostBreakdownCard(byTool: snapshot.byTool, byProject: snapshot.byProject) }
+        if recap.hasActivity { polishControls }
     }
 
     private func resetPolish() {
@@ -79,183 +161,62 @@ struct WeeklyRecapSheet: View {
     }
 
     private var polishControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        VStack(alignment: .leading, spacing: FizzSpacing.row) {
+            HStack(spacing: FizzSpacing.row) {
                 Toggle("AI 润色", isOn: Binding(get: { consentFor != nil }, set: { on in
                     if on { showConsent = true } else { resetPolish() }
                 }))
                 .toggleStyle(.switch)
+                .controlSize(.small)
+                .tint(.secondary)
+                .fizzKeyboardAction { if consentFor != nil { resetPolish() } else { showConsent = true } }
                 .disabled(!aiEnabled || !summaryConsent)
-                if polishing { ProgressView().controlSize(.mini) }
-                Spacer()
                 if !aiEnabled || !summaryConsent {
-                    Button("设置 AI 总结…") { openSettings() }.buttonStyle(.link)
+                    FizzActionButton(title: "设置 AI 总结…", height: .compact) { openSettings() }
+                        .fizzKeyboardAction { openSettings() }
                 }
             }
-            .controlSize(.small)
-            if let polished { Text(verbatim: polished).font(.callout).textSelection(.enabled) }
-        }
-    }
-
-    private var header: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("本周回顾")
-                    .font(.system(size: 23, weight: .semibold))
-                    .accessibilityAddTraits(.isHeader)
-                Text("最近 7 天的本机记录")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 12)
-
-            Button {
-                dismiss()
-            } label: {
-                FizzIcon(symbol: "xmark", size: 11)
-                    .frame(width: 24, height: 24)
-            }
-            .buttonStyle(.glass)
-            .help("关闭")
-            .accessibilityLabel("关闭本周回顾")
-        }
-    }
-
-    private var summaryGrid: some View {
-        VStack(alignment: .trailing, spacing: 4) {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 116), spacing: 10)], alignment: .leading, spacing: 10
-            ) {
-                metric("AI 对话", value: "\(recap.sessionCount) 次", symbol: "bubble.left.and.bubble.right")
-                metric("改动文件", value: "\(recap.changedFileCount) 个", symbol: "doc.text")
-                metric("保存版本", value: "\(recap.savedVersionCount) 个", symbol: "bookmark.fill")
-                metric("估算费用", value: recap.cost.amountLabel, symbol: "dollarsign.circle")
-            }
-            if recap.cost.isPartial {
-                Text("另有 \(recap.cost.unpriced) 次会话未计价")
-                    .font(.caption2).foregroundStyle(.secondary)
+            if let polished {
+                Text(verbatim: polished)
+                    .font(FizzTypography.body)
+                    .textSelection(.enabled)
             }
         }
-    }
-
-    private func metric(_ title: String, value: String, symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
-                FizzIcon(symbol: symbol, size: 10)
-                    .foregroundStyle(FizzTheme.accent)
-                Text(title)
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-            Text(value)
-                .font(.system(size: 18, weight: .semibold, design: .rounded).monospacedDigit())
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .padding(11)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .fizzCard(radius: FizzRadius.control)
-    }
-
-    private var activeProjects: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text("活跃项目")
-                .font(.system(size: 13, weight: .semibold))
-
-            VStack(spacing: 0) {
-                ForEach(recap.activeProjects.prefix(8)) { project in
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(project.name)
-                                .font(.system(size: 12.5, weight: .medium))
-                            Text("\(project.sessionCount) 次对话 · \(project.changedFileCount) 个文件")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 8)
-                        Text("\(project.savedVersionCount) 个版本")
-                            .font(.system(size: 10.5, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 7)
-
-                    if project.id != recap.activeProjects.prefix(8).last?.id {
-                        Divider()
-                            .opacity(0.25)
-                    }
-                }
-            }
-        }
-    }
-
-    private var topFiles: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text("改得最多")
-                .font(.system(size: 13, weight: .semibold))
-
-            VStack(spacing: 0) {
-                ForEach(Array(recap.topFiles.enumerated()), id: \.element.id) { index, file in
-                    HStack(spacing: 9) {
-                        Text("\(index + 1)")
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.tertiary)
-                            .frame(width: 14, alignment: .trailing)
-                        Text(file.path)
-                            .font(.system(size: 11, design: .monospaced))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer(minLength: 8)
-                        Text("\(file.projectName) · \(file.sessionCount) 次")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
-
-                    if file.id != recap.topFiles.last?.id {
-                        Divider()
-                            .opacity(0.25)
-                    }
-                }
-            }
-        }
-    }
-
-    private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            FizzIcon(symbol: "calendar.badge.clock", size: 24)
-                .foregroundStyle(FizzTheme.accent)
-            Text("这周还没有可回顾的内容")
-                .font(.system(size: 15, weight: .semibold))
-            Text("和 AI 聊一次或存一个版本后，这里会按本机记录自动汇总。不会上传任何内容。")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 44)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var footer: some View {
-        HStack(spacing: 10) {
-            Text("只复制到剪贴板，不会写入项目文件。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 8)
-            Button {
-                SystemActions.copy(
-                    recap.markdown(polishedSummary: polished),
-                    feedback: "本周回顾已复制",
-                    microViz: .compact(state: .done)
-                )
-            } label: {
-                Label("复制 Markdown", systemImage: "doc.on.clipboard")
+        FizzSheetFooter {
+            if polishing {
+                ProgressView().controlSize(.mini)
+                Text("正在润色复盘…")
+                    .font(FizzTypography.caption)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.glassProminent)
-            .tint(FizzTheme.accent)
-            .controlSize(.small)
-            .disabled(!recap.hasActivity)
-            .accessibilityLabel("复制本周回顾 Markdown")
+            Spacer(minLength: FizzSpacing.row)
+            FizzActionButton(title: "关闭", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+                .fizzKeyboardAction { dismiss() }
+            FizzActionButton(title: "复制 Markdown", symbol: "doc.on.clipboard", action: copyMarkdown)
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .fizzKeyboardAction(action: copyMarkdown)
+                .disabled(recap?.hasActivity != true)
+            FizzActionButton(title: "分享卡", symbol: "photo.on.rectangle", prominence: .primary) { showingShare = true }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .fizzKeyboardAction { showingShare = true }
+                .disabled(recap?.hasActivity != true)
         }
+        .focusSection()
+    }
+
+    private func copyMarkdown() {
+        guard let recap else { return }
+        SystemActions.copy(recap.markdown(polishedSummary: polished), feedback: "复盘已复制", microViz: .compact(state: .done))
+    }
+
+    private func shareData(_ recap: WeeklyRecap) -> WeeklyRecapShareData {
+        WeeklyRecapShareData(
+            period: "\(recap.range.periodTitle) · \(dateSpan(recap.windowStart, recap.generatedAt))",
+            analysis: recap.analysis
+        )
     }
 }

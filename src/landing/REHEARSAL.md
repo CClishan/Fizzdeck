@@ -1,8 +1,11 @@
-# FizzDeck v0.8.0 官网与 Build 13 实机贴图
+# FizzDeck 官网 · v0.9.0 / Build 23
 
-首屏沿用原版 Studio Display 与 Mac Studio 样机。机身图为原 PNG 的 WebP 副本（53,770 字节）；屏幕使用独立的 Build 13 工作台实机图（62,644 字节），两图共 116,414 字节。窗口贴在 2400 × 1610 底图的 `(622, 280, 1156, 753)`，随底图等比缩放；更换同宽高比截图时无需重做样机。底图 WebP 边缘是 `#f6f6f6`，与首屏背景同色。
+四张亮色图都取自本版 1320 × 860pt 的原生 macOS 窗口，使用隔离项目。工作台、进度、版本、体检的源图与 WebP 一一对应；体检使用较长的样例项目列表，未把本机监听进程拍进官网。下载仍指向 GitHub `releases/latest`。本地候选不改变公开官网或下载。
 
-下方三张仍是「进度」「版本」「体检」的原生截图，按需加载。所有原生截图来自独立 bundle、临时 home 和三个隔离项目，不发布用户的项目、日志或路径。
+用只含网页输入的独立目录执行 `npm ci` 和 `npm run build`；不要把 `output/`、`macos/` 或 Swift 缓存带进 Tailwind 的扫描范围。运行 `node script/export_landing.mjs <独立的官网候选目录>`，只导出 `landing.html` 和 9 个资源。此目录需要有官网的 `app/fizzdeck/route.ts`。发布后再验证公网实际返回的字节。
 
-- 中英文区分产品版本（v0.8.0 / Build 16）和截图来源（v0.7.5 / Build 13）。下载与发版记录分别指向 `releases/latest` 和 `releases`。等 GitHub 的公开下载切换到 Build 16 再部署对应官网文案。
-- `npm run build` 构建独立的 `public/landing.html`；线上站点入口为 `koroo.top/fizzdeck`。实际发布与 CDN 核验见根目录 `HANDOFF.md`。
+- Studio Display 机身 53,770 字节，工作台 WebP 61,152 字节；首屏共 **114,922 字节**，两张图各请求一次。窗口贴在原 2400 × 1610 样机的 `(622, 280, 1156, 753)`。其余三张按需加载。
+- Chrome 158 在 1440 × 900、390 × 844 的中英文四个组合下，按实际字形位置统计 hero、showcase、grid、shortcut、FAQ。**20 组主副句全部正好两行**，无裁切、横向溢出或控制台错误，灰色标题最低对比度 4.95:1。放大网页后允许自然换行。
+- 核对四张图实际传输字节与源文件 SHA-256、下载链接、切换语言后刷新、键盘跳到正文、FAQ 展开和无 JS 下载。真实项目数据、伴生 Web 工作台和 QA 素材不进官网导出包。
+
+本机[浏览器记录及八张截图](../../output/release-v0.9.0/REVIEW.md)、[窗口原图与 WebP 对照](../../output/release-v0.9.0/native/web-photos.json)。可运行 `bash output/release-v0.9.0/web-work/verify.sh` 在新的独立目录复验；该工作脚本及审阅资料由 Git 忽略。

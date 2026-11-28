@@ -81,9 +81,8 @@ struct CommandPaletteView: View {
         groups.flatMap(\.entries)
     }
 
-    private var selectedIndex: Int {
-        guard !entries.isEmpty else { return 0 }
-        return min(selection, entries.count - 1)
+    private func selectedIndex(in entries: [PaletteEntry]) -> Int {
+        max(0, min(selection, entries.count - 1))
     }
 
     private var quickActionEntries: [PaletteEntry] {
@@ -97,7 +96,7 @@ struct CommandPaletteView: View {
                 title: "复制接力卡",
                 subtitle: project.displayName,
                 symbol: "doc.on.clipboard",
-                tint: FizzTheme.accent,
+                tint: Color.secondary,
                 shortcut: nil,
                 keywords: "接力卡 handoff copy 交接 \(project.displayName)"
             ) {
@@ -106,7 +105,7 @@ struct CommandPaletteView: View {
                 ToastCenter.shared.show(
                     "接力卡已复制",
                     symbol: "doc.on.clipboard.fill",
-                    tint: FizzTheme.accent,
+                    tint: Color.secondary,
                     subtitle: "\(card.characterCount) 字"
                 )
             }
@@ -120,7 +119,7 @@ struct CommandPaletteView: View {
                     title: "接着做",
                     subtitle: "\(project.displayName) · \(HomeDashboardModel.toolTitle(resumable.tool))",
                     symbol: "play.fill",
-                    tint: .green,
+                    tint: .secondary,
                     shortcut: nil,
                     keywords: "接着做 继续 continue resume \(project.displayName)"
                 ) {
@@ -131,7 +130,7 @@ struct CommandPaletteView: View {
                             ToastCenter.shared.show(
                                 res.message,
                                 symbol: "exclamationmark.triangle.fill",
-                                tint: .orange,
+                                tint: FizzTheme.statusWarning,
                                 subtitle: res.fallbackCommand != nil ? "已复制命令到剪贴板" : nil
                             )
                         }
@@ -148,7 +147,7 @@ struct CommandPaletteView: View {
                     title: "看改了什么",
                     subtitle: project.displayName,
                     symbol: "doc.text.magnifyingglass",
-                    tint: .teal,
+                    tint: Color.secondary,
                     shortcut: nil,
                     keywords: "看改了什么 diff 还原 对比 标记 \(project.displayName)"
                 ) {
@@ -165,7 +164,7 @@ struct CommandPaletteView: View {
                     title: "存个版本",
                     subtitle: "\(project.displayName) · \(project.dirtyCount) 个未保存改动",
                     symbol: "bookmark.circle",
-                    tint: FizzTheme.accent,
+                    tint: Color.secondary,
                     shortcut: nil,
                     keywords: "存个版本 提交 commit save \(project.displayName)"
                 ) {
@@ -181,7 +180,7 @@ struct CommandPaletteView: View {
                 title: "在终端中打开",
                 subtitle: project.displayName,
                 symbol: "terminal",
-                tint: .green,
+                tint: .secondary,
                 shortcut: nil,
                 keywords: "终端 terminal iterm ghostty warp shell 命令行"
             ) {
@@ -196,7 +195,7 @@ struct CommandPaletteView: View {
                 title: "在 Finder 中显示",
                 subtitle: project.displayName,
                 symbol: "folder",
-                tint: .blue,
+                tint: Color.secondary,
                 shortcut: nil,
                 keywords: "目录 文件"
             ) {
@@ -212,7 +211,7 @@ struct CommandPaletteView: View {
                     title: "用 \(editor.title) 打开",
                     subtitle: project.displayName,
                     symbol: "chevron.left.forwardslash.chevron.right",
-                    tint: .indigo,
+                    tint: Color.secondary,
                     shortcut: nil,
                     keywords: "编辑器 IDE \(editor.title.lowercased())"
                 ) {
@@ -230,7 +229,7 @@ struct CommandPaletteView: View {
                     title: isRunning ? "停止开发服务…" : "启动开发服务",
                     subtitle: "\(project.displayName) · \(run.command)",
                     symbol: isRunning ? "stop.fill" : "play.fill",
-                    tint: isRunning ? .red : .green,
+                    tint: .secondary,
                     shortcut: nil,
                     keywords: "服务 端口 启动 停止 dev server"
                 ) {
@@ -253,7 +252,7 @@ struct CommandPaletteView: View {
                     title: "运行测试",
                     subtitle: project.displayName,
                     symbol: "checkmark.shield",
-                    tint: .teal,
+                    tint: Color.secondary,
                     shortcut: nil,
                     keywords: "test 检查 check"
                 ) {
@@ -274,7 +273,7 @@ struct CommandPaletteView: View {
                         title: "继续最近会话",
                         subtitle: "\(project.displayName) · \(toolLabel)",
                         symbol: "play.fill",
-                        tint: .purple,
+                        tint: Color.secondary,
                         shortcut: nil,
                         keywords: "继续 会话 resume codex claude"
                     ) {
@@ -292,7 +291,7 @@ struct CommandPaletteView: View {
                         title: "复制 AI 恢复命令",
                         subtitle: "\(project.displayName) · \(toolLabel)",
                         symbol: "doc.on.doc",
-                        tint: .purple,
+                        tint: Color.secondary,
                         shortcut: nil,
                         keywords: "复制 命令 会话 resume codex claude"
                     ) {
@@ -311,7 +310,7 @@ struct CommandPaletteView: View {
                         title: "在浏览器中打开远程仓库",
                         subtitle: remote.raw,
                         symbol: "arrow.up.right.square",
-                        tint: .blue,
+                        tint: Color.secondary,
                         shortcut: nil,
                         keywords: "远程 remote origin 仓库 browser \(url.absoluteString)"
                     ) {
@@ -327,7 +326,7 @@ struct CommandPaletteView: View {
                     title: "复制远程地址",
                     subtitle: remote.raw,
                     symbol: "link",
-                    tint: .teal,
+                    tint: Color.secondary,
                     shortcut: nil,
                     keywords: "远程 remote origin 地址 url"
                 ) {
@@ -384,7 +383,7 @@ struct CommandPaletteView: View {
                 title: "打开总览",
                 subtitle: "项目总览",
                 symbol: "square.grid.2x2",
-                tint: FizzTheme.accent,
+                tint: Color.secondary,
                 shortcut: "⌘0",
                 keywords: "首页 home dashboard",
                 pinned: true
@@ -397,7 +396,7 @@ struct CommandPaletteView: View {
                 title: "重新扫描项目",
                 subtitle: "更新 Git、体积和运行状态",
                 symbol: "arrow.clockwise",
-                tint: .blue,
+                tint: Color.secondary,
                 shortcut: "⌘R",
                 keywords: "刷新 refresh scan",
                 pinned: true
@@ -410,7 +409,7 @@ struct CommandPaletteView: View {
                 title: "打开对话",
                 subtitle: "跨项目 AI 对话时间线",
                 symbol: "bubble.left.and.bubble.right",
-                tint: FizzTheme.accent,
+                tint: Color.secondary,
                 shortcut: nil,
                 keywords: "对话 会话 conversations sessions"
             ) {
@@ -422,7 +421,7 @@ struct CommandPaletteView: View {
                 title: "管理项目文件夹",
                 subtitle: "查看文件夹或扫描新的父目录",
                 symbol: "plus",
-                tint: .green,
+                tint: .secondary,
                 shortcut: nil,
                 keywords: "新增 导入 folder 文件夹"
             ) {
@@ -441,7 +440,7 @@ struct CommandPaletteView: View {
                     title: starTitle,
                     subtitle: project.displayName,
                     symbol: project.starred ? "star.slash" : "star",
-                    tint: .yellow,
+                    tint: Color.secondary,
                     shortcut: nil,
                     keywords: "星标 收藏 关注 star focus"
                 ) {
@@ -460,7 +459,7 @@ struct CommandPaletteView: View {
                     title: "复制接力卡 · \(project.displayName)",
                     subtitle: PathTools.displayPath(project.path),
                     symbol: "doc.on.clipboard",
-                    tint: FizzTheme.accent,
+                    tint: Color.secondary,
                     shortcut: nil,
                     keywords: "接力卡 handoff copy \(project.displayName)"
                 ) {
@@ -469,7 +468,7 @@ struct CommandPaletteView: View {
                     ToastCenter.shared.show(
                         "接力卡已复制",
                         symbol: "doc.on.clipboard.fill",
-                        tint: FizzTheme.accent,
+                        tint: Color.secondary,
                         subtitle: "\(project.displayName) · \(card.characterCount) 字"
                     )
                 }
@@ -482,7 +481,7 @@ struct CommandPaletteView: View {
                         title: "接着做 · \(project.displayName)",
                         subtitle: HomeDashboardModel.toolTitle(resumable.tool),
                         symbol: "play.fill",
-                        tint: .green,
+                        tint: .secondary,
                         shortcut: nil,
                         keywords: "接着做 继续 continue resume \(project.displayName)"
                     ) {
@@ -493,7 +492,7 @@ struct CommandPaletteView: View {
                                 ToastCenter.shared.show(
                                     res.message,
                                     symbol: "exclamationmark.triangle.fill",
-                                    tint: .orange,
+                                    tint: FizzTheme.statusWarning,
                                     subtitle: res.fallbackCommand != nil ? "已复制命令到剪贴板" : nil
                                 )
                             }
@@ -517,6 +516,10 @@ struct CommandPaletteView: View {
     }
 
     var body: some View {
+        let groups = self.groups
+        let entries = groups.flatMap(\.entries)
+        let index = selectedIndex(in: entries)
+
         ZStack(alignment: .top) {
             Color.black.opacity(colorScheme == .dark ? 0.55 : 0.30)
                 .ignoresSafeArea()
@@ -531,13 +534,13 @@ struct CommandPaletteView: View {
                 if entries.isEmpty {
                     emptyState
                 } else {
-                    results
+                    results(entries, groupSizes: groups.map(\.entries.count))
                 }
 
                 Divider()
                     .opacity(0.45)
 
-                keyboardHints
+                footer(canExecute: entries.indices.contains(index) && entries[index].isEnabled)
             }
             .frame(width: 620)
             .background(
@@ -627,7 +630,7 @@ struct CommandPaletteView: View {
                 title: "「\(result.primaryIntent)」",
                 subtitle: subtitleParts.joined(separator: " · "),
                 symbol: result.endedWithError ? "exclamationmark.triangle" : "bubble.left.and.bubble.right",
-                tint: result.endedWithError ? .orange : FizzTheme.accent,
+                tint: result.endedWithError ? FizzTheme.statusWarning : Color.secondary,
                 shortcut: nil,
                 keywords: "\(result.projectName) \(result.primaryIntent) \(result.touchedFilesText)"
             ) {
@@ -637,42 +640,43 @@ struct CommandPaletteView: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 10) {
-            FizzIcon(symbol: "magnifyingglass", size: 15)
+        HStack(spacing: FizzSpacing.row) {
+            FizzIcon(.md, symbol: "magnifyingglass")
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             TextField("搜索项目、对话、分支或快捷操作", text: $query)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15))
+                .font(FizzTypography.sectionTitle(.regular))
                 .focused($searchFocused)
                 .onSubmit {
                     runSelected()
                 }
 
             if !query.isEmpty {
-                Button {
+                FizzIconButton(title: "清除搜索", symbol: "xmark.circle.fill", height: .compact) {
                     query = ""
-                } label: {
-                    FizzIcon(symbol: "xmark.circle.fill", size: 13)
-                        .foregroundStyle(.tertiary)
+                    searchFocused = true
                 }
-                .buttonStyle(.plain)
-                .help("清除搜索")
             }
 
             Text("⌘K")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .font(FizzTypography.monoSmall(.medium))
                 .foregroundStyle(.tertiary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
                 .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
+
+            FizzIconButton(title: "关闭命令面板", symbol: "xmark", height: .compact, action: dismiss)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, FizzSpacing.page)
         .frame(height: 52)
     }
 
-    private var results: some View {
-        ScrollViewReader { proxy in
+    private func results(_ entries: [PaletteEntry], groupSizes: [Int]) -> some View {
+        let selectedIndex = selectedIndex(in: entries)
+
+        return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
@@ -684,14 +688,14 @@ struct CommandPaletteView: View {
                             .id(entry.id)
                     }
                 }
-                .padding(.horizontal, 7)
-                .padding(.vertical, 6)
+                .padding(.horizontal, FizzSpacing.row)
+                .padding(.vertical, CommandPaletteLayout.contentPadding / 2)
                 .animation(
                     FizzMotion.resolved(reduceMotion, FizzMotion.quick),
                     value: selectedIndex
                 )
             }
-            .frame(height: resultsHeight)
+            .frame(height: CommandPaletteLayout.resultsHeight(groupSizes: groupSizes))
             .onChange(of: selectedIndex) {
                 guard entries.indices.contains(selectedIndex) else { return }
                 withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
@@ -702,43 +706,44 @@ struct CommandPaletteView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 7) {
-            FizzIcon(symbol: "magnifyingglass", size: 20)
+        VStack(spacing: FizzSpacing.row) {
+            FizzIcon(.lg, symbol: "magnifyingglass")
                 .foregroundStyle(.tertiary)
             Text("没有匹配结果")
-                .font(.system(size: 12.5, weight: .medium))
+                .font(FizzTypography.body(.medium))
             Text("试试项目名、路径、分支、远程或动作")
-                .font(.system(size: 11))
+                .font(FizzTypography.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 160)
     }
 
-    private var resultsHeight: CGFloat {
-        CommandPaletteLayout.resultsHeight(groupSizes: groups.map(\.entries.count))
-    }
-
-    private var keyboardHints: some View {
-        HStack(spacing: 12) {
-            hint("↑↓", "选择")
-            hint("↵", "打开")
-            hint("esc", "关闭")
+    private func footer(canExecute: Bool) -> some View {
+        FizzSheetFooter {
+            HStack(spacing: FizzSpacing.grid) {
+                hint("↑↓", "选择")
+                hint("↵", "执行")
+                hint("esc", "关闭")
+            }
             Spacer(minLength: 0)
+
+            FizzActionButton(title: "执行所选", prominence: .primary, action: runSelected)
+                .disabled(!canExecute)
         }
-        .padding(.horizontal, 15)
-        .frame(height: 36)
+        .padding(.horizontal, FizzSpacing.page)
+        .padding(.vertical, FizzSpacing.row)
     }
 
     private func hint(_ key: String, _ title: String) -> some View {
         HStack(spacing: 4) {
             Text(key)
-                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                .font(FizzTypography.monoSmall(.medium))
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
                 .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
             Text(title)
-                .font(.system(size: 10))
+                .font(FizzTypography.micro)
                 .foregroundStyle(.secondary)
         }
     }
@@ -746,12 +751,13 @@ struct CommandPaletteView: View {
     private func sectionHeader(_ title: String) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 10, weight: .semibold))
+                .font(FizzTypography.micro)
                 .foregroundStyle(.tertiary)
                 .frame(height: CommandPaletteLayout.sectionTextHeight, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, FizzSpacing.row)
         .padding(.top, CommandPaletteLayout.sectionTopPadding)
         .padding(.bottom, CommandPaletteLayout.sectionBottomPadding)
     }
@@ -761,48 +767,50 @@ struct CommandPaletteView: View {
             selection = entries.firstIndex(where: { $0.id == entry.id }) ?? selection
             execute(entry)
         } label: {
-            HStack(spacing: 10) {
-                FizzIcon(symbol: entry.symbol, size: 14)
+            HStack(spacing: FizzSpacing.row) {
+                FizzIcon(.md, symbol: entry.symbol)
                     .foregroundStyle(entry.tint)
-                    .frame(width: 24, height: 28)
+                    .frame(width: FizzControlHeight.compact.rawValue, height: FizzControlHeight.standard.rawValue)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.title)
-                        .font(.system(size: 12.5, weight: selected ? .semibold : .medium))
+                        .font(FizzTypography.body(selected ? .semibold : .medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     if let subtitle = entry.subtitle {
                         Text(subtitle)
-                            .font(.system(size: 10.5))
+                            .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
                 }
 
-                Spacer(minLength: 8)
+                Spacer(minLength: FizzSpacing.row)
 
                 if let shortcut = entry.shortcut {
                     Text(shortcut)
-                        .font(.system(size: 9.5, design: .monospaced))
+                        .font(FizzTypography.monoSmall)
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
                 }
             }
-            .padding(.horizontal, 9)
+            .padding(.horizontal, FizzSpacing.row)
             .frame(height: CommandPaletteLayout.rowHeight)
             .background {
                 if selected {
                     RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                        .fill(FizzTheme.accent.opacity(0.09))
+                        .fill(FizzTheme.selectedFill)
                         .matchedGeometryEffect(id: "palette-selection", in: selectionNamespace)
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .disabled(!entry.isEnabled)
         .opacity(entry.isEnabled ? 1 : 0.55)
     }
@@ -862,8 +870,9 @@ struct CommandPaletteView: View {
     }
 
     private func moveSelection(_ delta: Int) {
+        let entries = self.entries
         guard !entries.isEmpty else { return }
-        var index = selectedIndex
+        var index = selectedIndex(in: entries)
         for _ in entries.indices {
             index = (index + delta + entries.count) % entries.count
             if entries[index].isEnabled {
@@ -874,8 +883,10 @@ struct CommandPaletteView: View {
     }
 
     private func runSelected() {
-        guard entries.indices.contains(selectedIndex), entries[selectedIndex].isEnabled else { return }
-        execute(entries[selectedIndex])
+        let entries = self.entries
+        let index = selectedIndex(in: entries)
+        guard entries.indices.contains(index) else { return }
+        execute(entries[index])
     }
 
     private var hasMarkedText: Bool {

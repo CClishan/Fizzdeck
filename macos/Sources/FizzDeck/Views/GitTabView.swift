@@ -10,7 +10,8 @@ struct GitTabView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     @State private var changes: [GitChange] = []
-    @State private var worktrees: [GitWorktree] = []
+    @State private var worktreeRefresh = 0
+    @State private var worktreeWriteInProgress = false
     @State private var showAdvancedGit = false
     @State private var loadingWorkspace = false
     @State private var expandedPaths: Set<String> = []
@@ -36,8 +37,12 @@ struct GitTabView: View {
         URL(fileURLWithPath: project.path)
     }
 
-    private var isBusy: Bool {
+    private var isGitWriteInProgress: Bool {
         runningAction != nil || busyOperation != nil
+    }
+
+    private var isBusy: Bool {
+        isGitWriteInProgress || worktreeWriteInProgress
     }
 
     private var stagedCount: Int {
@@ -55,51 +60,37 @@ struct GitTabView: View {
     var body: some View {
         if loading {
             ProgressView("读取 Git 信息…")
+                .font(FizzTypography.body)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let git = detail.git {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: FizzSpacing.section) {
                     statusPanel(git)
                     if copyMode == .plain && showInlineSaveVersion {
                         inlineSaveVersionCard(git)
                     }
                     commitPanel
+                    GitWorktreePanel(
+                        directory: directory,
+                        gitRefresh: worktreeRefresh,
+                        gitIsBusy: isGitWriteInProgress,
+                        isWriting: $worktreeWriteInProgress,
+                        onGitChanged: refreshAfterWorktreeWrite
+                    )
                     filesPanel(git)
                     if copyMode == .pro {
                         branchesPanel(git)
-                        worktreesPanel
                     } else {
-                        DisclosureGroup("进阶选项（分支、工作树、暂存）", isExpanded: $showAdvancedGit) {
-                            VStack(alignment: .leading, spacing: 14) {
-                                HStack(spacing: 8) {
-                                    Button(FizzCopy.stashAction(.plain).text) {
-                                        performFileWrite("暂存当前改动") {
-                                            await GitService.stashPush(in: directory)
-                                        }
-                                    }
-                                    .buttonStyle(.glass)
-                                    .controlSize(.small)
-                                    .disabled(isBusy || !hasDirtyChanges)
-                                    .help(FizzCopy.stashAction(.plain).proHint ?? "")
-
-                                    Button("取回之前收起的改动") {
-                                        confirmation = .stashRestore
-                                    }
-                                    .buttonStyle(.glass)
-                                    .controlSize(.small)
-                                    .disabled(isBusy || git.stashCount == 0)
-                                }
-                                branchesPanel(git)
-                                worktreesPanel
-                            }
-                            .padding(.top, 10)
+                        DisclosureGroup("进阶选项（分支）", isExpanded: $showAdvancedGit) {
+                            branchesPanel(git)
+                                .padding(.top, FizzSpacing.grid)
                         }
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(FizzTypography.body(.medium))
                         .foregroundStyle(.secondary)
                     }
                     commitsPanel
                 }
-                .padding(24)
+                .padding(FizzSpacing.page)
             }
             .fizzTracksScrollPastTop()
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -125,15 +116,21 @@ struct GitTabView: View {
                 }
             }
         } else if GitService.hasGit(directory) {
-            ProgressView("读取版本记录…").task { await onSyncCompleted() }
+            ProgressView("读取版本记录…")
+                .font(FizzTypography.body)
+                .task { await onSyncCompleted() }
         } else {
-            ContentUnavailableView {
-                Label("还没有开启版本保护", systemImage: "arrow.triangle.branch")
-            } description: {
-                Text("开启后可从第一条基线查看变化或还原文件。")
-            } actions: {
-                EnableVersionProtectionButton(project: project).buttonStyle(.glassProminent)
+            ScrollView {
+                Panel(title: "还没有开启版本保护", symbol: "arrow.triangle.branch") {
+                    Text("开启后可从第一条基线查看变化或还原文件。")
+                        .font(FizzTypography.body)
+                        .foregroundStyle(.secondary)
+                } accessory: {
+                    EnableVersionProtectionButton(project: project, prominence: .primary)
+                }
+                .padding(FizzSpacing.page)
             }
+            .fizzTracksScrollPastTop()
         }
     }
 
@@ -151,37 +148,21 @@ struct GitTabView: View {
             symbol: "point.3.connected.trianglepath.dotted",
             content: {
                 if copyMode == .plain {
-                    HStack(spacing: 10) {
-                        Text(statusSentence)
-                            .font(.system(size: 13.5, weight: .medium))
-                            .foregroundStyle(hasDirtyChanges ? .primary : .secondary)
-                            .help("分支：\(project.branch ?? "—") · ↑\(git.ahead) ↓\(git.behind)")
-                        Spacer(minLength: 8)
-                        if hasDirtyChanges {
-                            Button(showInlineSaveVersion ? "收起" : "存个版本") {
-                                if showInlineSaveVersion {
-                                    showInlineSaveVersion = false
-                                } else {
-                                    openInlineSaveVersion()
-                                }
-                            }
-                            .buttonStyle(.glassProminent)
-                            .tint(FizzTheme.accent)
-                            .controlSize(.small)
-                            .disabled(isBusy)
-                        }
-                    }
+                    Text(statusSentence)
+                        .font(FizzTypography.body(.medium))
+                        .foregroundStyle(hasDirtyChanges ? .primary : .secondary)
+                        .help("分支：\(project.branch ?? "—") · ↑\(git.ahead) ↓\(git.behind)")
                 } else {
                     LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 240), spacing: 20)],
+                        columns: [GridItem(.adaptive(minimum: 240), spacing: FizzSpacing.section)],
                         alignment: .leading,
-                        spacing: 8
+                        spacing: FizzSpacing.row
                     ) {
                         KeyValueRow(key: "当前分支", value: project.branch ?? "—", mono: true)
                         KeyValueRow(
                             key: "未提交",
                             value: "\(changeCount) 个改动",
-                            tint: hasDirtyChanges ? .orange : .secondary
+                            tint: hasDirtyChanges ? FizzTheme.statusWarning : .secondary
                         )
                         KeyValueRow(key: "领先 / 落后", value: "↑ \(git.ahead)  ↓ \(git.behind)", mono: true)
                         KeyValueRow(key: "Stash", value: "\(git.stashCount)")
@@ -196,64 +177,63 @@ struct GitTabView: View {
                 }
             },
             accessory: {
-                syncControls
+                HStack(spacing: FizzSpacing.row) {
+                    if let runningAction {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .accessibilityLabel("\(runningAction.title)进行中")
+                    }
+
+                    syncMenu
+
+                    if copyMode == .plain, hasDirtyChanges {
+                        if showInlineSaveVersion {
+                            FizzActionButton(title: "收起", height: .compact) {
+                                showInlineSaveVersion = false
+                            }
+                            .disabled(isBusy)
+                        } else {
+                            FizzActionButton(title: "存个版本", height: .compact, prominence: .primary) {
+                                openInlineSaveVersion()
+                            }
+                            .disabled(isBusy)
+                        }
+                    }
+                }
             }
         )
     }
 
-    private var syncControls: some View {
-        GlassEffectContainer(spacing: 2) {
-            HStack(spacing: 1) {
-                ForEach(GitSyncAction.allCases) { action in
-                    Button {
-                        confirmation = .sync(action)
-                    } label: {
-                        Group {
-                            if runningAction == action {
-                                ProgressView()
-                                    .controlSize(.mini)
-                            } else {
-                                FizzIcon(symbol: symbol(for: action), size: 11)
-                                    .foregroundStyle(tint(for: action))
-                            }
-                        }
-                        .frame(width: 28, height: 26)
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isBusy || loading)
-                    .help(syncTooltip(for: action))
-                    .accessibilityLabel(syncTooltip(for: action))
+    private var syncMenu: some View {
+        FizzMenuButton(title: "同步远程仓库") {
+            ForEach(GitSyncAction.allCases) { action in
+                Button(syncMenuTitle(for: action), systemImage: symbol(for: action)) {
+                    confirmation = .sync(action)
                 }
             }
-            .padding(3)
-            .glassEffect(.regular.interactive(), in: Capsule())
         }
-        .fizzAdaptiveShadow(.subtle)
+        .disabled(isBusy || loading)
     }
 
     private func feedbackLine(_ feedback: GitSyncFeedback) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            FizzIcon(
-                symbol: feedback.failed ? "exclamationmark.circle.fill" : "checkmark.circle.fill",
-                size: 12
-            )
-            .foregroundStyle(feedback.failed ? Color.red : Color.green)
+            FizzIcon(.sm, symbol: feedback.failed ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+            .foregroundStyle(.secondary)
             Text(feedback.message)
-                .font(.caption)
-                .foregroundStyle(feedback.failed ? Color.red : Color.secondary)
+                .font(FizzTypography.caption)
+                .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             Text(Format.relative(feedback.date))
-                .font(.caption2)
+                .font(FizzTypography.micro)
                 .foregroundStyle(.tertiary)
         }
     }
 
     private func feedbackBanner(_ feedback: GitSyncFeedback) -> some View {
         feedbackLine(feedback)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 8)
+            .padding(.horizontal, FizzSpacing.page)
+            .padding(.vertical, FizzSpacing.row)
             .background(FizzTheme.elevatedFill)
             .overlay(alignment: .bottom) {
                 Rectangle()
@@ -263,37 +243,27 @@ struct GitTabView: View {
     }
 
     private func remoteRow(_ remote: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
+        HStack(spacing: FizzSpacing.row) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("远程")
-                    .font(.caption)
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
-                Spacer(minLength: 8)
-                if let parsed = GitRemote(raw: remote), let url = parsed.webURL {
-                    Button {
-                        SystemActions.openURL(url.absoluteString)
-                    } label: {
-                        FizzIcon(symbol: "arrow.up.right.square", size: 11)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("在浏览器中打开远程仓库")
-                    .accessibilityLabel("在浏览器中打开远程仓库")
-                }
-                Button {
-                    SystemActions.copy(remote)
-                } label: {
-                    FizzIcon(symbol: "doc.on.doc", size: 11)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("复制远程地址")
-                .accessibilityLabel("复制远程地址")
+                Text(verbatim: remote)
+                    .font(FizzTypography.mono)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
             }
-            Text(verbatim: remote)
-                .font(.system(size: 11, design: .monospaced))
-                .textSelection(.enabled)
-                .lineLimit(2)
+
+            Spacer(minLength: 8)
+
+            FizzIconButton(title: "复制远程地址", symbol: "doc.on.doc", height: .compact) {
+                SystemActions.copy(remote)
+            }
+            if let parsed = GitRemote(raw: remote), let url = parsed.webURL {
+                FizzIconButton(title: "在浏览器中打开远程仓库", symbol: "arrow.up.right.square", height: .compact) {
+                    SystemActions.openURL(url.absoluteString)
+                }
+            }
         }
     }
 
@@ -302,59 +272,54 @@ struct GitTabView: View {
         let commitPushCopy = FizzCopy.commitAndPushAction(copyMode)
 
         return Panel(title: commitCopy.text, symbol: "arrow.up.circle") {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 8) {
-                    TextField(copyMode == .plain ? "写一句这次改了什么" : "一行提交信息", text: $commitMessage)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .padding(.horizontal, 10)
-                        .frame(height: 30)
-                        .background(
-                            FizzTheme.recessedFill,
-                            in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                                .strokeBorder(FizzTheme.hairline, lineWidth: 1)
-                        }
-                        .onSubmit {
-                            performCommit(push: false)
-                        }
-                        .disabled(isBusy)
-
-                    Button(commitCopy.text) {
+            VStack(alignment: .leading, spacing: FizzSpacing.row) {
+                TextField(copyMode == .plain ? "写一句这次改了什么" : "一行提交信息", text: $commitMessage)
+                    .textFieldStyle(.plain)
+                    .font(FizzTypography.body)
+                    .padding(.horizontal, 10)
+                    .frame(height: FizzControlHeight.standard.rawValue)
+                    .background(
+                        FizzTheme.recessedFill,
+                        in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
+                            .strokeBorder(FizzTheme.hairline, lineWidth: 1)
+                    }
+                    .onSubmit {
                         performCommit(push: false)
                     }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
-                    .disabled(!canCommit)
-                    .help(commitCopy.proHint ?? "提交已暂存改动")
-
-                    Button(commitPushCopy.text) {
-                        performCommit(push: true)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(FizzTheme.accent)
-                    .controlSize(.small)
-                    .disabled(!canCommit)
-                    .help(commitPushCopy.proHint ?? "提交已暂存改动并推送当前分支")
-                }
+                    .disabled(isBusy)
 
                 HStack(spacing: 6) {
                     Text(stagedCount > 0
                         ? (copyMode == .plain ? "已选中 \(stagedCount) 个要存的文件" : "已暂存 \(stagedCount) 个文件")
-                        : (copyMode == .plain ? "先点下方文件旁的 + 选中要存的改动" : "先暂存文件再提交"))
-                        .font(.caption)
+                        : (copyMode == .plain ? "先点下方文件旁的「暂存」选中要存的改动" : "先暂存文件再提交"))
+                        .font(FizzTypography.caption)
                         .foregroundStyle(stagedCount > 0 ? .secondary : .tertiary)
                     Spacer(minLength: 8)
                     if let busyOperation {
                         ProgressView()
                             .controlSize(.mini)
                         Text(busyOperation)
-                            .font(.caption2)
+                            .font(FizzTypography.micro)
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+        } accessory: {
+            HStack(spacing: FizzSpacing.row) {
+                FizzActionButton(title: commitCopy.text, height: .compact) {
+                    performCommit(push: false)
+                }
+                .disabled(!canCommit)
+                .help(commitCopy.proHint ?? "提交已暂存改动")
+
+                FizzActionButton(title: commitPushCopy.text, height: .compact, prominence: .primary) {
+                    performCommit(push: true)
+                }
+                .disabled(!canCommit)
+                .help(commitPushCopy.proHint ?? "提交已暂存改动并推送当前分支")
             }
         }
     }
@@ -365,7 +330,7 @@ struct GitTabView: View {
             && !isBusy
     }
 
-    private func syncTooltip(for action: GitSyncAction) -> String {
+    private func syncMenuTitle(for action: GitSyncAction) -> String {
         guard copyMode == .plain else { return action.title }
         switch action {
         case .fetch: return "检查云端有没有更新"
@@ -406,74 +371,45 @@ struct GitTabView: View {
     }
 
     private func fileActions(_ git: GitDetail) -> some View {
-        GlassEffectContainer(spacing: 2) {
-            HStack(spacing: 1) {
-                actionIcon(
-                    "全部暂存",
-                    symbol: "plus",
-                    disabled: isBusy || changes.allSatisfy { !$0.hasUnstagedChanges }
-                ) {
-                    performFileWrite("暂存全部改动") {
-                        await GitService.stageAll(in: directory)
-                    }
+        HStack(spacing: FizzSpacing.row) {
+            FizzIconButton(title: "全部暂存", symbol: "plus", height: .compact) {
+                performFileWrite("暂存全部改动") {
+                    await GitService.stageAll(in: directory)
                 }
+            }
+            .disabled(isBusy || changes.allSatisfy { !$0.hasUnstagedChanges })
 
-                actionIcon(
-                    "全部取消暂存",
-                    symbol: "minus",
-                    disabled: isBusy || stagedCount == 0
-                ) {
+            FizzMenuButton(title: "更多文件操作") {
+                Button("全部取消暂存", systemImage: "minus") {
                     performFileWrite("取消全部暂存") {
                         await GitService.unstageAll(in: directory)
                     }
                 }
+                .disabled(stagedCount == 0)
 
-                if copyMode == .pro {
-                    Divider()
-                        .frame(height: 16)
-                        .padding(.horizontal, 2)
+                Divider()
 
-                    actionIcon(
-                        "暂存当前改动",
-                        symbol: "archivebox",
-                        disabled: isBusy || !hasDirtyChanges
-                    ) {
-                        performFileWrite("暂存当前改动") {
-                            await GitService.stashPush(in: directory)
-                        }
-                    }
-
-                    actionIcon(
-                        "恢复最近一次 Stash",
-                        symbol: "arrow.uturn.backward",
-                        disabled: isBusy || git.stashCount == 0
-                    ) {
-                        confirmation = .stashRestore
+                Button(
+                    copyMode == .plain ? FizzCopy.stashAction(.plain).text : "暂存当前改动",
+                    systemImage: "archivebox"
+                ) {
+                    performFileWrite("暂存当前改动") {
+                        await GitService.stashPush(in: directory)
                     }
                 }
-            }
-            .padding(3)
-            .glassEffect(.regular.interactive(), in: Capsule())
-        }
-        .fizzAdaptiveShadow(.subtle)
-    }
+                .disabled(!hasDirtyChanges)
+                .help(FizzCopy.stashAction(copyMode).proHint ?? "")
 
-    private func actionIcon(
-        _ title: String,
-        symbol: String,
-        disabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            FizzIcon(symbol: symbol, size: 10)
-                .foregroundStyle(disabled ? Color.secondary.opacity(0.45) : Color.secondary)
-                .frame(width: 25, height: 22)
-                .contentShape(Capsule())
+                Button(
+                    copyMode == .plain ? "取回之前收起的改动" : "恢复最近一次 Stash",
+                    systemImage: "arrow.uturn.backward"
+                ) {
+                    confirmation = .stashRestore
+                }
+                .disabled(git.stashCount == 0)
+            }
+            .disabled(isBusy)
         }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .help(title)
-        .accessibilityLabel(title)
     }
 
     @ViewBuilder
@@ -486,7 +422,7 @@ struct GitTabView: View {
             } label: {
                 HStack(spacing: 9) {
                     Text(change.displayCode)
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(FizzTypography.monoSmall(.bold))
                         .foregroundStyle(codeColor(change))
                         .frame(width: 24)
                         .padding(.vertical, 2)
@@ -497,32 +433,29 @@ struct GitTabView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(change.path)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(FizzTypography.mono)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         HStack(spacing: 5) {
                             if change.hasStagedChanges {
                                 Text("已暂存")
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(.secondary)
                             }
                             if change.hasUnstagedChanges {
                                 Text("未暂存")
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(.secondary)
                             }
                             if let original = change.originalPath {
                                 Text("← \(original)")
                                     .foregroundStyle(.tertiary)
                             }
                         }
-                        .font(.system(size: 9.5))
+                        .font(FizzTypography.micro)
                     }
 
                     Spacer(minLength: 0)
 
-                    FizzIcon(
-                        symbol: "chevron.right",
-                        size: 8
-                    )
+                    FizzIcon(.xs, symbol: "chevron.right")
                     .foregroundStyle(.tertiary)
                     .rotationEffect(.degrees(expandedPaths.contains(change.path) ? 90 : 0))
                 }
@@ -541,17 +474,17 @@ struct GitTabView: View {
             .accessibilityValue(expandedPaths.contains(change.path) ? "已展开" : "已收起")
             .accessibilityHint(expandedPaths.contains(change.path) ? "收起 Diff" : "展开 Diff")
 
-            if change.hasUnstagedChanges {
-                compactButton("暂存", help: "暂存 \(change.path)") {
-                    performFileWrite("暂存 \(change.path)") {
-                        await GitService.stage([change.path], in: directory)
-                    }
-                }
-            }
             if change.hasStagedChanges {
                 compactButton("取消暂存", help: "取消暂存 \(change.path)") {
                     performFileWrite("取消暂存 \(change.path)") {
                         await GitService.unstage([change.path], in: directory)
+                    }
+                }
+            }
+            if change.hasUnstagedChanges {
+                compactButton("暂存", help: "暂存 \(change.path)") {
+                    performFileWrite("暂存 \(change.path)") {
+                        await GitService.stage([change.path], in: directory)
                     }
                 }
             }
@@ -572,9 +505,7 @@ struct GitTabView: View {
         help: String,
         action: @escaping () -> Void
     ) -> some View {
-        Button(title, action: action)
-            .buttonStyle(.glass)
-            .controlSize(.mini)
+        FizzActionButton(title: title, height: .compact, action: action)
             .focusable(interactions: .edit)
             .onKeyPress(keys: [.space, .return], phases: .down) { key in
                 guard !isBusy, key.modifiers.intersection([.command, .option, .control, .shift]).isEmpty else { return .ignored }
@@ -593,7 +524,7 @@ struct GitTabView: View {
                 ProgressView()
                     .controlSize(.mini)
                 Text("读取 Diff…")
-                    .font(.caption)
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
             .padding(.vertical, 8)
@@ -601,24 +532,22 @@ struct GitTabView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     if diff.additions > 0 {
-                        Text("+\(diff.additions)")
-                            .foregroundStyle(.green)
+                        TagChip(text: "+\(diff.additions)", tint: FizzTheme.statusSuccess, compact: true)
                     }
                     if diff.deletions > 0 {
-                        Text("-\(diff.deletions)")
-                            .foregroundStyle(.red)
+                        TagChip(text: "-\(diff.deletions)", tint: FizzTheme.statusDanger, compact: true)
                     }
                     if diff.truncated {
                         Text("已截断")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                 }
-                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                .font(FizzTypography.monoSmall(.semibold))
 
                 if let note = diff.note {
                     Text(note)
-                        .font(.caption)
+                        .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -643,7 +572,7 @@ struct GitTabView: View {
             }
         } else {
             Text("没有可显示的 Diff")
-                .font(.caption)
+                .font(FizzTypography.caption)
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 8)
         }
@@ -652,7 +581,7 @@ struct GitTabView: View {
     private func diffSection(_ section: GitDiffSection) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(section.title)
-                .font(.system(size: 9.5, weight: .semibold))
+                .font(FizzTypography.micro(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -660,47 +589,8 @@ struct GitTabView: View {
                 .background(FizzTheme.elevatedFill.opacity(0.6))
 
             ForEach(section.lines) { line in
-                diffLine(line)
+                GitDiffLineRow(line: line)
             }
-        }
-    }
-
-    private func diffLine(_ line: GitDiffLine) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Text(line.oldLine.map(String.init) ?? "")
-                .frame(width: 30, alignment: .trailing)
-                .foregroundStyle(.tertiary)
-            Text(line.newLine.map(String.init) ?? "")
-                .frame(width: 30, alignment: .trailing)
-                .foregroundStyle(.tertiary)
-            Text(line.text.isEmpty ? " " : line.text)
-                .foregroundStyle(foreground(for: line.kind))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .font(.system(size: 10, design: .monospaced))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 1)
-        .background(background(for: line.kind))
-    }
-
-    private func background(for kind: GitDiffLineKind) -> Color {
-        switch kind {
-        case .addition: .green.opacity(0.11)
-        case .deletion: .red.opacity(0.11)
-        case .hunk: .blue.opacity(0.08)
-        default: .clear
-        }
-    }
-
-    private func foreground(for kind: GitDiffLineKind) -> Color {
-        switch kind {
-        case .addition: .green
-        case .deletion: .red
-        case .hunk: .blue
-        case .meta: .secondary
-        case .header: .secondary
-        case .context: .primary
         }
     }
 
@@ -709,19 +599,16 @@ struct GitTabView: View {
             VStack(spacing: 0) {
                 ForEach(Array(git.branches.prefix(30))) { branch in
                     HStack(spacing: 8) {
-                        FizzIcon(
-                            symbol: branch.name == project.branch ? "checkmark.circle.fill" : "circle",
-                            size: 10
-                        )
-                        .foregroundStyle(branch.name == project.branch ? .green : .secondary)
+                        FizzIcon(.xs, symbol: branch.name == project.branch ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(.secondary)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(branch.name)
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(FizzTypography.mono)
                                 .lineLimit(1)
                             if let upstream = branch.upstream {
                                 Text(upstream)
-                                    .font(.caption2)
+                                    .font(FizzTypography.micro)
                                     .foregroundStyle(.tertiary)
                                     .lineLimit(1)
                             }
@@ -746,92 +633,6 @@ struct GitTabView: View {
         }
     }
 
-    private var worktreesPanel: some View {
-        Panel(title: "关联 Worktree", symbol: "rectangle.stack") {
-            if worktrees.isEmpty {
-                Text("没有读取到 Worktree 信息")
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(worktrees) { worktree in
-                        HStack(spacing: 8) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                HStack(spacing: 6) {
-                                    Text(worktree.displayName)
-                                        .font(.system(size: 12, weight: .medium))
-                                    if worktree.isMain {
-                                        badge("主仓")
-                                    }
-                                    if worktree.isDetached {
-                                        badge("detached")
-                                    }
-                                    if worktree.isLocked {
-                                        badge("locked")
-                                    }
-                                    if worktree.isPrunable {
-                                        badge("可清理")
-                                    }
-                                }
-                                Text(verbatim: PathTools.displayPath(worktree.path))
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                Text(worktree.branch ?? worktree.head ?? "—")
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundStyle(.tertiary)
-                                    .lineLimit(1)
-                            }
-
-                            Spacer(minLength: 8)
-
-                            worktreeButton("在 Finder 显示", symbol: "folder") {
-                                SystemActions.reveal(worktree.path)
-                            }
-                            worktreeButton("在终端打开", symbol: "terminal") {
-                                SystemActions.openTerminal(worktree.path)
-                            }
-                            worktreeButton("打开目录", symbol: "arrow.up.forward.app") {
-                                SystemActions.open(worktree.path)
-                            }
-                        }
-                        .padding(.vertical, 7)
-
-                        if worktree.id != worktrees.last?.id {
-                            Divider()
-                                .opacity(0.25)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func badge(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 9, weight: .medium))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(FizzTheme.recessedFill, in: Capsule())
-    }
-
-    private func worktreeButton(
-        _ title: String,
-        symbol: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            FizzIcon(symbol: symbol, size: 10)
-                .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(title)
-        .accessibilityLabel(title)
-    }
-
     private var mixedTimelineEntries: [VersionTimelineEntry] {
         var entries: [VersionTimelineEntry] = detail.commits.map { .commit($0) }
         entries.append(contentsOf: store.marks(for: project.path).map { .mark($0) })
@@ -853,16 +654,16 @@ struct GitTabView: View {
                         switch entry {
                         case .commit(let commit):
                             HStack(alignment: .top, spacing: 10) {
-                                FizzIcon(symbol: "circle.fill", size: 8)
-                                    .foregroundStyle(FizzTheme.accent)
+                                FizzIcon(.xs, symbol: "circle.fill")
+                                    .foregroundStyle(Color.secondary)
                                     .padding(.top, 4)
                                 Text(commit.hash)
-                                    .font(.system(size: 10, design: .monospaced))
+                                    .font(FizzTypography.monoSmall)
                                     .foregroundStyle(.secondary)
                                     .frame(width: 54, alignment: .leading)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(commit.subject)
-                                        .font(.callout)
+                                        .font(FizzTypography.body)
                                         .lineLimit(2)
                                     HStack(spacing: 6) {
                                         if copyMode == .plain {
@@ -872,7 +673,7 @@ struct GitTabView: View {
                                         Text("·")
                                         Text(Format.relative(commit.date))
                                     }
-                                    .font(.caption2)
+                                    .font(FizzTypography.micro)
                                     .foregroundStyle(.secondary)
                                 }
                                 Spacer(minLength: 0)
@@ -880,61 +681,53 @@ struct GitTabView: View {
                             .padding(.vertical, 7)
 
                         case .mark(let mark):
-                            HStack(alignment: .top, spacing: 10) {
-                                FizzIcon(
-                                    symbol: mark.kind == .gitSnapshot ? "diamond.fill" : "diamond",
-                                    size: 9
-                                )
-                                .foregroundStyle(mark.kind == .gitSnapshot ? .teal : .secondary)
-                                .padding(.top, 4)
+                            HStack(spacing: FizzSpacing.row) {
+                                FizzIcon(.xs, symbol: mark.kind == .gitSnapshot ? "diamond.fill" : "diamond")
+                                .foregroundStyle(mark.kind == .gitSnapshot ? Color.secondary : .secondary)
 
                                 Text(mark.isProtectionBaseline ? "基线" : "AI 标记")
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundStyle(.teal)
+                                    .font(FizzTypography.monoSmall)
+                                    .foregroundStyle(Color.secondary)
                                     .frame(width: 54, alignment: .leading)
 
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(mark.label ?? "对话开始前的样子")
-                                        .font(.callout)
+                                        .font(FizzTypography.body)
                                     HStack(spacing: 6) {
                                         TagChip(
                                             text: mark.kind == .gitSnapshot ? "可还原标记" : "纯记录",
-                                            tint: mark.kind == .gitSnapshot ? .teal : .secondary,
+                                            tint: mark.kind == .gitSnapshot ? Color.secondary : .secondary,
                                             compact: true
                                         )
                                         if mark.pinned {
-                                            TagChip(text: "⭐ 已保留", tint: .orange, compact: true)
+                                            TagChip(text: "⭐ 已保留", compact: true)
                                         }
                                         Text(Format.relative(mark.createdAt))
                                             .foregroundStyle(.secondary)
                                     }
-                                    .font(.caption2)
+                                    .font(FizzTypography.micro)
                                 }
 
                                 Spacer(minLength: 8)
 
                                 if mark.kind == .gitSnapshot {
-                                    Button(mark.pinned ? "取消固定" : "固定保留") {
+                                    FizzActionButton(title: mark.pinned ? "取消固定" : "固定保留", height: .compact) {
                                         Task {
                                             let success = await store.togglePin(mark: mark)
                                             if !success {
                                                 ToastCenter.shared.show(
                                                     "暂时没能更新固定状态",
                                                     symbol: "exclamationmark.triangle.fill",
-                                                    tint: .orange
+                                                    tint: FizzTheme.statusWarning
                                                 )
                                             }
                                         }
                                     }
-                                    .buttonStyle(.glass)
-                                    .controlSize(.small)
                                     .help(mark.pinned ? "取消永久保留" : "永久保留，不会被 Git 清理")
 
-                                    Button("看变化") {
+                                    FizzActionButton(title: "看变化", height: .compact) {
                                         markDiffTarget = mark
                                     }
-                                    .buttonStyle(.glass)
-                                    .controlSize(.small)
                                 }
                             }
                             .padding(.vertical, 7)
@@ -955,8 +748,8 @@ struct GitTabView: View {
         let shouldBlockPush = saveVersionAlsoPush && hasSecretRisk
 
         return Panel(title: "存个版本", symbol: "bookmark.circle.fill") {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: FizzSpacing.grid) {
+                HStack(spacing: FizzSpacing.row) {
                     TextField("写一句这次改了什么", text: Binding(
                         get: { saveVersionMessage },
                         set: { newValue in
@@ -968,9 +761,9 @@ struct GitTabView: View {
                         }
                     ))
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12.5))
+                    .font(FizzTypography.body)
                     .padding(.horizontal, 10)
-                    .frame(height: 32)
+                    .frame(height: FizzControlHeight.standard.rawValue)
                     .background(
                         FizzTheme.recessedFill,
                         in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
@@ -985,82 +778,77 @@ struct GitTabView: View {
                         ProgressView()
                             .controlSize(.mini)
                     } else if saveVersionIsAIGenerated {
-                        TagChip(text: "✦ AI 拟定", tint: FizzTheme.accent, compact: true)
+                        TagChip(text: "✦ AI 拟定", tint: Color.secondary, compact: true)
                     }
                 }
 
-                HStack(spacing: 12) {
-                    if git.remote != nil {
-                        Toggle("同时上传到云端", isOn: $saveVersionAlsoPush)
-                            .toggleStyle(.checkbox)
-                            .font(.system(size: 12))
-                    }
-
-                    Spacer(minLength: 8)
-
-                    Button("取消") {
-                        showInlineSaveVersion = false
-                        showEnvGuardPanel = false
-                    }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
-                    .disabled(isBusy)
-
-                    if shouldBlockPush {
-                        Button("先处理密钥风险") {
-                            showEnvGuardPanel.toggle()
-                        }
-                        .buttonStyle(.glassProminent)
-                        .tint(.orange)
-                        .controlSize(.small)
-                    } else {
-                        Button(saveVersionAlsoPush ? "保存并上传" : "确认保存") {
-                            performSaveVersion(push: saveVersionAlsoPush)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .tint(FizzTheme.accent)
-                        .controlSize(.small)
-                        .disabled(saveVersionMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isBusy)
-                    }
+                if git.remote != nil {
+                    Toggle("同时上传到云端", isOn: $saveVersionAlsoPush)
+                        .toggleStyle(.checkbox)
+                        .font(FizzTypography.body)
                 }
 
                 if showEnvGuardPanel && hasSecretRisk {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: FizzSpacing.row) {
                         if let envGuardIssue {
-                            HStack(spacing: 6) {
-                                FizzIcon(symbol: "exclamationmark.shield.fill", size: 13)
-                                    .foregroundStyle(.orange)
-                                Text(envGuardIssue.title)
-                                    .font(.system(size: 12.5, weight: .semibold))
+                            HStack(spacing: FizzSpacing.row) {
+                                FizzIcon(.md, symbol: "exclamationmark.shield.fill")
+                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(envGuardIssue.title)
+                                        .font(FizzTypography.cardTitle)
+                                    Text(envGuardIssue.detail)
+                                        .font(FizzTypography.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
+                                FizzActionButton(title: "把 .env 加入忽略列表", height: .compact) {
+                                    Task { await fixEnvGitignore() }
+                                }
                             }
-                            Text(envGuardIssue.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Button("把 .env 加入忽略列表") {
-                                Task { await fixEnvGitignore() }
-                            }
-                            .buttonStyle(.glassProminent)
-                            .tint(.orange)
-                            .controlSize(.small)
                         }
                         if !trackedSecretFiles.isEmpty {
                             HStack(spacing: 6) {
-                                FizzIcon(symbol: "key.fill", size: 12)
-                                    .foregroundStyle(.red)
+                                FizzIcon(.sm, symbol: "key.fill")
+                                    .foregroundStyle(.secondary)
                                 Text("已跟踪文件疑似含密钥：\(trackedSecretFiles.prefix(3).joined(separator: "、"))")
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(FizzTypography.cardTitle)
                             }
                             Text("建议先把真实密钥移到 .env 再上传到云端，避免泄露。")
-                                .font(.caption)
+                                .font(FizzTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        Color.orange.opacity(0.08),
+                        FizzTheme.mutedFill,
                         in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
                     )
+                }
+            }
+        } accessory: {
+            HStack(spacing: FizzSpacing.row) {
+                FizzActionButton(title: "取消", height: .compact) {
+                    showInlineSaveVersion = false
+                    showEnvGuardPanel = false
+                }
+                .disabled(isBusy)
+
+                if shouldBlockPush {
+                    FizzActionButton(title: "先处理密钥风险", symbol: "exclamationmark.shield", height: .compact) {
+                        showEnvGuardPanel.toggle()
+                    }
+                    .foregroundStyle(.secondary)
+                } else {
+                    FizzActionButton(
+                        title: saveVersionAlsoPush ? "保存并上传" : "确认保存",
+                        height: .compact,
+                        prominence: .primary
+                    ) {
+                        performSaveVersion(push: saveVersionAlsoPush)
+                    }
+                    .disabled(saveVersionMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isBusy)
                 }
             }
         }
@@ -1122,7 +910,7 @@ struct GitTabView: View {
         ToastCenter.shared.show(
             "已把 .env 加入忽略列表",
             symbol: "checkmark.shield.fill",
-            tint: .green,
+            tint: FizzTheme.statusSuccess,
             subtitle: "之后上传代码不会泄露这些密钥文件"
         )
     }
@@ -1158,7 +946,7 @@ struct GitTabView: View {
             ToastCenter.shared.show(
                 result.message,
                 symbol: "arrow.triangle.branch",
-                tint: FizzTheme.accent,
+                tint: Color.secondary,
                 subtitle: project.displayName,
                 microViz: .gitMerge
             )
@@ -1186,7 +974,7 @@ struct GitTabView: View {
                 ToastCenter.shared.show(
                     result.message,
                     symbol: "checkmark.circle.fill",
-                    tint: .green,
+                    tint: FizzTheme.statusSuccess,
                     subtitle: project.displayName,
                     microViz: microViz(for: operation)
                 )
@@ -1239,18 +1027,26 @@ struct GitTabView: View {
     private func refreshAfterWrite() async {
         await loadWorkspace()
         await onSyncCompleted()
+        worktreeRefresh &+= 1
+    }
+
+    private func refreshAfterWorktreeWrite(mainPath: String) async {
+        diffs.removeAll()
+        expandedPaths.removeAll()
+        if PathTools.canonical(project.path) != mainPath {
+            await store.refreshGit(for: mainPath)
+        }
+        await refreshAfterWrite()
     }
 
     private func loadWorkspace() async {
         loadingWorkspace = true
         async let changesTask = GitService.changes(directory)
-        async let worktreesTask = GitWorktreeService.list(in: directory)
         async let checkTask = LightweightProjectCheckService.check(directory: directory, copyMode: copyMode)
         async let secretsTask = DoctorService.findTrackedSecretFiles(in: directory)
-        let (freshChanges, freshWorktrees, issues, secretFiles) = await (changesTask, worktreesTask, checkTask, secretsTask)
+        let (freshChanges, issues, secretFiles) = await (changesTask, checkTask, secretsTask)
         guard !Task.isCancelled else { return }
         changes = freshChanges
-        worktrees = freshWorktrees
         envGuardIssue = issues.first { $0.kind == .unignoredEnvFile }
         trackedSecretFiles = secretFiles
         let paths = Set(freshChanges.map(\.path))
@@ -1302,20 +1098,12 @@ struct GitTabView: View {
         }
     }
 
-    private func tint(for action: GitSyncAction) -> Color {
-        switch action {
-        case .fetch: .blue
-        case .pull: .teal
-        case .push: .purple
-        }
-    }
-
     private func codeColor(_ change: GitChange) -> Color {
-        if change.untracked { return .blue }
-        if change.conflicted { return .red }
-        if change.isDeleted { return .red }
-        if change.displayCode.contains("A") { return .green }
-        if change.displayCode.contains("M") { return .orange }
+        if change.untracked { return Color.secondary }
+        if change.conflicted { return FizzTheme.statusDanger }
+        if change.isDeleted { return FizzTheme.statusDanger }
+        if change.displayCode.contains("A") { return FizzTheme.statusSuccess }
+        if change.displayCode.contains("M") { return FizzTheme.statusWarning }
         return .secondary
     }
 

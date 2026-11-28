@@ -14,10 +14,9 @@ struct ProjectFolderCard: View {
     @State private var pressed = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: FizzSpacing.row) {
             if showsCoverPreview, let artwork = project.artwork {
                 LibraryCoverPreview(path: artwork)
-                    .frame(height: 64)
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
 
@@ -27,25 +26,25 @@ struct ProjectFolderCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
                         Text(project.displayName)
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .font(FizzTypography.cardTitle)
                             .lineLimit(1)
 
                         if project.starred {
-                            FizzIcon(symbol: "star.fill", size: 9)
-                                .foregroundStyle(.yellow)
+                            FizzIcon(.xs, symbol: "star.fill")
+                                .foregroundStyle(Color.secondary)
                         }
                     }
 
                     HStack(spacing: 5) {
                         Text(projectSubtitle)
-                            .font(.system(size: 10.5))
+                            .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
 
                         if project.dirtyCount > 0 {
                             TagChip(
                                 text: "\(project.dirtyCount) 处改动",
-                                tint: .orange,
+                                tint: FizzTheme.statusWarning,
                                 compact: true
                             )
                             .fixedSize()
@@ -58,10 +57,9 @@ struct ProjectFolderCard: View {
 
                 if selecting {
                     FizzIcon(
-                        symbol: selected ? "checkmark.circle.fill" : "circle",
-                        size: 16
+                        .md, symbol: selected ? "checkmark.circle.fill" : "circle"
                     )
-                    .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
+                    .foregroundStyle(selected ? Color.primary : Color.secondary.opacity(0.55))
                     .frame(width: 18, height: 18)
                     .accessibilityHidden(true)
                 } else if project.port == .running {
@@ -72,39 +70,43 @@ struct ProjectFolderCard: View {
             }
 
             Text(primaryDetail)
-                .font(.system(size: 11.5))
+                .font(FizzTypography.caption)
                 .foregroundStyle(project.note.isEmpty ? .secondary : .primary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, minHeight: 14, alignment: .topLeading)
 
+            Spacer(minLength: 0)
+
             HStack(spacing: 5) {
                 if let stack = firstStack {
-                    TagChip(text: stack.0, tint: stack.1, compact: true)
+                    TagChip(text: stack, compact: true)
                 }
 
                 Spacer(minLength: 4)
 
                 Text(Format.relative(project.recent))
-                    .font(.system(size: 10))
+                    .font(FizzTypography.micro)
                     .foregroundStyle(.tertiary)
             }
             .lineLimit(1)
         }
-        .padding(12)
+        .padding(FizzSpacing.card)
         .frame(
             maxWidth: .infinity,
             minHeight: showsCoverPreview && project.artwork != nil ? 188 : 122,
+            maxHeight: .infinity,
             alignment: .topLeading
         )
-        .background(FizzTheme.cardFill, in: RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous))
+        .background(selected ? FizzTheme.selectedFill : FizzTheme.cardFill,
+                    in: RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous)
                 .strokeBorder(
                     focused
                         ? FizzTheme.accent
                         : selected
-                            ? accent.opacity(0.55)
-                            : hovering ? accent.opacity(0.24) : FizzTheme.stroke,
+                            ? Color.primary.opacity(0.35)
+                            : FizzTheme.stroke,
                     lineWidth: (focused || selected) ? 1.5 : 1
                 )
         }
@@ -158,10 +160,6 @@ struct ProjectFolderCard: View {
         }
     }
 
-    private var accent: Color {
-        project.color?.color ?? ProjectGrouping.color(for: project.group)
-    }
-
     private var projectSubtitle: String {
         if let branch = project.branch {
             return "\(project.group) · \(branch)"
@@ -175,9 +173,8 @@ struct ProjectFolderCard: View {
         return project.intro.text
     }
 
-    private var firstStack: (String, Color)? {
-        guard let group = project.stacks.first, let item = group.items.first else { return nil }
-        return (item, group.color)
+    private var firstStack: String? {
+        project.stacks.first?.items.first
     }
 }
 
@@ -226,7 +223,7 @@ private struct LibraryCoverImage: View {
                     .interpolation(.medium)
                     .scaledToFill()
             } else {
-                FizzIcon(symbol: "photo", size: 12)
+                FizzIcon(.sm, symbol: "photo")
                     .foregroundStyle(.tertiary)
             }
         }
@@ -250,16 +247,16 @@ struct HomeToolBadge: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            FizzIcon(symbol: symbol, size: 10)
+            FizzIcon(.xs, symbol: symbol)
             if !compact {
                 Text(title)
             }
         }
-        .font(.system(size: 9.5, weight: .medium))
-        .foregroundStyle(tint)
+        .font(FizzTypography.micro)
+        .foregroundStyle(.secondary)
         .padding(.horizontal, compact ? 4 : 5)
         .padding(.vertical, 2)
-        .background(tint.opacity(0.09), in: Capsule())
+        .background(FizzTheme.mutedFill, in: Capsule())
         .lineLimit(1)
         .help(title)
     }
@@ -272,7 +269,4 @@ struct HomeToolBadge: View {
         HomeDashboardModel.toolSymbol(tool)
     }
 
-    private var tint: Color {
-        DetectedTool(rawValue: tool)?.tint ?? .secondary
-    }
 }

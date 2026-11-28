@@ -378,6 +378,12 @@ enum ProjectTab: String, CaseIterable, Identifiable, Sendable {
 
     var title: String { title(for: .plain) }
 
+    func adjacent(forward: Bool) -> Self {
+        let tabs = Self.allCases
+        guard let index = tabs.firstIndex(of: self) else { return self }
+        return tabs[(index + tabs.count + (forward ? 1 : -1)) % tabs.count]
+    }
+
     func title(for mode: CopyMode) -> String {
         switch self {
         case .progress: FizzCopy.tabTitle(.progress, mode: mode)

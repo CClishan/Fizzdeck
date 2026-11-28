@@ -47,6 +47,9 @@ enum WorkspaceWatchPaths {
         ".gemini/tmp",
         ".dsh/storages/session_projcache/sessions",
         ".gemini/antigravity/brain",
+        CursorSessionReader.projectsPath,
+        CursorSessionReader.workspacesPath,
+        OpenCodeSessionReader.storagePath,
     ]
 
     static func touchesGit(path: String, gitPath: String?) -> Bool {
@@ -348,6 +351,7 @@ final class WorkspaceWatcher {
         missingRootTimer = nil
         stopStream(&sessionStream)
         startSessionWatch()
+        debouncer.schedule(.sessions)
     }
 
     private func startLifecycleObservers() {
@@ -426,6 +430,7 @@ final class WorkspaceWatcher {
         guard isStarted, !isPaused else { return }
         switch change {
         case .sessions:
+            guard paths.isEmpty || paths.contains(where: { !$0.hasSuffix("/opencode.db-shm") }) else { return }
             debouncer.schedule(.sessions)
         case .git:
             guard let gitPath, paths.contains(where: { WorkspaceWatchPaths.touchesGit(path: $0, gitPath: gitPath) }) else {

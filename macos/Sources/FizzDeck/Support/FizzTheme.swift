@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import SwiftUI
 
 enum AppAppearance: String, CaseIterable, Identifiable {
@@ -69,8 +70,97 @@ enum FizzSpacing {
     static let page: CGFloat = 24
     static let section: CGFloat = 20
     static let panel: CGFloat = 16
+    static let card: CGFloat = 12
     static let grid: CGFloat = 12
     static let row: CGFloat = 8
+}
+
+enum FizzIconSize: CGFloat, CaseIterable {
+    case xs = 10
+    case sm = 12
+    case md = 14
+    case lg = 22
+}
+
+@MainActor enum FizzTypography {
+    enum Weight: String, CaseIterable {
+        case regular = "Regular", medium = "Medium", semibold = "SemiBold", bold = "Bold"
+
+        fileprivate var systemWeight: NSFont.Weight {
+            switch self {
+            case .regular: .regular
+            case .medium: .medium
+            case .semibold: .semibold
+            case .bold: .bold
+            }
+        }
+    }
+
+    private static let descriptors: [Weight: CTFontDescriptor] = {
+        let bundle: Bundle
+        #if SWIFT_PACKAGE
+        // The packaged executable ships Fonts directly; it has no SwiftPM resource bundle.
+        let main = Bundle.main
+        bundle = main.bundleURL.pathExtension == "app" && main.executableURL?.lastPathComponent == "FizzDeck" ? main : .module
+        #else
+        bundle = .main
+        #endif
+        return Dictionary(uniqueKeysWithValues: Weight.allCases.map { weight in
+            let name = "ObelMono-\(weight.rawValue)"
+            guard let url = bundle.url(forResource: name, withExtension: "otf", subdirectory: "Fonts") else {
+                fatalError("Missing Fonts/\(name).otf in \(bundle.bundlePath)")
+            }
+            var error: Unmanaged<CFError>?
+            if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
+                guard let failure = error?.takeRetainedValue() else { fatalError("Could not register \(url.path)") }
+                // ATS can already have registered this URL on app launch.
+                guard CFErrorGetDomain(failure) == kCTFontManagerErrorDomain,
+                      CFErrorGetCode(failure) == CTFontManagerError.alreadyRegistered.rawValue else {
+                    fatalError("Could not register \(url.path): \(failure)")
+                }
+            }
+            guard let file = (CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [NSFontDescriptor])?.first,
+                  file.postscriptName == name else { fatalError("Invalid font at \(url.path); expected \(name)") }
+
+            let system = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: weight.systemWeight)
+            // A generic cascade substitutes Semibold for Bold. Use the actual Chinese UI face.
+            let chinese = CTFontCreateForStringWithLanguage(
+                system, "汉" as CFString, CFRange(location: 0, length: 1), "zh-Hans" as CFString
+            ) as NSFont
+            let descriptor = file.addingAttributes([.cascadeList: [chinese.fontDescriptor, system.fontDescriptor]]) as CTFontDescriptor
+            let face = CTFontCreateWithFontDescriptor(descriptor, NSFont.systemFontSize, nil)
+            guard let source = CTFontCopyAttribute(face, kCTFontURLAttribute) as? URL,
+                  source.standardizedFileURL == url.standardizedFileURL else { fatalError("CoreText substituted \(url.path)") }
+            return (weight, descriptor)
+        })
+    }()
+
+    static func registerBundledFonts() { _ = descriptors }
+
+    static func font(_ size: CGFloat, weight: Weight = .regular) -> Font {
+        Font(CTFontCreateWithFontDescriptor(descriptors[weight]!, size, nil))
+    }
+
+    static let pageTitle = font(22, weight: .semibold)
+    static let sectionTitle = sectionTitle(.semibold)
+    static let cardTitle = font(13, weight: .semibold)
+    static let body = body(.regular)
+    static let caption = caption(.regular)
+    static let micro = micro(.medium)
+    static let mono = mono(.regular)
+    static let monoSmall = monoSmall(.regular)
+
+    static func sectionTitle(_ weight: Weight) -> Font { font(14, weight: weight) }
+    static func body(_ weight: Weight) -> Font { font(12.5, weight: weight) }
+    static func caption(_ weight: Weight) -> Font { font(11, weight: weight) }
+    static func micro(_ weight: Weight) -> Font { font(10, weight: weight) }
+    static func mono(_ weight: Weight) -> Font { font(11.5, weight: weight) }
+    static func monoSmall(_ weight: Weight) -> Font { font(10.5, weight: weight) }
+}
+
+enum FizzControlHeight: CGFloat, CaseIterable {
+    case standard = 28
+    case compact = 24
 }
 
 enum FizzElevation {
@@ -103,30 +193,52 @@ enum FizzElevation {
 }
 
 enum FizzTheme {
-    static let accent = Color(red: 100 / 255, green: 56 / 255, blue: 255 / 255)
-    static let page = fizzAdaptiveColor(light: 0xF8F8F7, dark: 0x111315)
-    static let sidebar = fizzAdaptiveColor(light: 0xF7F6F6, dark: 0x16181A)
-    static let warmGlow = Color(red: 1.00, green: 0.65, blue: 0.68)
-    static let coolGlow = Color(red: 0.67, green: 0.58, blue: 0.98)
+    private static let accentLight = fizzHexColor(0x6941E8)
+    private static let accentDark = fizzHexColor(0x9F82FF)
+    static let accent = fizzAdaptiveColor(light: accentLight, dark: accentDark)
+    static let accentSoft = fizzAdaptiveColor(
+        light: accentLight.withAlphaComponent(0.10), dark: accentDark.withAlphaComponent(0.16)
+    )
+    static let statusDanger = fizzAdaptiveColor(light: 0xDC3848, dark: 0xFF6B78)
+    static let statusWarning = fizzAdaptiveColor(light: 0xCF6E0C, dark: 0xFFA940)
+    static let statusSuccess = fizzAdaptiveColor(light: 0x159662, dark: 0x38D399)
+    static let page = fizzAdaptiveColor(light: 0xFFFFFF, dark: 0x111316)
+    static let sidebar = fizzAdaptiveColor(light: 0xF8F9FB, dark: 0x16191F)
     static let hairline = fizzAdaptiveColor(
-        light: NSColor.black.withAlphaComponent(0.065),
-        dark: NSColor.white.withAlphaComponent(0.08)
+        light: NSColor.black.withAlphaComponent(0.08),
+        dark: NSColor.white.withAlphaComponent(0.09)
     )
     static let stroke = fizzAdaptiveColor(
-        light: NSColor.black.withAlphaComponent(0.06),
-        dark: NSColor.white.withAlphaComponent(0.07)
+        light: NSColor.black.withAlphaComponent(0.085),
+        dark: NSColor.white.withAlphaComponent(0.09)
     )
     static let selectedFill = fizzAdaptiveColor(
-        light: NSColor.black.withAlphaComponent(0.055),
-        dark: NSColor.white.withAlphaComponent(0.08)
+        light: NSColor.black.withAlphaComponent(0.06),
+        dark: NSColor.white.withAlphaComponent(0.10)
     )
-    static let cardFill = fizzAdaptiveColor(light: 0xFFFFFF, dark: 0x1B1D20)
-    static let recessedFill = fizzAdaptiveColor(light: 0xF3F3F2, dark: 0x131517)
-    static let elevatedFill = fizzAdaptiveColor(light: 0xFFFFFF, dark: 0x25282C)
+    static let cardFill = fizzAdaptiveColor(light: 0xFFFFFF, dark: 0x1A1D23)
+    static let recessedFill = fizzAdaptiveColor(light: 0xF4F5F7, dark: 0x14171B)
+    static let elevatedFill = fizzAdaptiveColor(light: 0xFFFFFF, dark: 0x242830)
     static let mutedFill = fizzAdaptiveColor(
         light: NSColor.black.withAlphaComponent(0.035),
-        dark: NSColor.white.withAlphaComponent(0.05)
+        dark: NSColor.white.withAlphaComponent(0.055)
     )
+}
+
+enum ProjectAccentColor {
+    static let mauve = fizzAdaptiveColor(light: 0x744CE8, dark: 0xA88BFF)
+    static let slate = fizzAdaptiveColor(light: 0x2B6EF2, dark: 0x6BA4FF)
+    static let sage = fizzAdaptiveColor(light: 0x0E9384, dark: 0x35D8C0)
+    private static let olive = fizzAdaptiveColor(light: 0x1D9A56, dark: 0x4CE08A)
+    static let ochre = fizzAdaptiveColor(light: 0xD96218, dark: 0xFF984F)
+    static let rose = fizzAdaptiveColor(light: 0xD9327A, dark: 0xFF70B5)
+    private static let palette = [mauve, slate, sage, olive, ochre, rose]
+
+    static func color(for projectID: String) -> Color {
+        // FNV-1a keeps project colors stable between launches.
+        let hash = projectID.utf8.reduce(UInt32(2_166_136_261)) { ($0 ^ UInt32($1)) &* 16_777_619 }
+        return palette[Int(hash % UInt32(palette.count))]
+    }
 }
 
 private func fizzAdaptiveColor(light: UInt32, dark: UInt32) -> Color {
@@ -193,34 +305,8 @@ enum FizzAsset {
 }
 
 struct FizzBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    static func glowOpacity(for colorScheme: ColorScheme) -> Double? {
-        colorScheme == .dark ? 0.06 : nil
-    }
-
     var body: some View {
-        ZStack {
-            FizzTheme.page
-
-            if let glowOpacity = Self.glowOpacity(for: colorScheme) {
-                RadialGradient(
-                    colors: [FizzTheme.warmGlow.opacity(glowOpacity), .clear],
-                    center: .topTrailing,
-                    startRadius: 20,
-                    endRadius: 470
-                )
-
-                RadialGradient(
-                    colors: [FizzTheme.coolGlow.opacity(glowOpacity), .clear],
-                    center: .bottomTrailing,
-                    startRadius: 0,
-                    endRadius: 680
-                )
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
+        FizzTheme.page.ignoresSafeArea().allowsHitTesting(false)
     }
 }
 
@@ -228,6 +314,15 @@ struct FizzLogo: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var size: CGFloat = 30
+
+    private var fallbackIconSize: FizzIconSize {
+        switch size {
+        case ..<24: .xs
+        case ..<40: .sm
+        case ..<48: .md
+        default: .lg
+        }
+    }
 
     var body: some View {
         Group {
@@ -238,9 +333,9 @@ struct FizzLogo: View {
                     .scaledToFit()
             } else {
                 ZStack {
-                    FizzTheme.accent
-                    FizzIcon(symbol: "bubble.left.fill", size: size * 0.43)
-                        .foregroundStyle(.white)
+                    FizzTheme.elevatedFill
+                    FizzIcon(fallbackIconSize, symbol: "bubble.left.fill")
+                        .foregroundStyle(.primary)
                 }
             }
         }

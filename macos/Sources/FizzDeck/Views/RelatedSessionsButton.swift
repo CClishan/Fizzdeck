@@ -12,77 +12,88 @@ struct RelatedSessionsButton: View {
     @State private var results: [SessionSearchResult] = []
 
     var body: some View {
-        Button {
-            isPresented.toggle()
-            guard isPresented else { return }
-            Task { await load() }
-        } label: {
-            if compact {
-                FizzIcon(symbol: "text.bubble", size: 10)
-                    .foregroundStyle(FizzTheme.accent)
-                    .frame(width: 18, height: 18)
-                    .contentShape(Rectangle())
-            } else {
-                Label("查相关对话", systemImage: "text.bubble")
-                    .font(.system(size: 10.5, weight: .medium))
+        trigger
+            .help("查看改过 \(URL(fileURLWithPath: file).lastPathComponent) 的历史对话")
+            .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+                popoverContent
             }
-        }
-        .buttonStyle(.glass)
-        .controlSize(.mini)
-        .help("查看改过 \(URL(fileURLWithPath: file).lastPathComponent) 的历史对话")
-        .accessibilityLabel("查相关对话")
-        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-            popoverContent
+    }
+
+    @ViewBuilder
+    private var trigger: some View {
+        if compact {
+            FizzIconButton(title: "查相关对话", symbol: "text.bubble", height: .compact, action: togglePopover)
+        } else {
+            FizzActionButton(title: "查相关对话", symbol: "text.bubble", height: .compact, action: togglePopover)
         }
     }
 
+    private func togglePopover() {
+        isPresented.toggle()
+        guard isPresented else { return }
+        Task { await load() }
+    }
+
     private var popoverContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("改过这个文件的对话")
-                    .font(.system(size: 13, weight: .semibold))
-                Text(file)
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
+        VStack(spacing: 0) {
+            FizzSheetHeader(title: "改过这个文件的对话", subtitle: file) {
+                isPresented = false
             }
+            .truncationMode(.middle)
+            .padding(.horizontal, FizzSpacing.page)
+            .padding(.vertical, FizzSpacing.panel)
 
             Divider()
                 .opacity(0.4)
 
-            if isLoading {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("正在翻这段时间的记录…")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-            } else if results.isEmpty {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("还没有对话改过这个文件")
-                        .font(.system(size: 12.5, weight: .medium))
-                    Text("之后 AI 在这里改动后，会自动出现在这里。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(results) { result in
-                            sessionRow(result)
-                        }
-                    }
-                }
-                .frame(maxHeight: 320)
+            popoverBody
+                .padding(.horizontal, FizzSpacing.page)
+                .padding(.vertical, FizzSpacing.grid)
+
+            Divider()
+                .opacity(0.4)
+
+            FizzSheetFooter {
+                FizzActionButton(title: "关闭", role: .cancel) { isPresented = false }
+                    .keyboardShortcut(.cancelAction)
             }
+            .padding(.horizontal, FizzSpacing.page)
+            .padding(.vertical, FizzSpacing.grid)
         }
-        .padding(FizzSpacing.panel)
         .frame(width: 380)
         .background(FizzTheme.cardFill)
+    }
+
+    @ViewBuilder
+    private var popoverBody: some View {
+        if isLoading {
+            HStack(spacing: FizzSpacing.row) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在翻这段时间的记录…")
+                    .font(FizzTypography.body)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
+        } else if results.isEmpty {
+            VStack(alignment: .leading, spacing: FizzSpacing.row) {
+                Text("还没有对话改过这个文件")
+                    .font(FizzTypography.body(.medium))
+                Text("之后 AI 在这里改动后，会自动出现在这里。")
+                    .font(FizzTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(results) { result in
+                        sessionRow(result)
+                    }
+                }
+            }
+            .frame(maxHeight: 320)
+        }
     }
 
     private func sessionRow(_ result: SessionSearchResult) -> some View {
@@ -90,33 +101,33 @@ struct RelatedSessionsButton: View {
             isPresented = false
             Task { await open(result) }
         } label: {
-            HStack(alignment: .top, spacing: 9) {
+            HStack(alignment: .top, spacing: FizzSpacing.row) {
                 FizzIcon(
-                    symbol: result.endedWithError ? "exclamationmark.bubble" : "bubble.left",
-                    size: 12
+                    .sm,
+                    symbol: result.endedWithError ? "exclamationmark.bubble" : "bubble.left"
                 )
-                .foregroundStyle(result.endedWithError ? Color.orange : FizzTheme.accent)
+                .foregroundStyle(.secondary)
                 .frame(width: 16, height: 18)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         TagChip(
                             text: HomeDashboardModel.toolTitle(result.tool),
-                            tint: DetectedTool(rawValue: result.tool)?.tint ?? .secondary,
+                            tint: .secondary,
                             compact: true
                         )
                         Text(Format.relative(result.modified))
-                            .font(.system(size: 10.5))
+                            .font(FizzTypography.caption)
                             .foregroundStyle(.tertiary)
                         if result.endedWithError {
                             Text("报错结束")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.orange)
+                                .font(FizzTypography.micro)
+                                .foregroundStyle(.secondary)
                         }
                     }
 
                     Text(result.primaryIntent.isEmpty ? (result.lastUser ?? "未记录起始描述") : result.primaryIntent)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(FizzTypography.body(.medium))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
@@ -124,20 +135,19 @@ struct RelatedSessionsButton: View {
                        let error = result.lastError,
                        !error.isEmpty {
                         Text(error)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(.orange)
+                            .font(FizzTypography.monoSmall)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
 
                 Spacer(minLength: 4)
 
-                FizzIcon(symbol: "chevron.right", size: 8)
+                FizzIcon(.xs, symbol: "chevron.right")
                     .foregroundStyle(.tertiary)
                     .padding(.top, 4)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
+            .padding(FizzSpacing.row)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -6,6 +6,7 @@ enum DetectedTool: String, CaseIterable, Codable, Identifiable, Hashable, Sendab
     case claude
     case grok
     case cursor
+    case opencode
     case trae
     case windsurf
     case gemini
@@ -20,6 +21,7 @@ enum DetectedTool: String, CaseIterable, Codable, Identifiable, Hashable, Sendab
         case .claude: "Claude Code"
         case .grok: "Grok"
         case .cursor: "Cursor"
+        case .opencode: "OpenCode"
         case .trae: "Trae"
         case .windsurf: "Windsurf"
         case .gemini: "Gemini CLI"
@@ -44,6 +46,7 @@ enum DetectedTool: String, CaseIterable, Codable, Identifiable, Hashable, Sendab
         case .claude: "sparkles"
         case .grok: "bolt.horizontal"
         case .cursor: "cursorarrow.rays"
+        case .opencode: "chevron.left.forwardslash.chevron.right"
         case .trae: "wand.and.stars"
         case .windsurf: "wind"
         case .gemini: "diamond"
@@ -52,24 +55,10 @@ enum DetectedTool: String, CaseIterable, Codable, Identifiable, Hashable, Sendab
         }
     }
 
-    var tint: Color {
-        switch self {
-        case .codex: .blue
-        case .claude: .purple
-        case .grok: .orange
-        case .cursor: .teal
-        case .trae: .green
-        case .windsurf: .cyan
-        case .gemini: .indigo
-        case .deepseek: .mint
-        case .agy: .pink
-        }
-    }
-
     var supportsResume: Bool {
         switch self {
         case .codex, .claude, .grok, .gemini: true
-        case .cursor, .trae, .windsurf, .deepseek, .agy: false
+        case .cursor, .opencode, .trae, .windsurf, .deepseek, .agy: false
         }
     }
 }
@@ -86,15 +75,8 @@ struct ToolEvidenceIndex: Sendable {
         var map: [DetectedTool: Set<String>] = [:]
 
         let resolvedSessions = sessionCwdMap ?? SessionIndex.buildLightweightCwdMap(homeDirectory: homeDirectory)
-        for (name, tool) in [
-            ("codex", DetectedTool.codex),
-            ("claude", .claude),
-            ("grok", .grok),
-            ("gemini", .gemini),
-            ("deepseek", .deepseek),
-            ("agy", .agy),
-        ] {
-            if let cwds = resolvedSessions[name] {
+        for (name, cwds) in resolvedSessions {
+            if let tool = DetectedTool(rawValue: name) {
                 map[tool, default: []].formUnion(cwds)
             }
         }
@@ -161,6 +143,7 @@ enum ToolEvidenceDetector {
         if has("CLAUDE.md") || has(".claude") { add(.claude) }
         if has(".grok") || has("GROK.md") { add(.grok) }
         if has(".cursor") || has(".cursorrules") || has(".cursorignore") { add(.cursor) }
+        if has(".opencode") || has("opencode.json") || has("opencode.jsonc") { add(.opencode) }
         if has(".trae") { add(.trae) }
         if has(".windsurf") || has(".windsurfrules") { add(.windsurf) }
         if has(".gemini") || has("GEMINI.md") { add(.gemini) }

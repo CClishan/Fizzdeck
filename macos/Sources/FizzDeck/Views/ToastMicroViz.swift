@@ -86,11 +86,7 @@ struct ToastMicroVizView: View {
             }
             .trim(from: 0, to: phase)
             .stroke(
-                LinearGradient(
-                    colors: [.blue, FizzTheme.accent],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
+                Color.secondary,
                 style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
             )
 
@@ -103,15 +99,7 @@ struct ToastMicroVizView: View {
     private func mergeCommit(x: CGFloat, y: CGFloat, index: Int) -> some View {
         let reveal = max(0, min(1, (phase - Double(index) * 0.18) / 0.46))
         return Circle()
-            .fill(
-                index == 1
-                    ? AnyShapeStyle(LinearGradient(
-                        colors: [.blue, FizzTheme.accent],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ))
-                    : AnyShapeStyle(Color.blue)
-            )
+            .fill(Color.secondary)
             .frame(width: 5, height: 5)
             .overlay {
                 Circle()
@@ -134,7 +122,7 @@ struct ToastMicroVizView: View {
                     let active = index < step || state == .live
                     let failed = state == .failed && index == step
                     Capsule()
-                        .fill(failed ? Color.red : (active ? Color.green : FizzTheme.hairline))
+                        .fill(failed ? FizzTheme.statusDanger : (active ? FizzTheme.statusSuccess : FizzTheme.hairline))
                         .frame(width: max(1, xStep * revealFor(index)), height: 1.5)
                         .position(
                             x: inset + xStep * CGFloat(index) + xStep / 2,
@@ -163,7 +151,7 @@ struct ToastMicroVizView: View {
         let completed = index < step || state == .live
         let current = index == step && state != .live
         let failed = state == .failed && index == step
-        let tint: Color = failed ? .red : (completed || current ? .green : .secondary)
+        let tint: Color = failed ? FizzTheme.statusDanger : (completed || current ? FizzTheme.statusSuccess : .secondary)
 
         ZStack {
             if current && !reduceMotion {
@@ -185,7 +173,7 @@ struct ToastMicroVizView: View {
             if failed {
                 Image(systemName: "xmark")
                     .font(.system(size: 4.5, weight: .black))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.primary)
             } else if completed, index > 0 || state == .live {
                 Image(systemName: "checkmark")
                     .font(.system(size: index == 4 ? 5.5 : 4, weight: .black))
@@ -209,8 +197,8 @@ struct ToastMicroVizView: View {
                 Capsule()
                     .fill(
                         isLatest && improved && latestBarGreen
-                            ? Color.green
-                            : (isLatest ? Color.blue : FizzTheme.accent.opacity(0.55))
+                            ? FizzTheme.statusSuccess
+                            : (isLatest ? Color.secondary : Color.secondary.opacity(0.55))
                     )
                     .frame(width: 4.5, height: max(3, 24 * value * reveal))
                     .opacity(reveal)
@@ -250,7 +238,7 @@ struct ToastMicroVizView: View {
                 cellSize: 4,
                 spacing: 1.4,
                 phase: phase,
-                tintOverride: .blue,
+                tintOverride: Color.secondary,
                 cornerRadius: 1.2
             )
 
@@ -261,7 +249,7 @@ struct ToastMicroVizView: View {
                 cellSize: 4,
                 spacing: 1.4,
                 phase: phase,
-                tintOverride: .orange,
+                tintOverride: FizzTheme.statusWarning,
                 cornerRadius: 1.2
             )
             .opacity(amberOpacity)
@@ -338,11 +326,11 @@ private struct MicroGrid: View {
         case .empty:
             return FizzTheme.hairline
         case .positive:
-            return .green
+            return FizzTheme.statusSuccess
         case .negative:
-            return .red
+            return FizzTheme.statusDanger
         case .warning:
-            return tintOverride ?? .orange
+            return tintOverride ?? FizzTheme.statusWarning
         case .neutral:
             return .secondary.opacity(0.55)
         }

@@ -20,11 +20,9 @@ final class ProjectGroupingTests: XCTestCase {
         XCTAssertEqual(ordered, ["网页", "Mac 应用", "其他", "自定义 A", "自定义 B"])
     }
 
-    func testCustomGroupColorIsStable() {
-        let first = ProjectGrouping.paletteIndex(for: "客户项目")
-        let second = ProjectGrouping.paletteIndex(for: "客户项目")
-
-        XCTAssertEqual(first, second)
-        XCTAssertTrue((0..<8).contains(first))
+    func testBothDetectedAndCustomGroupsUseTheProjectPalette() {
+        for group in ["网页", "客户项目"] {
+            XCTAssertEqual(ProjectGrouping.color(for: group), ProjectAccentColor.color(for: group))
+        }
     }
 }

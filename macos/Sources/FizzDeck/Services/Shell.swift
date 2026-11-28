@@ -4,6 +4,7 @@ struct ShellOutput: Sendable {
     let status: Int32
     let text: String
     var timedOut = false
+    var hasUTF8Output = true
 
     var succeeded: Bool { status == 0 }
 }
@@ -67,12 +68,13 @@ enum Shell {
                 process.waitUntilExit()
                 timer.cancel()
 
-                let text = String(data: data, encoding: .utf8) ?? ""
+                let text = String(data: data, encoding: .utf8)
                 continuation.resume(
                     returning: ShellOutput(
                         status: process.terminationStatus,
-                        text: text,
-                        timedOut: timeoutFlag.isMarked
+                        text: text ?? "",
+                        timedOut: timeoutFlag.isMarked,
+                        hasUTF8Output: text != nil
                     )
                 )
             }

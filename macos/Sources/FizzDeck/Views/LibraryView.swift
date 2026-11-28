@@ -136,14 +136,14 @@ struct LibraryView: View {
                                 onToggleCoverPreview: toggleCoverPreview
                             )
 
+                            filterToolbar
+
                             if let dayKey = localQuery.commitDayKey {
                                 commitDayBanner(dayKey)
                                     .transition(
                                         .opacity.combined(with: .move(edge: .top))
                                     )
                             }
-
-                            filterToolbar
 
                             if visibleProjects.isEmpty {
                                 emptyResults
@@ -170,8 +170,7 @@ struct LibraryView: View {
                                     onCopyCleanup: copyCleanupCommands,
                                     onRescanSelected: { Task { await rescanSelected() } },
                                     onToggleSelectAll: toggleSelectAll,
-                                    onClearSelection: clearSelection,
-                                    onEndSelection: endSelectionAnimated
+                                    onClearSelection: clearSelection
                                 )
 
                                 if !split.idle.isEmpty {
@@ -197,7 +196,7 @@ struct LibraryView: View {
                 }
             }
         }
-        .focusable(mode == .cards && !searchFocused)
+        .focusable(mode == .cards, interactions: .edit)
         .focusEffectDisabled()
         .onKeyPress(.upArrow) {
             moveFocus(.up)
@@ -261,57 +260,57 @@ struct LibraryView: View {
     }
 
     private var filterToolbar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    FizzIcon(symbol: "magnifyingglass", size: 12)
-                        .foregroundStyle(.secondary)
-                    TextField("搜索项目、分支、路径或技术栈（⌘F）", text: $localQuery.searchText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12.5))
-                        .focused($searchFocused)
-                        .accessibilityLabel("搜索项目库")
-                    if !localQuery.searchText.isEmpty {
-                        Button {
-                            localQuery.searchText = ""
-                        } label: {
-                            FizzIcon(symbol: "xmark.circle.fill", size: 12)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("清除搜索")
+        HStack(spacing: FizzSpacing.row) {
+            HStack(spacing: 6) {
+                FizzIcon(.sm, symbol: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                TextField("搜索项目、分支、路径或技术栈（⌘F）", text: $localQuery.searchText)
+                    .textFieldStyle(.plain)
+                    .font(FizzTypography.body)
+                    .focused($searchFocused)
+                    .accessibilityLabel("搜索项目库")
+                if !localQuery.searchText.isEmpty {
+                    Button {
+                        localQuery.searchText = ""
+                    } label: {
+                        FizzIcon(.sm, symbol: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .frame(width: FizzControlHeight.compact.rawValue, height: FizzControlHeight.compact.rawValue)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .help("清除搜索")
+                    .accessibilityLabel("清除项目搜索")
                 }
-                .padding(.horizontal, 10)
-                .frame(height: 30)
-                .frame(maxWidth: 340)
-                .background(
-                    FizzTheme.recessedFill,
-                    in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                        .strokeBorder(FizzTheme.stroke, lineWidth: 1)
-                }
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, localQuery.searchText.isEmpty ? 10 : 2)
+            .frame(height: FizzControlHeight.compact.rawValue)
+            .frame(maxWidth: 340)
+            .background(FizzTheme.recessedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control))
+            .overlay {
+                RoundedRectangle(cornerRadius: FizzRadius.control)
+                    .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        quickChip("星标", active: localQuery.starredOnly) {
-                            localQuery.starredOnly.toggle()
-                        }
-                        quickChip("有改动", active: localQuery.dirtyOnly) {
-                            localQuery.dirtyOnly.toggle()
-                        }
-                        quickChip("运行中", active: localQuery.runningOnly) {
-                            localQuery.runningOnly.toggle()
-                        }
-                        quickChip("有 AI 会话", active: localQuery.hasSessionsOnly) {
-                            localQuery.hasSessionsOnly.toggle()
-                        }
-                        quickChip("有未推送", active: localQuery.unpushedOnly) {
-                            localQuery.unpushedOnly.toggle()
-                        }
-
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    quickChip("星标", active: localQuery.starredOnly) {
+                        localQuery.starredOnly.toggle()
+                    }
+                    quickChip("有改动", active: localQuery.dirtyOnly) {
+                        localQuery.dirtyOnly.toggle()
+                    }
+                    quickChip("运行中", active: localQuery.runningOnly) {
+                        localQuery.runningOnly.toggle()
+                    }
+                    quickChip("有 AI 会话", active: localQuery.hasSessionsOnly) {
+                        localQuery.hasSessionsOnly.toggle()
+                    }
+                    quickChip("有未推送", active: localQuery.unpushedOnly) {
+                        localQuery.unpushedOnly.toggle()
                     }
                 }
             }
@@ -320,47 +319,27 @@ struct LibraryView: View {
 
     private func commitDayBanner(_ dayKey: String) -> some View {
         HStack(spacing: 9) {
-            FizzIcon(symbol: "calendar.badge.clock", size: 13)
-                .foregroundStyle(FizzTheme.accent)
+            FizzIcon(.md, symbol: "calendar.badge.clock")
+                .foregroundStyle(Color.secondary)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("提交日期筛选")
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(FizzTypography.micro)
                     .foregroundStyle(.secondary)
                 Text(formattedCommitDay(dayKey))
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .monospacedDigit()
+                    .font(FizzTypography.cardTitle)
             }
 
-            Text("\(visibleProjects.count) 个项目")
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 7)
-                .frame(height: 20)
-                .background(FizzTheme.recessedFill, in: Capsule())
+            TagChip(text: "\(visibleProjects.count) 个项目", compact: true)
 
             Spacer(minLength: 8)
 
-            Button {
+            FizzActionButton(title: "清除", symbol: "xmark", height: .compact) {
                 withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                     localQuery.commitDayKey = nil
                 }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("清除")
-                    FizzIcon(symbol: "xmark", size: 8)
-                }
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .frame(height: 22)
-                .background(FizzTheme.elevatedFill, in: Capsule())
-                .overlay {
-                    Capsule()
-                        .strokeBorder(FizzTheme.stroke, lineWidth: 1)
-                }
             }
-            .buttonStyle(.plain)
             .help("清除提交日期筛选")
             .accessibilityLabel("清除提交日期筛选")
         }
@@ -368,8 +347,7 @@ struct LibraryView: View {
         .padding(.vertical, 7)
         .glassEffect(.regular, in: Capsule())
         .fizzAdaptiveShadow(.subtle)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("提交日期筛选，\(formattedCommitDay(dayKey))，\(visibleProjects.count) 个项目")
+        .accessibilityElement(children: .contain)
     }
 
     private func formattedCommitDay(_ dayKey: String) -> String {
@@ -386,12 +364,12 @@ struct LibraryView: View {
     private func quickChip(_ title: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 11, weight: active ? .semibold : .medium))
+                .font(FizzTypography.caption(active ? .semibold : .medium))
                 .foregroundStyle(active ? .white : .secondary)
                 .padding(.horizontal, 10)
-                .frame(height: 24)
+                .frame(height: FizzControlHeight.compact.rawValue)
                 .background(
-                    active ? FizzTheme.accent : FizzTheme.mutedFill,
+                    active ? FizzTheme.selectedFill : FizzTheme.mutedFill,
                     in: Capsule()
                 )
                 .contentShape(Capsule())
@@ -410,18 +388,18 @@ struct LibraryView: View {
             } label: {
                 HStack(spacing: 6) {
                     FizzIcon(
-                        symbol: showIdleProjects ? "chevron.down" : "chevron.right",
-                        size: FizzIconScale.micro
+                        .xs, symbol: showIdleProjects ? "chevron.down" : "chevron.right"
                     )
                     .foregroundStyle(.secondary)
                     Text("闲置 30 天以上")
-                        .font(.system(size: 13.5, weight: .semibold))
+                        .font(FizzTypography.sectionTitle)
                         .foregroundStyle(.secondary)
                     Text("\(idleProjects.count)")
-                        .font(.caption.monospacedDigit())
+                        .font(FizzTypography.monoSmall)
                         .foregroundStyle(.tertiary)
                     Spacer(minLength: 0)
                 }
+                .frame(minHeight: FizzControlHeight.compact.rawValue)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -481,11 +459,10 @@ struct LibraryView: View {
                 : "没有找到匹配的项目。")
         } actions: {
             if localQuery.hasActiveFilters || !store.query.isEmpty {
-                Button("清除筛选") {
+                FizzActionButton(title: "清除筛选", height: .compact) {
                     clearFilters()
                     store.query = ""
                 }
-                .buttonStyle(.glass)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 280)
@@ -506,17 +483,13 @@ struct LibraryView: View {
             } description: {
                 Text("扫描常用目录或手动添加文件夹，FizzDeck 会分析 Git、AI 会话和体积。")
             } actions: {
-                HStack(spacing: 10) {
-                    Button("智能扫描本机项目") {
-                        store.presentFirstRunScan()
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(FizzTheme.accent)
-
-                    Button("手动添加文件夹") {
+                HStack(spacing: FizzSpacing.row) {
+                    FizzActionButton(title: "手动添加文件夹") {
                         Task { await store.addRoot() }
                     }
-                    .buttonStyle(.glass)
+                    FizzActionButton(title: "智能扫描本机项目", prominence: .primary) {
+                        store.presentFirstRunScan()
+                    }
                 }
             }
         }
@@ -681,12 +654,6 @@ struct LibraryView: View {
         }
     }
 
-    private func endSelectionAnimated() {
-        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
-            endSelection()
-        }
-    }
-
     private func endSelection() {
         selectionMode = false
         selectedPaths.removeAll()
@@ -700,7 +667,7 @@ struct LibraryView: View {
             ToastCenter.shared.show(
                 result.feedback,
                 symbol: "doc.on.doc.fill",
-                tint: FizzTheme.accent,
+                tint: Color.secondary,
                 microViz: .compact(state: .done)
             )
         }
@@ -718,7 +685,7 @@ struct LibraryView: View {
         ToastCenter.shared.show(
             message,
             symbol: starred ? "star.fill" : "star",
-            tint: .yellow,
+            tint: Color.secondary,
             microViz: .compact(state: .done)
         )
     }
@@ -733,7 +700,7 @@ struct LibraryView: View {
         ToastCenter.shared.show(
             message,
             symbol: "folder.fill",
-            tint: FizzTheme.accent,
+            tint: Color.secondary,
             microViz: .compact(state: .done)
         )
     }
@@ -791,7 +758,7 @@ struct LibraryView: View {
         ToastCenter.shared.show(
             "批量扫描完成",
             symbol: "arrow.clockwise.circle.fill",
-            tint: FizzTheme.accent,
+            tint: Color.secondary,
             subtitle: batchFeedback,
             microViz: .bars(
                 values: existing.map { Double($0.weekly.values.reduce(0, +)) },

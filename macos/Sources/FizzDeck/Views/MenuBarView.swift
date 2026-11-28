@@ -48,14 +48,11 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            FizzIcon(
-                symbol: attentionCount > 0 ? "exclamationmark.circle.fill" : "checkmark.circle",
-                size: 12
-            )
+            FizzIcon(.sm, symbol: attentionCount > 0 ? "exclamationmark.circle.fill" : "checkmark.circle")
             Text("\(attentionCount)")
-                .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
+                .font(FizzTypography.caption(.semibold))
         }
-        .foregroundStyle(attentionCount > 0 ? Color.red : Color.primary)
+        .foregroundStyle(.primary)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("FizzDeck，待处理 \(attentionCount) 项")
         .task {
@@ -174,12 +171,12 @@ struct MenuBarMenu: View {
                                 SystemActions.openURL("http://127.0.0.1:\(port)")
                             } content: {
                                 HStack(spacing: 8) {
-                                    RunningPulseDot(size: 5)
+                                    RunningPulseDot()
                                     Text("打开 \(project.displayName) 预览")
                                         .lineLimit(1)
                                     Spacer(minLength: 12)
                                     Text(":\(port)")
-                                        .font(.system(size: 10.5, design: .monospaced))
+                                        .font(FizzTypography.monoSmall)
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -188,7 +185,7 @@ struct MenuBarMenu: View {
                             Task { await actions.stop(project, store: store, presentNotice: presentMainWindow) }
                         } content: {
                             HStack(spacing: 8) {
-                                FizzIcon(symbol: "stop.fill", size: 9)
+                                FizzIcon(.xs, symbol: "stop.fill")
                                     .foregroundStyle(.secondary)
                                     .frame(width: 9)
                                 Text("停止 \(project.displayName)…")
@@ -238,7 +235,7 @@ struct MenuBarMenu: View {
                                 ToastCenter.shared.show(
                                     "接力卡已复制",
                                     symbol: "doc.on.clipboard.fill",
-                                    tint: FizzTheme.accent,
+                                    tint: Color.secondary,
                                     subtitle: "\(project.displayName) · \(result.characterCount) 字"
                                 )
                             }
@@ -281,7 +278,7 @@ struct MenuBarMenu: View {
                 ToastCenter.shared.show(
                     "这次对话的改动已经找不到了",
                     symbol: "exclamationmark.triangle.fill",
-                    tint: .orange,
+                    tint: FizzTheme.statusWarning,
                     subtitle: "标记可能已被 Git 清理，可以打开进度页看当时的记录"
                 )
                 return

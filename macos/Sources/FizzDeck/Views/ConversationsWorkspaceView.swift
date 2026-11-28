@@ -31,7 +31,6 @@ struct ConversationsWorkspaceView: View {
     }
 
     @Environment(RepositoryStore.self) private var store
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var statusFilter: StatusFilter = .all
     @State private var toolFilter = "all"
     @State private var searchQuery = ""
@@ -39,7 +38,7 @@ struct ConversationsWorkspaceView: View {
     @State private var isSearching = false
     @State private var scrolledPastTop = false
     @State private var resumingID: String?
-    @State private var isWeeklyRecapPresented = false
+    let onShowRecap: () -> Void
 
     private var trimmedSearchQuery: String {
         searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -117,7 +116,13 @@ struct ConversationsWorkspaceView: View {
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: FizzSpacing.section) {
-                header
+                FizzPageHeader(
+                    title: FizzCopy.conversationsNavTitle,
+                    subtitle: "跨项目按天汇总的 AI 对话记录"
+                ) {
+                    FizzActionButton(title: "复盘", symbol: "calendar.badge.clock", keyboardNavigation: true, action: onShowRecap)
+                }
+                filters
 
                 if allEntries.isEmpty {
                     ContentUnavailableView(
@@ -137,12 +142,13 @@ struct ConversationsWorkspaceView: View {
                     .frame(maxWidth: .infinity, minHeight: 220)
                 } else {
                     ForEach(daySections) { section in
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: FizzSpacing.grid) {
                             Text(section.title)
-                                .font(.system(size: 12.5, weight: .semibold))
+                                .font(FizzTypography.sectionTitle)
                                 .foregroundStyle(.secondary)
+                                .accessibilityAddTraits(.isHeader)
 
-                            VStack(spacing: 8) {
+                            VStack(spacing: FizzSpacing.row) {
                                 ForEach(section.entries) { entry in
                                     conversationCard(entry)
                                 }
@@ -164,93 +170,101 @@ struct ConversationsWorkspaceView: View {
         .task(id: "\(searchQuery)|\(statusFilter.rawValue)|\(toolFilter)|\(store.projects.count)|\(store.hasIndexedSessionSearch)") {
             await runSearch()
         }
-        .sheet(isPresented: $isWeeklyRecapPresented) {
-            WeeklyRecapSheet(projects: store.projects)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            FizzIcon(.sm, symbol: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            TextField("搜索对话（支持中文、报错关键字、文件名）", text: $searchQuery)
+                .textFieldStyle(.plain)
+                .font(FizzTypography.body)
+                .accessibilityLabel("搜索所有项目的对话")
+
+            if isSearching {
+                ProgressView()
+                    .controlSize(.mini)
+                    .frame(width: FizzControlHeight.compact.rawValue)
+                    .accessibilityLabel("正在搜索对话")
+            } else if !searchQuery.isEmpty {
+                Button {
+                    searchQuery = ""
+                } label: {
+                    FizzIcon(.sm, symbol: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(width: FizzControlHeight.compact.rawValue, height: FizzControlHeight.compact.rawValue)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("清除对话搜索")
+                .help("清除搜索")
+            }
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, isSearching || !searchQuery.isEmpty ? 2 : 10)
+        .frame(height: FizzControlHeight.compact.rawValue)
+        .background(FizzTheme.recessedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control))
+        .overlay {
+            RoundedRectangle(cornerRadius: FizzRadius.control)
+                .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+                .allowsHitTesting(false)
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(FizzCopy.conversationsNavTitle)
-                        .font(.system(size: 24, weight: .semibold))
-                        .accessibilityAddTraits(.isHeader)
-                    Text("跨项目按天汇总的 AI 对话记录，点击任意一条回到对应项目进度")
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 12)
-                Button {
-                    isWeeklyRecapPresented = true
-                } label: {
-                    Label("本周回顾", systemImage: "calendar.badge.clock")
-                }
-                .buttonStyle(.glass)
-                .controlSize(.small)
-                .accessibilityLabel("打开本周回顾")
-                Text(isSearchActive ? "命中 \(searchResults.count) 条" : "共 \(filteredEntries.count) 条")
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.secondary)
+    private var filters: some View {
+        HStack(spacing: FizzSpacing.row) {
+            searchField
+
+            FizzSegmentedCapsule(items: StatusFilter.allCases, selection: $statusFilter, height: .compact, keyboardNavigation: true) { item, _ in
+                Text(item.title)
+                    .font(FizzTypography.caption(.medium))
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("状态筛选")
 
-            HStack(spacing: 8) {
-                FizzIcon(symbol: "magnifyingglass", size: 13)
-                    .foregroundStyle(.secondary)
-
-                TextField("搜索所有项目的对话（支持中文、报错关键字、文件名）", text: $searchQuery)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-
-                if isSearching {
-                    ProgressView()
-                        .controlSize(.mini)
-                } else if !searchQuery.isEmpty {
+            Menu {
+                ForEach(["all"] + availableTools, id: \.self) { tool in
                     Button {
-                        searchQuery = ""
+                        toolFilter = tool
                     } label: {
-                        FizzIcon(symbol: "xmark.circle.fill", size: 13)
-                            .foregroundStyle(.tertiary)
+                        if toolFilter == tool {
+                            Label(toolFilterTitle(tool), systemImage: "checkmark")
+                        } else {
+                            Text(toolFilterTitle(tool))
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .help("清除搜索")
                 }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(toolFilterTitle(toolFilter))
+                        .font(FizzTypography.caption(.medium))
+                    FizzIcon(.xs, symbol: "chevron.down")
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: FizzControlHeight.compact.rawValue)
+                .contentShape(Capsule())
             }
-            .padding(.horizontal, 12)
-            .frame(height: 36)
-            .background(
-                FizzTheme.cardFill,
-                in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
-                    .strokeBorder(FizzTheme.stroke, lineWidth: 1)
-            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: Capsule())
+            .fixedSize()
+            .accessibilityLabel("工具筛选")
+            .accessibilityValue(toolFilterTitle(toolFilter))
 
-            HStack(spacing: 10) {
-                Picker("状态筛选", selection: $statusFilter) {
-                    ForEach(StatusFilter.allCases) { item in
-                        Text(item.title).tag(item)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 230)
-
-                Picker("工具筛选", selection: $toolFilter) {
-                    Text("全部工具").tag("all")
-                    ForEach(availableTools, id: \.self) { tool in
-                        Text(HomeDashboardModel.toolTitle(tool)).tag(tool)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .controlSize(.small)
+            Text(isSearchActive ? "命中 \(searchResults.count) 条" : "共 \(filteredEntries.count) 条")
+                .font(FizzTypography.monoSmall)
+                .foregroundStyle(.secondary)
                 .fixedSize()
-
-                Spacer(minLength: 0)
-            }
         }
+    }
+
+    private func toolFilterTitle(_ tool: String) -> String {
+        tool == "all" ? "全部工具" : HomeDashboardModel.toolTitle(tool)
     }
 
     private func conversationCard(_ entry: ConversationEntry) -> some View {
@@ -259,115 +273,147 @@ struct ConversationsWorkspaceView: View {
         let toolTitle = HomeDashboardModel.toolTitle(session.tool)
         let isLive = store.activeAISessionIDs.contains(session.stableID)
         let isResuming = resumingID == session.stableID
+        let resumeTitle = isLive ? "回到会话" : "继续"
+        let openSession = { store.openProject(project, tab: .progress, sessionID: session.id) }
 
-        return HStack(alignment: .top, spacing: 12) {
-            Button {
-                store.openProject(project, tab: .progress, sessionID: session.id)
-            } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    ProjectBadgeIcon(project: project, size: 24, framed: false)
-                        .padding(.top, 2)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 7) {
-                            Text(project.displayName)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.primary)
-
-                            TagChip(
-                                text: toolTitle,
-                                tint: DetectedTool(rawValue: session.tool)?.tint ?? .secondary,
-                                compact: true
-                            )
-
-                            statusBadge(isLive: isLive, session: session)
-
-                            Text(Format.relative(session.modified))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
-
-                            Spacer(minLength: 0)
-                        }
-
-                        Text(session.primaryIntent ?? "\(toolTitle) 会话")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-
-                        if !session.touchedFiles.isEmpty {
-                            HStack(spacing: 5) {
-                                ForEach(Array(session.touchedFiles.prefix(3)), id: \.self) { file in
-                                    Text(URL(fileURLWithPath: file).lastPathComponent)
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(FizzTheme.recessedFill, in: Capsule())
-                                        .help(file)
-                                }
-                                if session.touchedFiles.count > 3 {
-                                    Text("+\(session.touchedFiles.count - 3)")
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundStyle(.tertiary)
-                                }
-                            }
-                        }
-
-                        if session.endedWithError, let err = session.lastError, !err.isEmpty {
-                            Text(err)
-                                .font(.system(size: 10.5, design: .monospaced))
-                                .foregroundStyle(.orange)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
+        return conversationRow(projectPath: project.path, modified: session.modified, durationMinutes: session.durationMinutes) {
+            Button(action: openSession) {
+                VStack(alignment: .leading, spacing: 6) {
+                    projectMetadata(project.displayName, tool: session.tool) {
+                        statusBadge(isLive: isLive, session: session)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    conversationTitle(session.primaryIntent ?? "\(toolTitle) 会话")
+                    if !session.touchedFiles.isEmpty {
+                        touchedFiles(session.touchedFiles)
+                    }
+                    if session.endedWithError, let err = session.lastError, !err.isEmpty {
+                        Text(err)
+                            .font(FizzTypography.monoSmall)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-
+            .fizzKeyboardAction(action: openSession)
+        } actions: {
             HStack(spacing: 6) {
                 HandoffCopyButton(project: project, compact: true)
 
                 if session.resumeCommand != nil {
-                    Button {
+                    FizzActionButton(
+                        title: isResuming ? "恢复中…" : resumeTitle,
+                        symbol: "play.fill", height: .compact, prominence: .primary
+                    ) {
                         Task { await resume(session, in: project) }
-                    } label: {
-                        if isResuming {
-                            ProgressView()
-                                .controlSize(.mini)
-                        } else {
-                            Label(isLive ? "回到会话" : "继续", systemImage: "play.fill")
-                                .font(.system(size: 10.5, weight: .medium))
-                        }
                     }
-                    .buttonStyle(.glassProminent)
-                    .tint(FizzTheme.accent)
-                    .controlSize(.small)
                     .disabled(isResuming)
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(14)
+    }
+
+    private func conversationRow<Details: View, Actions: View>(
+        projectPath: String, modified: Date, durationMinutes: Int? = nil,
+        @ViewBuilder details: () -> Details, @ViewBuilder actions: () -> Actions
+    ) -> some View {
+        ConversationColumns {
+            HStack(alignment: .top, spacing: FizzSpacing.row) {
+                Capsule()
+                    .fill(ProjectAccentColor.color(for: projectPath))
+                    .frame(width: 2, height: 24)
+                    .accessibilityHidden(true)
+                details()
+            }
+
+            VStack(alignment: .trailing, spacing: 6) {
+                HStack(spacing: FizzSpacing.row) {
+                    if let durationMinutes, durationMinutes > 0 {
+                        Text("\(durationMinutes) 分钟")
+                    }
+                    Text(Format.relative(modified))
+                        .minimumScaleFactor(0.85)
+                        .frame(width: 96, alignment: .trailing)
+                        .help(Format.shortDate(modified))
+                }
+                .font(FizzTypography.monoSmall)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+                actions()
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(FizzSpacing.card)
         .fizzCard(radius: FizzRadius.card)
+    }
+
+    private func projectMetadata<Status: View>(
+        _ name: String, tool: String, @ViewBuilder status: () -> Status
+    ) -> some View {
+        HStack(spacing: 6) {
+            Text(name)
+                .font(FizzTypography.caption(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            TagChip(
+                text: HomeDashboardModel.toolTitle(tool),
+                tint: .secondary,
+                compact: true
+            )
+            .fixedSize()
+
+            status()
+                .fixedSize()
+        }
+    }
+
+    private func conversationTitle(_ title: String) -> some View {
+        Text(title)
+            .font(FizzTypography.cardTitle)
+            .foregroundStyle(.primary)
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+    }
+
+    private func touchedFiles(_ files: [String]) -> some View {
+        HStack(spacing: 5) {
+            ForEach(Array(files.prefix(3)), id: \.self) { file in
+                Text(URL(fileURLWithPath: file).lastPathComponent)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(FizzTheme.recessedFill, in: Capsule())
+                    .help(file)
+            }
+            if files.count > 3 {
+                Text("+\(files.count - 3)")
+                    .foregroundStyle(.tertiary)
+                    .fixedSize()
+            }
+        }
+        .font(FizzTypography.monoSmall)
+        .lineLimit(1)
     }
 
     @ViewBuilder
     private func statusBadge(isLive: Bool, session: SessionRecord) -> some View {
         if isLive {
             HStack(spacing: 4) {
-                RunningPulseDot(size: 5)
+                RunningPulseDot()
                 Text("进行中")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.green)
+                    .font(FizzTypography.micro)
+                    .foregroundStyle(.secondary)
             }
         } else if session.endedWithError {
-            TagChip(text: "报错结束", tint: .orange, compact: true)
+            TagChip(text: "报错结束", tint: FizzTheme.statusWarning, compact: true)
         } else {
             Text("✓ 正常结束")
-                .font(.system(size: 10))
+                .font(FizzTypography.micro)
                 .foregroundStyle(.tertiary)
         }
     }
@@ -380,7 +426,7 @@ struct ConversationsWorkspaceView: View {
             ToastCenter.shared.show(
                 "已唤起 \(HomeDashboardModel.toolTitle(session.tool))",
                 symbol: "terminal.fill",
-                tint: .green,
+                tint: FizzTheme.statusSuccess,
                 subtitle: project.displayName
             )
         } else {
@@ -390,7 +436,7 @@ struct ConversationsWorkspaceView: View {
             ToastCenter.shared.show(
                 result.message,
                 symbol: "exclamationmark.triangle.fill",
-                tint: .orange,
+                tint: FizzTheme.statusWarning,
                 subtitle: result.fallbackCommand != nil ? "已复制恢复命令到剪贴板" : nil
             )
         }
@@ -406,7 +452,7 @@ struct ConversationsWorkspaceView: View {
             )
             .frame(maxWidth: .infinity, minHeight: 240)
         } else {
-            VStack(spacing: 8) {
+            VStack(spacing: FizzSpacing.row) {
                 ForEach(searchResults) { result in
                     searchResultRow(result)
                 }
@@ -416,65 +462,41 @@ struct ConversationsWorkspaceView: View {
 
     private func searchResultRow(_ result: SessionSearchResult) -> some View {
         let project = store.projects.first { $0.path == result.projectPath }
-        let toolTitle = HomeDashboardModel.toolTitle(result.tool)
         let isLive = store.activeAISessionIDs.contains(result.sessionStableID)
-
-        return Button {
+        let openSession = {
             if let project {
                 store.openProject(project, tab: .progress, sessionID: result.sessionID)
             }
-        } label: {
-            HStack(alignment: .top, spacing: 12) {
-                if let project {
-                    ProjectBadgeIcon(project: project, size: 24, framed: false)
-                        .padding(.top, 2)
-                }
+        }
 
+        return Button(action: openSession) {
+            conversationRow(projectPath: result.projectPath, modified: result.modified) {
                 VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 7) {
-                        Text(result.projectName)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.primary)
-
-                        TagChip(
-                            text: toolTitle,
-                            tint: DetectedTool(rawValue: result.tool)?.tint ?? .secondary,
-                            compact: true
-                        )
-
+                    projectMetadata(result.projectName, tool: result.tool) {
                         if isLive {
-                            TagChip(text: "进行中", tint: .green, compact: true)
+                            TagChip(text: "进行中", tint: FizzTheme.statusSuccess, compact: true)
                         } else if result.endedWithError {
-                            TagChip(text: "报错结束", tint: .orange, compact: true)
+                            TagChip(text: "报错结束", tint: FizzTheme.statusWarning, compact: true)
                         }
-
-                        Text(Format.relative(result.modified))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
-
-                        Spacer(minLength: 0)
                     }
 
-                    Text("「\(result.primaryIntent)」")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                    conversationTitle("「\(result.primaryIntent)」")
 
                     if let snippet = result.matchedSnippet, !snippet.isEmpty {
                         Text(snippet)
-                            .font(.system(size: 11))
-                            .foregroundStyle(FizzTheme.accent)
+                            .font(FizzTypography.caption)
+                            .foregroundStyle(Color.secondary)
                             .lineLimit(1)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            } actions: {
+                EmptyView()
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(14)
-        .fizzCard(radius: FizzRadius.card)
+        .fizzKeyboardAction(action: openSession)
     }
 
     private func runSearch() async {
@@ -501,5 +523,41 @@ struct ConversationsWorkspaceView: View {
         }
         searchResults = results
         isSearching = false
+    }
+}
+
+private struct ConversationColumns: Layout {
+    private let leadingShare: CGFloat = 0.65
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width: CGFloat
+        if let proposedWidth = proposal.width, proposedWidth.isFinite {
+            width = proposedWidth
+        } else {
+            width = FizzSpacing.grid + max(
+                subviews[0].sizeThatFits(.unspecified).width / leadingShare,
+                subviews[1].sizeThatFits(.unspecified).width / (1 - leadingShare)
+            )
+        }
+        let (leading, trailing) = widths(for: width)
+        let height = max(
+            subviews[0].sizeThatFits(.init(width: leading, height: nil)).height,
+            subviews[1].sizeThatFits(.init(width: trailing, height: nil)).height
+        )
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let (leading, trailing) = widths(for: bounds.width)
+        subviews[0].place(at: bounds.origin, anchor: .topLeading, proposal: .init(width: leading, height: nil))
+        subviews[1].place(
+            at: CGPoint(x: bounds.maxX - trailing, y: bounds.minY), anchor: .topLeading,
+            proposal: .init(width: trailing, height: nil)
+        )
+    }
+
+    private func widths(for width: CGFloat) -> (CGFloat, CGFloat) {
+        let available = max(0, width - FizzSpacing.grid)
+        return (available * leadingShare, available * (1 - leadingShare))
     }
 }

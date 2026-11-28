@@ -9,6 +9,9 @@ enum SidebarLayout {
     static let cornerRadius: CGFloat = FizzRadius.frame
 }
 
+private let sidebarLabelInk = Color.primary.opacity(0.78)
+private let sidebarDetailInk = Color.primary.opacity(0.64)
+
 struct SidebarView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
@@ -30,16 +33,12 @@ struct SidebarView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: SidebarLayout.cornerRadius, style: .continuous)
-                .fill(FizzTheme.sidebar)
-        }
         .clipShape(RoundedRectangle(cornerRadius: SidebarLayout.cornerRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: SidebarLayout.cornerRadius, style: .continuous)
-                .strokeBorder(FizzTheme.stroke, lineWidth: 1)
-        }
-        .fizzAdaptiveShadow(.raised)
+        .glassEffect(
+            .regular,
+            in: .rect(cornerRadius: SidebarLayout.cornerRadius, style: .continuous)
+        )
+        .fizzAdaptiveShadow(.subtle)
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.standard), value: collapsed)
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: store.destination)
         .task {
@@ -81,11 +80,11 @@ struct SidebarView: View {
             Button {
                 store.toggleCommandPalette()
             } label: {
-                FizzIcon(symbol: "magnifyingglass", size: FizzIconScale.nav)
-                    .foregroundStyle(.secondary)
+                FizzIcon(.sm, symbol: "magnifyingglass")
+                    .foregroundStyle(sidebarLabelInk)
                     .frame(width: 36, height: 30)
                     .background(
-                        FizzTheme.recessedFill,
+                        FizzTheme.mutedFill,
                         in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
                     )
                     .overlay {
@@ -197,23 +196,23 @@ struct SidebarView: View {
             store.toggleCommandPalette()
         } label: {
             HStack(spacing: 6) {
-                FizzIcon(symbol: "magnifyingglass", size: FizzIconScale.nav)
-                    .foregroundStyle(.secondary)
+                FizzIcon(.sm, symbol: "magnifyingglass")
+                    .foregroundStyle(sidebarLabelInk)
 
                 Text("搜索")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .font(FizzTypography.font(12))
+                    .foregroundStyle(sidebarLabelInk)
 
                 Spacer(minLength: 4)
 
                 Text("⌘K")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.tertiary)
+                    .font(FizzTypography.micro(.regular))
+                    .foregroundStyle(sidebarDetailInk)
             }
             .padding(.horizontal, 9)
             .frame(height: 30)
             .background(
-                FizzTheme.recessedFill,
+                FizzTheme.mutedFill,
                 in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
             )
             .overlay {
@@ -233,7 +232,6 @@ struct SidebarView: View {
                 symbol: "house",
                 title: "工作台",
                 detail: runningCount > 0 ? "\(runningCount) 运行中" : nil,
-                detailColor: .green,
                 selected: store.destination.isDashboard,
                 selectionNamespace: selectionNamespace
             ) {
@@ -244,7 +242,6 @@ struct SidebarView: View {
                 symbol: "bubble.left.and.bubble.right",
                 title: FizzCopy.conversationsNavTitle,
                 detail: store.activeAIProjectPaths.isEmpty ? nil : "\(store.activeAIProjectPaths.count) 进行中",
-                detailColor: .green,
                 selected: store.destination.isConversations,
                 selectionNamespace: selectionNamespace
             ) {
@@ -299,11 +296,8 @@ struct SidebarView: View {
 
         return VStack(alignment: .leading, spacing: 1) {
             SidebarSectionHeader(title: sectionTitle) {
-                FizzIcon(
-                    symbol: copyMode == .plain ? "pin.fill" : "star.fill",
-                    size: FizzIconScale.micro
-                )
-                .foregroundStyle(copyMode == .plain ? FizzTheme.accent : Color.yellow)
+                FizzIcon(.xs, symbol: copyMode == .plain ? "pin.fill" : "star.fill")
+                    .foregroundStyle(sidebarLabelInk)
             }
 
             ForEach(manualEntries) { entry in
@@ -312,8 +306,8 @@ struct SidebarView: View {
 
             if !autoEntries.isEmpty {
                 Text("7 天内活跃（自动）")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                    .font(FizzTypography.micro(.regular))
+                    .foregroundStyle(sidebarDetailInk)
                     .padding(.leading, 9)
                     .padding(.top, manualEntries.isEmpty ? 2 : 5)
                     .padding(.bottom, 1)
@@ -328,8 +322,8 @@ struct SidebarView: View {
                     store.openLibrary()
                 } label: {
                     Text("还有 \(partition.overflowActiveCount) 个活跃项目")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.secondary)
+                        .font(FizzTypography.monoSmall)
+                        .foregroundStyle(sidebarLabelInk)
                         .padding(.horizontal, 9)
                         .frame(height: 22, alignment: .leading)
                 }
@@ -356,7 +350,7 @@ struct SidebarView: View {
     private var runningSection: some View {
         VStack(alignment: .leading, spacing: 1) {
             SidebarSectionHeader(title: "正在运行") {
-                RunningPulseDot(size: 5)
+                RunningPulseDot()
             }
 
             ForEach(runningProjects) { project in
@@ -391,8 +385,8 @@ struct SidebarView: View {
                             .frame(width: 5, height: 5)
 
                         Text(group.name)
-                            .font(.system(size: 11.5, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .font(FizzTypography.mono(.medium))
+                            .foregroundStyle(sidebarLabelInk)
                             .lineLimit(1)
 
                         Spacer(minLength: 0)
@@ -408,8 +402,8 @@ struct SidebarView: View {
                 Button {
                     toggleGroup(group.name)
                 } label: {
-                    FizzIcon(symbol: "chevron.right", size: FizzIconScale.micro)
-                        .foregroundStyle(.tertiary)
+                    FizzIcon(.xs, symbol: "chevron.right")
+                        .foregroundStyle(sidebarDetailInk)
                         .rotationEffect(.degrees(isCollapsed ? 0 : 90))
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
@@ -421,8 +415,8 @@ struct SidebarView: View {
                 Button {
                     Task { await store.addRoot() }
                 } label: {
-                    FizzIcon(symbol: "plus", size: FizzIconScale.micro)
-                        .foregroundStyle(.secondary)
+                    FizzIcon(.xs, symbol: "plus")
+                        .foregroundStyle(sidebarLabelInk)
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
                 }
@@ -476,7 +470,7 @@ struct SidebarView: View {
             ToastCenter.shared.show(
                 "接力卡已复制",
                 symbol: "doc.on.clipboard.fill",
-                tint: FizzTheme.accent,
+                tint: Color.secondary,
                 subtitle: "\(result.characterCount) 字"
             )
         }
@@ -503,9 +497,9 @@ struct SidebarView: View {
             if let disk {
                 HStack(spacing: 5) {
                     Text(Format.bytes(disk.free))
-                        .fontWeight(.medium)
+                        .font(FizzTypography.font(9.5, weight: .medium))
                     Text("可用")
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(sidebarDetailInk)
 
                     Spacer(minLength: 8)
 
@@ -514,13 +508,13 @@ struct SidebarView: View {
                             Capsule()
                                 .fill(FizzTheme.hairline)
                             Capsule()
-                                .fill(FizzTheme.accent.opacity(0.74))
+                                .fill(Color.secondary.opacity(0.65))
                                 .frame(width: max(3, proxy.size.width * disk.usedFraction))
                         }
                     }
                     .frame(width: 40, height: 3)
                 }
-                .font(.system(size: 9.5).monospacedDigit())
+                .font(FizzTypography.font(9.5))
                 .padding(.horizontal, 8)
                 .frame(height: 20)
                 .help(store.scannedAt.map { "\(Format.relative($0))更新" } ?? "尚未扫描")
@@ -609,8 +603,8 @@ private struct SidebarSectionHeader<Marker: View>: View {
                 .frame(width: 8, height: 8)
 
             Text(title)
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(.secondary)
+                .font(FizzTypography.mono(.medium))
+                .foregroundStyle(sidebarLabelInk)
                 .lineLimit(1)
 
             Spacer(minLength: 0)
@@ -632,7 +626,6 @@ private struct SidebarSignalRow: View {
     let symbol: String
     let title: String
     var detail: String?
-    var detailColor: Color = .secondary
     var selected = false
     let selectionNamespace: Namespace.ID
     let action: () -> Void
@@ -642,23 +635,22 @@ private struct SidebarSignalRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                FizzIcon(symbol: symbol, size: FizzIconScale.nav)
+                FizzIcon(.sm, symbol: symbol)
                     .frame(width: 16)
 
                 Text(title)
-                    .font(.system(size: 12.5, weight: selected ? .medium : .regular))
+                    .font(FizzTypography.body(selected ? .medium : .regular))
 
                 Spacer(minLength: 6)
 
                 if let detail, !detail.isEmpty {
                     Text(detail)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(detailColor)
+                        .font(FizzTypography.micro)
+                        .foregroundStyle(sidebarLabelInk)
                         .lineLimit(1)
                 }
             }
-            .foregroundStyle(selected ? Color.primary : Color.secondary)
+            .foregroundStyle(selected ? Color.primary : sidebarLabelInk)
             .padding(.horizontal, 8)
             .frame(height: 30)
             .background {
@@ -680,6 +672,7 @@ private struct SidebarSignalRow: View {
         .onHover { hovering = $0 }
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityRemoveTraits(selected ? [] : .isSelected)
+        .fizzKeyboardAction(action: action)
     }
 }
 
@@ -698,35 +691,36 @@ private struct SidebarProjectRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 7) {
-                ProjectBadgeIcon(project: project, size: 20, framed: false)
+                ProjectAccentDot(path: project.path)
 
                 Text(project.displayName)
-                    .font(.system(size: 12.5, weight: selected ? .medium : .regular))
-                    .lineLimit(1)
+                    .font(FizzTypography.body(selected ? .medium : .regular))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Spacer(minLength: 4)
 
                 if let tagText {
                     Text(tagText)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .font(FizzTypography.font(9, weight: .medium))
+                        .foregroundStyle(sidebarLabelInk)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(FizzTheme.recessedFill, in: Capsule())
+                        .background(FizzTheme.mutedFill, in: Capsule())
                 }
 
                 if let portText {
                     Text(portText)
-                        .font(.system(size: 9.5, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .font(FizzTypography.font(9.5))
+                        .foregroundStyle(sidebarDetailInk)
                 }
 
                 dotIndicator
             }
-            .foregroundStyle(selected ? Color.primary : Color.secondary)
+            .foregroundStyle(selected ? Color.primary : sidebarLabelInk)
             .padding(.horizontal, 7)
-            .frame(height: 27)
+            .padding(.vertical, 2)
+            .frame(minHeight: 27)
             .background {
                 if selected {
                     RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
@@ -754,17 +748,13 @@ private struct SidebarProjectRow: View {
     private var dotIndicator: some View {
         switch statusDot {
         case .aiWorking:
-            RunningPulseDot(size: 6)
+            RunningPulseDot()
                 .help("AI 正在干活")
         case .broken:
-            Circle()
-                .fill(Color.red)
-                .frame(width: 6, height: 6)
+            FizzStatusDot(tint: FizzTheme.statusDanger)
                 .help("跑不起来或上次对话报错")
         case .unsaved:
-            Circle()
-                .fill(Color.orange)
-                .frame(width: 6, height: 6)
+            FizzStatusDot(tint: FizzTheme.statusWarning)
                 .help(FizzCopy.uncommittedChanges(mode: copyMode).text)
         case .none:
             EmptyView()
@@ -785,8 +775,8 @@ private struct SidebarRailButton: View {
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .topTrailing) {
-                FizzIcon(symbol: symbol, size: FizzIconScale.nav)
-                    .foregroundStyle(selected ? Color.primary : Color.secondary)
+                FizzIcon(.sm, symbol: symbol)
+                    .foregroundStyle(selected ? Color.primary : sidebarLabelInk)
                     .frame(width: 34, height: 30)
                     .background {
                         if selected {
@@ -803,7 +793,7 @@ private struct SidebarRailButton: View {
                     }
 
                 if showsDot {
-                    RunningPulseDot(size: 5)
+                    RunningPulseDot()
                         .padding(2)
                 }
             }
@@ -815,6 +805,7 @@ private struct SidebarRailButton: View {
         .accessibilityLabel(label)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityRemoveTraits(selected ? [] : .isSelected)
+        .fizzKeyboardAction(action: action)
     }
 }
 
@@ -831,6 +822,9 @@ private struct SidebarRailProjectButton: View {
             ZStack(alignment: .topTrailing) {
                 ProjectBadgeIcon(project: project, size: 20, framed: false)
                     .frame(width: 34, height: 28)
+                    .overlay(alignment: .bottomLeading) {
+                        ProjectAccentDot(path: project.path).padding(2)
+                    }
                     .background {
                         if selected {
                             RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous)
@@ -846,7 +840,7 @@ private struct SidebarRailProjectButton: View {
                     }
 
                 if project.port == .running {
-                    RunningPulseDot(size: 5)
+                    RunningPulseDot()
                         .padding(2)
                 }
             }
@@ -868,19 +862,19 @@ private struct SidebarSettingsRow: View {
     var body: some View {
         SettingsLink {
             HStack(spacing: 8) {
-                FizzIcon(symbol: "gearshape", size: FizzIconScale.nav)
+                FizzIcon(.sm, symbol: "gearshape")
                     .frame(width: 16)
 
                 Text("设置")
-                    .font(.system(size: 12.5))
+                    .font(FizzTypography.body)
 
                 Spacer(minLength: 0)
 
                 Text("⌘,")
-                    .font(.system(size: 9.5, design: .monospaced))
-                    .foregroundStyle(.tertiary)
+                    .font(FizzTypography.font(9.5))
+                    .foregroundStyle(sidebarDetailInk)
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(sidebarLabelInk)
             .padding(.horizontal, 8)
             .frame(height: 30)
             .background {
@@ -903,8 +897,8 @@ private struct SidebarRailSettingsButton: View {
 
     var body: some View {
         SettingsLink {
-            FizzIcon(symbol: "gearshape", size: FizzIconScale.nav)
-                .foregroundStyle(.secondary)
+            FizzIcon(.sm, symbol: "gearshape")
+                .foregroundStyle(sidebarLabelInk)
                 .frame(width: 34, height: 30)
                 .background {
                     if hovering {

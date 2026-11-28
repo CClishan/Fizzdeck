@@ -24,16 +24,15 @@ struct HomeProjectBrowser: View {
     let onRescanSelected: () -> Void
     let onToggleSelectAll: () -> Void
     let onClearSelection: () -> Void
-    let onEndSelection: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: FizzSpacing.grid) {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 Text("项目")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(FizzTypography.font(15, weight: .semibold))
                     .accessibilityAddTraits(.isHeader)
                 Text("\(projects.count)")
-                    .font(.caption.monospacedDigit())
+                    .font(FizzTypography.micro(.regular))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
             }
@@ -61,98 +60,72 @@ struct HomeProjectBrowser: View {
     private var batchBar: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                FizzIcon(symbol: "checkmark.circle", size: 13)
-                    .foregroundStyle(FizzTheme.accent)
+                FizzIcon(.md, symbol: "checkmark.circle")
+                    .foregroundStyle(Color.secondary)
                 Text("已选 \(selectedCount) 个")
-                    .font(.system(size: 11.5, weight: .medium))
-                    .monospacedDigit()
+                    .font(FizzTypography.caption(.medium))
 
                 Spacer(minLength: 8)
 
-                if let onBatchStar {
-                    Button(allSelectedStarred ? "取消星标" : "设星标") {
-                        onBatchStar(!allSelectedStarred)
+                FizzMenuButton(title: "更多批量操作") {
+                    if let onBatchStar {
+                        Button(allSelectedStarred ? "取消星标" : "设星标") {
+                            onBatchStar(!allSelectedStarred)
+                        }
+                        .disabled(selectedCount == 0)
                     }
-                    .disabled(selectedCount == 0)
-                    .opacity(selectedCount == 0 ? 0.42 : 1)
-                    .buttonStyle(.glass)
-                }
 
-                if let onBatchGroup {
-                    Menu("改分组") {
-                        ForEach(knownGroups, id: \.self) { group in
-                            Button(group) {
-                                onBatchGroup(group)
+                    if let onBatchGroup {
+                        Menu("改分组") {
+                            ForEach(knownGroups, id: \.self) { group in
+                                Button(group) { onBatchGroup(group) }
+                            }
+                            if !knownGroups.isEmpty {
+                                Divider()
+                            }
+                            Button("自动分组") { onBatchGroup(nil) }
+                            Button("自定义…") {
+                                if let custom = SystemActions.promptForGroupName() {
+                                    onBatchGroup(custom)
+                                }
                             }
                         }
-                        if !knownGroups.isEmpty {
-                            Divider()
-                        }
-                        Button("自动分组") {
-                            onBatchGroup(nil)
-                        }
-                        Button("自定义…") {
-                            if let custom = SystemActions.promptForGroupName() {
-                                onBatchGroup(custom)
-                            }
-                        }
+                        .disabled(selectedCount == 0)
                     }
-                    .menuStyle(.button)
-                    .buttonStyle(.glass)
-                    .disabled(selectedCount == 0)
-                    .opacity(selectedCount == 0 ? 0.42 : 1)
-                }
 
-                if let onBatchFetch {
-                    Button("Fetch", action: onBatchFetch)
-                        .disabled(selectedCount == 0 || batchRunning || isScanning)
-                        .opacity(selectedCount == 0 || batchRunning || isScanning ? 0.42 : 1)
-                        .buttonStyle(.glass)
-                }
-
-                Button("复制清理命令", action: onCopyCleanup)
-                    .disabled(selectedCount == 0)
-                    .opacity(selectedCount == 0 ? 0.42 : 1)
-                    .buttonStyle(.glass)
-
-                Button(action: onRescanSelected) {
-                    if batchRunning {
-                        ProgressView()
-                            .controlSize(.mini)
-                    } else {
-                        Text("重新扫描")
+                    if let onBatchFetch {
+                        Button("Fetch", action: onBatchFetch)
+                            .disabled(selectedCount == 0 || batchRunning || isScanning)
                     }
+
+                    Button("复制清理命令", action: onCopyCleanup)
+                        .disabled(selectedCount == 0)
+
+                    Divider()
+
+                    Button(allVisibleSelected ? "取消全选" : "全选", action: onToggleSelectAll)
+                        .disabled(projects.isEmpty)
+                    Button("清除", action: onClearSelection)
+                        .disabled(selectedPaths.isEmpty)
                 }
+
+                FizzActionButton(
+                    title: batchRunning ? "扫描中…" : "重新扫描",
+                    height: .compact,
+                    action: onRescanSelected
+                )
                 .disabled(selectedCount == 0 || batchRunning || isScanning)
-                .opacity(selectedCount == 0 || batchRunning || isScanning ? 0.42 : 1)
-                .buttonStyle(.glass)
-
-                Button(allVisibleSelected ? "取消全选" : "全选", action: onToggleSelectAll)
-                    .disabled(projects.isEmpty)
-                    .opacity(projects.isEmpty ? 0.42 : 1)
-                    .buttonStyle(.glass)
-
-                Button("清除", action: onClearSelection)
-                    .disabled(selectedPaths.isEmpty)
-                    .opacity(selectedPaths.isEmpty ? 0.42 : 1)
-                    .buttonStyle(.glass)
-
-                Button("完成", action: onEndSelection)
-                    .buttonStyle(.glassProminent)
-                    .tint(FizzTheme.accent)
-                    .controlSize(.regular)
             }
-            .controlSize(.small)
 
             if let batchFeedback {
                 HStack(spacing: 5) {
-                    FizzIcon(symbol: "info.circle", size: 11)
-                        .foregroundStyle(FizzTheme.accent)
+                    FizzIcon(.sm, symbol: "info.circle")
+                        .foregroundStyle(Color.secondary)
                     Text(batchFeedback)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                .font(.caption2)
+                .font(FizzTypography.micro)
             }
         }
         .padding(.horizontal, 10)

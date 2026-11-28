@@ -1,6 +1,17 @@
 # FizzDeck 交接文档
 
-更新：2026-11-27。原生产品仓库 `CClishan/Fizzdeck`，官网仓库 `CClishan/koroo-blog`。请先区分本地构建、官网部署和 GitHub Latest。
+更新：2026-11-28。原生产品仓库 `CClishan/Fizzdeck`，官网仓库 `CClishan/koroo-blog`。请先区分本地构建、官网部署和 GitHub Latest。
+
+## v0.9.0 / Build 23 · 本地发布候选（待「确认发布」）
+
+[审核入口与双语截图](output/release-v0.9.0/REVIEW.md) · [拟提交文件](output/release-v0.9.0/git-files.txt) · [发行说明](docs/releases/v0.9.0.md)。当前分支 `main` 基点 `9291b2c`，保留原有 Wave 6 和 Wave 087 变更。2026-11-28 只读查询 GitHub Latest 仍为 **v0.8.0 / 16**；官网未同步。
+
+- 原生包的四字重 Obel Mono 共 823,012 字节，从 OTF 读到正式 PostScript 名称与 SIL OFL 1.1。App / SwiftPM 使用各自随包资源。CoreText 逐字符验证 Latin、数字和 `⌘` 用 Obel，中文与全角标点用同字重系统中文字体。泛用系统级联可能把 Bold 配成 Semibold；取系统实际的中文 UI 字体作为首个后备，保留系统后备。字体 OFL 和 Kubai MIT 原文均已入包。
+- [严格并发构建](output/release-v0.9.0/strict-build.log)零警告、零错误；[全套 372 项](output/release-v0.9.0/swift-test.log)通过，未跳过，含 25 项设计系统、10 项分享测试。最终千项目万会话检索 P95 0.61ms，千行原生表格 59.0 FPS（60 Hz，3 秒）。[包内检查](output/release-v0.9.0/bundle.json)：arm64、版本 0.9.0/23、四个字体、94 个图标、三个系统动作。
+- [1000 / 1320pt 浅暗实拍](output/release-v0.9.0/native/QA.md)：长英文名在展开侧栏和窄行动区提前省略，现按可用宽度换行或将状态胶囊另起一行；周历、复盘和光栅/ASCII 分享卡均实拍。取 WindowServer 窗口 ID 和前台状态，另作[不含验收代码、二进制哈希相同的隔离冒烟](output/release-v0.9.0/native/stock-binary-smoke.json)。未启动或检查已安装 App，不读取真实 `.repodeck`，也未读写封存的 Wave 6 目录。
+- [官网浏览器结果](output/release-v0.9.0/web-work/latest-final-build23/verification.json)：四张本版亮色真机图、双语精简文案；Chrome 四组合共 20 组主副句全为两行，零溢出、零控制台错误。首屏两图 114,922 字节，另三图延迟加载。独立无 Swift 缓存目录构建后，用产品仓 `public/` 的清单与导出脚本在隔离官网目录复验，[HTML 与九个依赖逐字节相同](output/release-v0.9.0/site-manifest.json)。保留伴生工作台既有入口和资产。
+- 验收踩坑：全套测试若整体再套系统文件沙箱，回环 SSH 和独立 CLI 进程识别用例会受影响；[额外沙箱尝试](output/release-v0.9.0/swift-test-extra-sandbox.log)有失败。正式全跑先以 `realpath` 核对 Foundation 的隔离 home，再采用 SwiftPM 常规测试环境，所有用例均通过。GUI 的启动前沙箱保持生效。网页扫描只带所需网页输入。
+- **待授权：** 当前没有 Developer ID Application 本机身份。tag 工作流经 CI 后生成草稿，上传 DMG 与 `.sha256`，使用本版发行说明并根据实际打包结果写明 ad-hoc 未公证或 Developer ID 已公证。收到「确认发布」后再提交、推送、打 tag；验证草稿资产、版本与签名、公开 Latest，再用导出脚本同步 `koroo-blog` 并核对线上字节。不要误提交 `output/` 或原有未跟踪的 Build 21 截图。
 
 | 项目 | 当前状态 |
 |---|---|
@@ -16,7 +27,79 @@
 
 本次发布准备再次用 Chrome 在 1440px / 390px 各点击切换中英文，核对下载地址、版本、截图来源和屏幕贴图位置，四种组合均无横向溢出。官网导出仍为 HTML + 9 个依赖，8 个依赖与线上相同；部署只需替换 HTML 并新增带内容哈希的文案脚本。对应补丁在 `output/release-v0.8.0/koroo-fizzdeck-0.8.0.patch`，浏览器记录在 `output/playwright/fizzdeck-v0.8.0/`。不要将 Swift 编译和测试的临时目录混入 Tailwind 的网页构建目录；本次网页产物从独立、无编译缓存的源码目录生成。
 
-## 真机与回归
+## Wave 087 视觉验收（0.8.6 / Build 22，独立本地审核）
+
+[本机隔离预览 App](output/wave-087/preview/FizzDeck.app) · [实拍与分享原图](output/wave-087/native/QA.md) · [相对 Build 22 的独立补丁](output/wave-087/review.patch) · [验贴与哈希](output/wave-087/review-verification.txt)。预览使用同目录树的 `preview-data/`，保留当前位置即可双击。默认五个样例项目；没有读取日常项目或会话。
+
+- 94 个 Kubai 模板在 10、12、14pt 均有有效墨迹。纯白工作台的两列行动卡与周历保留细描边；1320pt 浅／暗实拍展开 236pt，1000pt 两种外观都实点折叠至 58pt。四个组合均打开并拍到无遮挡的 900 × 700pt 复盘。
+- 初拍发现玻璃侧栏的未选项目偏灰。只提高中性前景，文字实拍对比度由浅色 2.86、暗色 3.22 提至 **7.16:1 / 7.57:1**。29 个隔离目录的长列表滚到底部，页脚固定，行不越过圆角。匿名分享卡用贡献排名分配互异的项目盘颜色；具名卡保留原项目色。两种波形左右留 36pt、底部留 8pt，移除光栅的装饰色雾。实际切换并复制的四份 PNG 均为 **1280 × 800**，默认不含项目名。
+- [干净严格构建](output/wave-087/strict-build.log) 0 警告、0 错误；[全量测试](output/wave-087/swift-test.log) **368/368，通过且无跳过**，含设计系统 21 项与分享 10 项。千项目／万会话查询 P95 0.76ms，窗口压测 60.0 FPS。`git diff --check` 通过。补丁只包含原生视觉、图标依赖、设计规范和本轮交接，用封存源码在临时目录验贴后逐文件核对内容和权限。
+- [隔离核对](output/wave-087/isolation-verification.txt)：整轮选取的 1,839 个受保护路径零变化；复制过 PNG 的阶段按类型逐字节还原剪贴板。临时实例已退出、注销，日常进程保留。预览可执行文件与最终实拍的可执行文件 SHA-256 相同。
+- 踩坑：在仓库内持久保留隔离预览目录时，`realpath` 也需要读取祖先目录元数据。首个探针在业务启动前退出，未连接 AX；只增加对指定祖先目录的元数据读取后验证通过，真实配置、安装包和 Git 仍不可读写。截图使用精确窗口 ID 及 `-a` 排除附着窗口，同时核对顶层标题、窗口列表和 PNG 的实际内容。
+- Wave 6 原先缺失的[1000pt 暗色复盘补拍](output/wave-086-retake/README.md)使用原冻结可执行文件和旧图标，单独归档。其原文保留下方历史状态；`output/wave-086/build22-source.tar.gz` 与 `output/wave-086/review.patch` 哈希均未变。未改 `src/`，未提交、推送、打 tag、签名、发版或部署。
+
+## v0.8.6 / Build 22（本地候选，待审核）
+
+- Build 21 已审核。开始 Wave 6 前封存[完整源码](output/wave-086/build21-source.tar.gz)，527 个路径与审核版[逐字节一致](output/wave-086/baseline-verification.txt)。公开 [Latest](https://github.com/CClishan/Fizzdeck/releases/latest) 仍为 v0.8.0 / Build 16。
+- [四层色彩规则](docs/COLOR_RULES.md)统一浅暗重点色、语义状态和六个项目色。导航与分段用灰阶，反馈用小圆点或轻胶囊，项目手动标签保留色点。移除背景、分享卡及详情头部光晕；Git 和还原共用差异行，只给增删文字着色。工作台标题下直接并排放「接着做」和「需要你看一下」，周历铺满一行，运行／健康无内容时不占位。
+- 点击近七天摘要打开复盘。费用随周期切换；按工具只有一类时显示金额与占比、不画环。指标折线为灰阶，趋势和表头改中文。上期对话不足 3 次、估算费用不足 $0.50，或增长超过 200% 时隐藏相应涨幅；保留的百分比取整。
+- 干净[严格并发构建](output/wave-086/strict-build.log) 0 警告、0 错误；[全量测试](output/wave-086/swift-test-verified.log) **365 项全过、0 跳过**。千项目／万会话检索 P95 0.61ms，原生表格实测 60.0 FPS。额外对测试及其子进程施加文件沙箱时，回环 SSH 与临时 CLI 进程识别两例失败；最终以独立测试主目录重跑全部用例。这不改变下述真机 App 从构造阶段生效的隔离。
+- [原生截图与走查](output/wave-086/native/QA.md)：摘要由同一窗口根部呈现复盘。修复前 1000pt 主窗被撑到 1308pt；修复后两种宽度、两种外观均保持原宽，复盘 900 × 700pt。窄窗周历完整显示 `Boreal Lab`、`Field Notes` 和 `Rendu Process — Cinematic Timeline`。八张必需截图中七张有效；1000pt 暗色复盘已打开并核对表头和窗宽，但原图被分享卡遮挡，补拍时 macOS 已锁屏。单分类与多分类费用各有额外实拍，不计入这八张。
+- [隔离核对](output/wave-086/isolation-verification.txt)：最终构建验证及四组真机走查前后 **1,839 项零变化**。整波起点至结束另有六个真实缓存相关路径在 16:04:48 发生变化，写入方未证实；真实 `roots.json`、`state.json`、安装包、Git 元数据未变，没有回写缓存。所有 QA 副本均已退出、注销，保留用户日常进程。每次先备份剪贴板；1320pt 浅色结束时实际还原，其余无需写入，逐项字节均已核对。
+- 隔离踩坑：早两次启动前预检未进入业务。Foundation 可能把临时 home 返回成 `/tmp`，需用 `realpath` 与 `/private/tmp` 比较。只连接有当前 PID 与防护标记的唯一 Bundle ID。截取指定 sheet 仍可能包含附着的子弹窗；应核对前后可见窗口列表和 PNG 内容。锁屏时即使 WindowServer 还列出窗口、录屏已有授权，也不能作为已拍到界面的证据。
+- 共享工作树在构建完成后出现了另一组图标、较亮色值与光栅／ASCII 分享卡修改。未覆盖这些工作。本波交付以[冻结的 Build 22 完整源码](output/wave-086/build22-source.tar.gz)为准，含 `#6E5CA8 / #9B89D9` 和原有图标；请勿把共享工作树的新外观用作本波验收依据。 封存副本另做[干净严格构建](output/wave-086/frozen-strict-build.log)；[复跑](output/wave-086/frozen-swift-test.log) 364 通过、0 失败，锁屏时仅跳过先前已通过的窗口压测。139 个 App 源文件的[编译器索引](output/wave-086/compiler-index-verification.txt)与实拍构建逐项一致。
+- [本波审核补丁](output/wave-086/review.patch)以完整 Build 21 为底[验贴](output/wave-086/review-verification.txt)，不含旧波次、伴生 Web 或官网改动。仍在本地审核点。
+
+## v0.8.5 / Build 21（本地，已审核）
+
+- 跨 Agent 复盘支持 `7d / 30d / 90d / All`。前三档按本机自然日和上一段等长周期比较；All 无上期。四张等高指标卡、按项目显隐的堆叠趋势、活跃热力图、连续活跃、按工具费用与报错率，以及逐条会话明细均使用本机记录。时长、轮数和测试结果按日志证据显示；缺失留空，未计价会话单独计数。
+- 分享卡按审核时补充的参考图改为横版：顶部品牌与周期，左侧放大 AI 干活时长，右侧列估算费用、Tokens、对话数，底部为项目色堆叠面积图。完整保留复盘的逐段数据，最多显示五层，小项目可合为「其他」；全期无时长时明确改画对话趋势。浅／暗两款均由 SwiftUI `ImageRenderer` 输出 1280 × 800 PNG，默认隐藏项目名，仅复制到本机剪贴板。Markdown 与单次同意的纯数字 AI 润色保留。
+- OpenCode 数据库暂时忙或短暂读不到时，源文件仍在则沿用上一份快照；源文件不存在时才从索引移除。隔离 SQLite 锁回归覆盖这两种情况。
+- 键盘修正后[严格并发构建](output/wave-085/native/keyboard-qa/strict-build.log) **0 警告 / 0 错误**；[全量测试](output/wave-085/native/keyboard-qa/swift-test.log) **361 项，360 通过、0 失败、1 项既有交互压测默认跳过**，比 Wave 4 多 17 项。[分享专项](output/wave-085/share-tests.log) 8 项全过，覆盖浅暗尺寸、匿名像素、路径与密钥脱敏，以及同时间桶的真实分层。
+- [隔离原生走查](output/wave-085/native/final-share/qa-observations.txt)覆盖四个周期、三种 Agent、项目筛选、测试胶囊和复盘快捷键。`⌘⇧C` 复制 Markdown，`⌘⇧S` 打开分享卡，Tab 到复制按钮后回车，Esc 返回复盘。该次走查从界面复制的 [浅色 PNG](output/wave-085/native/final-share/share-light.png) 与 [暗色 PNG](output/wave-085/native/final-share/share-dark.png) 均默认匿名，剪贴板各只有一项 PNG，该次原内容逐字节还原。
+- [本次键盘实测](output/wave-085/native/keyboard-qa/keyboard-ax.txt)：Tab 和空格打开工作台复盘及切换侧栏；对话可筛选、全文搜索并用回车打开命中项；项目库 `⌘F` 搜索，卡片墙用方向键和回车打开项目；体检可聚焦并发起重新检查；设置可切到「关于」并用「完成」关闭。`⌥⌘←/→` 可循环切换四个项目页签。Worktree 新建弹窗可用键盘打开并取消，未执行 Git 写操作；接力卡从菜单进入预览，三个场景均可键盘切换。VoiceOver 实际朗读与未抽查的原生菜单路径仍待验。
+- [旧版升级](output/wave-085/native/upgrades-final.log)：核对 `v0.5.3 / 11` 与 `v0.8.0 / 16` 原 DMG 的 SHA-256 和签名。两条路径都用对应旧版的安装助手替换已暂存的隔离副本并重启到横版分享卡构建 `0.8.5 / 21`；项目、星标、备注、分组保留，`roots.json` 与 `state.json` 逐字节一致。Build 21 包内已核对三个 App Intents 的动作元数据；本机仅有 Apple Development 身份，缺 Developer ID Application 与 `NOTARY_PROFILE`。签名版系统快捷指令与公证在线更新链未验证。
+- [官网候选](output/wave-085/landing/site-candidate/)沿用导出脚本，换了工作台、进度、版本与体检四张亮色真机图。[Chrome 记录](output/wave-085/landing/browser-verification.json)覆盖 390px / 1440px 中英文及四图实载字节，未见横向溢出或页面错误。首屏两图 115,222 字节；公开下载仍指向 v0.8.0。旧六页签伴生 Web 工作台保持不动，官网候选未部署。
+- 键盘 QA 的两次隔离异常发生在 **15:00:59**（旧辅助功能连接重启旧副本）及 **15:05:30**（另一个包装启动方案未获识别期间）。两次都只观察到真实 `~/.repodeck` 目录、扫描/会话缓存和搜索 SQLite/SHM/WAL 共六项变化，无法确认写入 PID。`roots.json`、`state.json`、已安装 App 和任务仓 Git 元数据未变。旧副本已注销并移开；最终 QA 将防护链接进实际 App，业务启动前由该 PID 验证受保护文件读写均被拒绝，退出后注销并移开副本。[最终受控复测](output/wave-085/native/keyboard-qa/isolation-verification.txt)前后 1,839 项零变化。后续只连接仍在运行、具备当次 PID 证明的唯一 Bundle ID，退出后丢弃绑定。
+- 键盘 QA 尝试用 Option 加辅助功能点击打开接力卡时，实际触发了普通复制，系统剪贴板被写入隔离样例接力卡；这一步前没有备份，未能恢复先前内容。后续改从明确的「预览接力卡…」菜单项进入。剪贴板不在文件快照范围内；后续对可能触发复制的验收先保存剪贴板。
+- Wave 5 [审查补丁](output/wave-085/review.patch)已纳入键盘修正，以审核通过的 Build 20 工作区快照为底，在独立临时目录[验贴并逐字节核对](output/wave-085/review-verification.txt)。已有修改保留，本地停在审核点，未暂存、提交、推送、打 tag、签名或发布。
+
+## v0.8.4 / Build 20（本地，已审核）
+
+- 接力卡可切换「换工具接着做」「丢给 AI 修报错」「写交接说明」。分别整理目标、改动与 Git 状态，最新可核对的本地或会话报错，以及项目背景和运行说明。预览与复制前脱敏，不写项目文件。底栏 28pt 主动作「复制并打开终端」，菜单可只复制或打开已安装的编辑器。原有 AI 润色仍仅在同意后主动选择，报错原文不进入润色请求。
+- Cursor 只读导入已明确归属或经 `workspace.json` 唯一匹配的本地 JSONL 对话；仅在没有导入真实对话时保留同工作区的摘要。OpenCode 只读导入默认位置的 SQLite 对话，消息和片段单独更新也会使缓存失效。两者都进入时间线、中文 FTS5、按文件反查和会话统计，无用量和费用的记录保持空值。Windsurf 保留工作区识别，不接默认 Cascade 历史或自动配置 Hook。格式与其他边界见 [macOS README](macos/README.md#local-agent-conversation-sources-build-20)。
+- 严格并发构建 **0 警告 / 0 错误**；全量 **344 项，343 通过、0 失败、1 项既有交互压测默认跳过**。本波新增 17 项，20 项专项回归全通过。`git diff --check`、打包脚本语法均通过；本地 App 包实读 `0.8.4 / 20`。
+- 隔离真机走查覆盖三种卡、实际失败输出、脱敏剪贴板、终端按钮与 Xcode 菜单、双工具时间线、中文搜索和文件反查。只向临时 OpenCode 库追加一轮，保持 `session.time_updated` 不动，无需重启或手动扫描即可搜到。未启动外部终端或编辑器，未读取真实工具历史。详见 [原生验收](output/wave-084/native/qa-observations.txt)。
+- 本波踩坑：LaunchServices 会覆盖额外传入的 `HOME`。守卫在连界面前即停止首次 QA 副本；后两次以探针验证 `CFFIXED_USER_HOME` 导向临时 Foundation home，再核对各自真实 PID 的临时 `ZDOTDIR`、禁 Git 传输和 npm 配置。npm 的用户与全局配置必须用两个不同的空文件。QA 副本已退出并注销，剪贴板已还原；[前后快照](output/wave-084/isolation-verification.txt)显示 1,839 个受检路径零变化。只留本地改动与 [本波审查补丁](output/wave-084/review.patch)，停在审核点后获得下一波放行，未暂存、提交、推送、打 tag、签名或发布。
+
+## v0.8.3 / Build 19（本地，已审核）
+
+- 版本页新增「并行工作区（Worktree）」：在 `<主仓目录名>-wt/<slug>` 创建独立分支及目录，拒绝覆盖，显示未提交以及相对主分支的领先和落后。右上新建和行尾操作使用 24pt 控件。刷新由进入页面、Git 写入完成或手动触发。
+- 合并要求主仓已检出主分支，两侧干净且没有未完成的 Git 操作；拒绝覆盖主仓同名的忽略文件。冲突只尝试中止本次合并，并提供主仓终端和可用编辑器入口。移除前检查该目录及子目录里的进程和 FizzDeck 受管任务；发现未提交或忽略文件时要求第二次确认。确认后内容再变会失效，移除始终保留分支。
+- 三处视觉微调已完成：接力卡两个分段组共用主题紫；「自动整理」放在「做到哪了」正文；项目库开关显示「封面」。在隔离原生浅色和暗色 1320pt 窗口走查，实际完成新建、两父提交合并、冲突撤回、脏目录二次确认与取消，以及运行中目录的拦截。冲突样例核对主仓 HEAD、未合并条目和文件内容；Swift 样例展示了 Xcode 菜单项。实际移除由 UUID 临时仓单测执行。[原生记录](output/wave-083/native/qa-observations.txt) · [Git 结果](output/wave-083/native/fixture-verification.txt)。
+- 严格并发构建 **0 警告 / 0 错误**；全量 **327 项，326 通过、0 失败、1 项既有交互压测默认跳过**；Worktree 共 21 项，新增 19 项，全通过。`git diff --check`、新文件空白检查、两个打包脚本语法均通过。临时 App 的 Info.plist 实读 `0.8.3 / 19`。
+- 本波踩坑：macOS `libproc` 返回 `/private/var`、`/private/tmp` 的实际路径，Foundation 可能去掉 `/private`；检测进程时用 `realpath` 再比较。XCTest 在异步恢复后同步 `waitUntilExit()` 会卡死，改用带超时的退出回调。完全禁止 Git 传输会拦住旧测试的临时 `file` 远端与回环 HTTP/SSH；只给全量测试开放这三种协议，QA 副本和 Worktree 服务仍禁用 Git 传输。
+- 两个 QA 副本各有独立 Bundle ID，先验证 LaunchServices 与实际 PID 环境再连接，退出后均注销。临时仓无远端。[隔离核对](output/wave-083/isolation-verification.txt) 比对 1,839 个受检路径，真实 FizzDeck 配置/缓存、已安装 App 和任务仓 Git 元数据无变化。此波未暂存、提交、推送、打 tag、签名或发布，审核通过后进入 v0.8.4。
+
+## v0.8.2 / Build 18（本地，已审核）
+
+- 工作台使用四张等高指标卡，按真实本地会话与 Git 记录显示近 7 天、上期对比与趋势；缺计价或用量时留空，改动文件按项目和路径去重。「接着做」和「需要你看一下」在首屏并排。侧栏、时间线、费用图例与对话行共用项目色。
+- 项目库、对话、体检、详情四签和七个弹窗/浮层已迁移。页眉动作 28pt，行尾和项目 Hero 24pt，次要操作收进带可访问名称的原生菜单。项目库保留唯一的「完成选择」；详情重新扫描只在工具栏；设置窗的「×」与「完成」都只关闭设置。移除旧 `FizzIcon` 数字重载并启用源码守门测试，零新依赖。
+- 严格并发构建 0 警告 / 0 错误，`git diff --check` 和两个打包脚本语法检查通过。全量 308 项：307 通过、0 失败、1 项既有交互压测默认跳过；本波新增 3 项均通过。临时 App 的 Info.plist 实读 `0.8.2 / 18`。仍在本地未暂存，公开版仍为 v0.8.0。
+- 使用 5 个临时 Git 项目和 10 条本地会话记录，在实机测得 `1000×996pt` 和 `1320×860pt`。四组主页面截图：[1000pt 浅色](output/wave-082/final-qa/1000-light-overview.jpg) · [1000pt 暗色](output/wave-082/final-qa/1000-dark-overview.jpg) · [1320pt 浅色](output/wave-082/final-qa/1320-light-overview.jpg) · [1320pt 暗色](output/wave-082/final-qa/1320-dark-overview.jpg)。样本中的操作区无横向裁切，指标与同排项目卡等高；记录了菜单全选、对话全文搜索、命令面板键盘打开项目、设置关闭，以及临时标记的 `README.md` 差异。对比只预览，未执行还原。原始截图和辅助功能记录见 `output/wave-082/final-qa/`。
+- **隔离异常（12:20）**：自动化重用了已退出的旧 App 连接，LaunchServices 不带上次命令行的临时 home 重启了旧副本。真实 `~/.repodeck` 的扫描、会话和提交活动缓存及会话搜索索引被刷新；`roots.json`、`state.json` 和 `/Applications/FizzDeck.app` 的大小及修改时间未变。旧副本登记了 6 个真实仓库的后台远端检查；检查 408 项 Git 元数据，只有本仓库 `refs/remotes/origin` 目录时间戳落在异常时段，未发现引用文件、HEAD、暂存区或对象包在该时段更新。未回写真实数据。
+- **复测方式**：退出并注销旧副本，把 `CFFIXED_USER_HOME` 和隔离 Git 配置写入新 QA 副本的 `Info.plist` `LSEnvironment`。先用无业务代码的探针确认系统启动会注入，再核对实际 App PID 环境，只连接这个正在运行的 Bundle ID。退出最终副本后，与加固复测前快照相比，10 个受检状态项均未变。留存 [Git 元数据核对](output/wave-082/isolation-incident-git-audit.txt)、`launchservices-preflight.log`、`guarded-environment.log` 和两份状态快照。后续 QA 启动必须先验证 PID 环境；退出后不要重用旧连接。
+- 本地结果通过审核后进入 v0.8.3，三处视觉反馈已随下一波落地。未提交、推送、打 tag、签名或部署。
+
+## v0.8.1 / Build 17（本地，已进入下一波）
+
+- 新增 4 档图标、6 档正文/标题字号与 2 档等宽字体、28/24pt 控件、按项目标识稳定分配的浅/暗双色调色板。共用层已提供原生玻璃按钮、页面标题、等高指标卡和微折线；`Panel` 与二级子卡使用统一圆角及留白。
+- 设置中 2 处旧突出按钮已迁移；清理 15 处非进度控件的 `.mini`。源码守门测试只允许 `.mini` 直接跟在 `ProgressView(...)` 后。原生玻璃样式在 28/24pt 控件分别补 8/6pt 纵向尺寸，设置标签高度时须扣除这部分。
+- 隔离 SwiftUI 组件预览在浅/暗模式量得按钮 28/24pt、图标按钮为同尺寸正方形；指标区域宽 670 和 1000pt 时，四卡均高 128pt。快照见 `output/wave-081/`，用于组件验收；全页面真机验收留到 v0.8.2。
+- 严格并发构建 0 警告 / 0 错误；305 项测试中 304 通过、1 项既有图形压测按默认配置跳过、0 失败，新增 9 项全部通过；`git diff --check` 通过。临时 App 的 Info.plist 实读 `0.8.1 / 17`。真实 `~/.repodeck` 与已安装 App 的检查项未变，未提交、推送、签名或发布。
+- 收到「继续先推进」后进入 v0.8.2，验收结果见上文。
+
+## v0.8.0 真机与回归
 
 - 合并提交第一次 CI 的提示条测试在固定等待 260 毫秒后过早断言，原提交重跑通过。后续测试改为观察队列实际变动，再验证只移除目标提示；不改发布 App 的行为。
 
@@ -39,7 +122,7 @@
 
 ## 继续工作
 
-本次发版已完成。后续需在旧版实机验证两条更新路径并核对项目、星标和设置；补完整键盘与 VoiceOver 朗读。取得 Developer ID Application 和公证凭据后，再从对应源码制作公证分发版。公开 DMG 校验记录留在 `output/release-v0.8.0/public-verification.json`。
+公开版仍为 v0.8.0，DMG 校验记录留在 `output/release-v0.8.0/public-verification.json`。Build 21 已审核；Build 22 停在本地，待补一张 1000pt 暗色复盘截图并审核。后续补全 App 键盘与 VoiceOver 朗读。取得 Developer ID Application 和公证凭据后，再验公证分发、系统的三个快捷指令和完整在线更新链。
 
 ## 网页版对齐 macOS（2026-11-26，本地未提交）
 

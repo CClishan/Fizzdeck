@@ -1,11 +1,11 @@
 # FizzDeck 现有能力全量梳理与后续演进路线
 
-> **源码基线**：macOS 原生端 `v0.8.0`（Build `16`）｜ [公开下载](https://github.com/CClishan/Fizzdeck/releases/latest) ｜ [官网](https://koroo.top/fizzdeck)
+> **本地源码候选**：macOS 原生端 [`v0.9.0`（Build `23`）](releases/v0.9.0.md)｜ [公开下载](https://github.com/CClishan/Fizzdeck/releases/latest) ｜ [官网](https://koroo.top/fizzdeck)
 > Build 13 保留独立源码和安装包；Build 16 汇总三个后续阶段，见[发行说明](releases/v0.8.0.md)。当前公开版为 [v0.8.0 / Build 16](https://github.com/CClishan/Fizzdeck/releases/tag/v0.8.0)（ad-hoc，未公证）。
 
 ---
 
-## 本轮版本与验证边界（2026-11-27）
+## 本轮版本与验证边界（2026-11-28）
 
 | 版本 | 原生能力 | 分发状态 |
 |---|---|---|
@@ -14,10 +14,17 @@
 | v0.7.6 阶段 | 关注项目 manifest / lock / `.env*` 事件、单项目 L0、限频云端检查、可停 L2、端口图、语言探测、非致命问题豁免 | 随 Build 16 打包；不包含在 Build 13 |
 | v0.7.7 阶段 | 项目 14/30 天费用与提交趋势、可选 AI 周报、按栈生成忽略规则并创建首次保护基线 | 随 Build 16 打包；不包含在 Build 13 |
 | v0.8.0 阶段 | 受管项目深链、三个 App Intents、CI、tag 打包、许可、规模压测 | 深链及键盘主路径真机通过；使用 Apple Development 签名后，三个动作均从系统快捷指令执行成功。托管 CI 与分发已验证；完整 VoiceOver 和 Apple 公证待验 |
+| v0.8.1 / 17、v0.8.2 / 18 | 原生设计 Token、统一图标与动作、等高工作台指标及全页面对齐 | 本地已审核，未分发 |
+| v0.8.3 / 19、v0.8.4 / 20 | 安全创建、合并、移除 Worktree；三种接力卡；Cursor / OpenCode 本地对话索引 | 本地已审核，未分发；Windsurf 仍是工作区摘要 |
+| v0.8.5 / 21 | 跨 Agent 复盘、项目堆叠趋势、活跃热力图、测试胶囊与匿名 PNG 分享卡 | 本地已审核，复盘和官网候选图见 [HANDOFF](../HANDOFF.md) |
+| v0.8.6 / 22 | [四层色彩预算](COLOR_RULES.md)、工作台行动区与全宽周历、复盘费用构成 | 纳入 Build 23；封存的 Wave 6 保留原貌 |
+| **v0.9.0 / 23** | 汇总 Build 17–22：Kubai 图标、浅色白底、原生玻璃侧栏、高明度项目色、光栅／ASCII 分享卡；四字重 Obel Mono + 系统中文 | 本地发布候选；双语官网使用 Build 23 隔离实拍；[公开 Latest](https://github.com/CClishan/Fizzdeck/releases/latest) 仍是 Build 16 |
 
-**性能与验收口径：** L0 按既有设计持续监听前 8 个关注项目，事件合并后只重检命中的项目；L1 打开工作台后按关注名单串行检查，含第 9 个及之后手动关注的 Git 项目。不拉取工作树，单项目至少间隔 24 小时；L2 必须点击。官网样机版首屏图片共 116,414 字节（机身 53,770，工作台 62,644），其余三张图延迟加载。部署状态、详细测试数字和升级验收见 [HANDOFF](../HANDOFF.md)。
+**性能与验收口径：** L0 按既有设计持续监听前 8 个关注项目，事件合并后只重检命中的项目；L1 打开工作台后按关注名单串行检查，含第 9 个及之后手动关注的 Git 项目。不拉取工作树，单项目至少间隔 24 小时；L2 必须点击。公开 Build 16 样机版首屏图片共 116,414 字节（机身 53,770，工作台 62,644），其余三张图延迟加载。Build 23 候选首屏两张共 114,922 字节；四个字体共增加 823,012 字节原生资源，不作为网页字体下载。千项目／万会话查询 P95 0.61ms，千行原生表格 59.0 FPS（本机 60 Hz、3 秒采样）。部署状态、详细测试数字和升级验收见 [HANDOFF](../HANDOFF.md)。
 
 **伴生 Web：** 本轮保留原有六页签与已有操作，未把有写操作的旧网页称为只读。后续是否减为四页签、或移除写操作，另行决定。
+
+**复盘口径：** 7/30/90 天按本机自然日切分，对比前一段等长自然日；All 覆盖已索引历史，无上一期。时长按可核对的 Agent 工作区间汇总，测试按匹配的命令与执行结果判定，证据不足显示 `—`。复盘在打开或切周期时从现有会话摘要计算，无额外常驻扫描；趋势图最多 45 桶，热力图显示所选周期最后 42 天（或更短）。复制 PNG 才触发本机 `ImageRenderer`，无上传；项目名默认隐藏。
 
 ## 一、产品定位与三端形态
 
@@ -71,7 +78,7 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 
 ### 5. AI 会话、终端回场与可选 AI 总结
 
-- **多工具原生索引**（[SessionIndex.swift](file:///Users/a003/dsh-workspace/repo-dashboard/macos/Sources/FizzDeck/Services/SessionIndex.swift)）：Codex、Claude Code、DeepSeek Harness、Antigravity / AGY、Grok、Gemini CLI；Cursor / Trae / Windsurf 只读工作区摘要。
+- **多工具原生索引**（[SessionIndex.swift](file:///Users/a003/dsh-workspace/repo-dashboard/macos/Sources/FizzDeck/Services/SessionIndex.swift)）：Codex、Claude Code、DeepSeek Harness、Antigravity / AGY、Grok、Gemini CLI；Cursor 的 agent-transcripts、OpenCode 的本地 SQLite 纳入对话索引；Trae / Windsurf 只读工作区摘要。
 - **多终端回场**（[SessionResumeService.swift](file:///Users/a003/dsh-workspace/repo-dashboard/macos/Sources/FizzDeck/Services/SessionResumeService.swift)、[TerminalLauncher.swift](file:///Users/a003/dsh-workspace/repo-dashboard/macos/Sources/FizzDeck/Services/TerminalLauncher.swift)）：Terminal、iTerm2、Ghostty、Warp；命令行中显式匹配会话 ID 的 CLI 进程可确认结束，不误杀共享 app-server。
 - **可选 AI 总结（默认关闭）**（[SummaryProvider.swift](file:///Users/a003/dsh-workspace/repo-dashboard/macos/Sources/FizzDeck/Services/SummaryProvider.swift)、[SummaryEngine.swift](file:///Users/a003/dsh-workspace/repo-dashboard/macos/Sources/FizzDeck/Services/SummaryEngine.swift)、[KeychainStore.swift](file:///Users/a003/dsh-workspace/repo-dashboard/macos/Sources/FizzDeck/Support/KeychainStore.swift)）：Agent CLI（免 Key）、OpenAI 兼容 API（Key 存 macOS 钥匙串）、本地模型（Ollama / LM Studio）。
 - **最小输入与防污染**：只发送项目名、文件名、变动计数和脱敏后的一句话意图；Agent CLI 在 `llm-workdir` 隔离执行，FizzDeck 自身会话被过滤并单独计费；失败静默回退规则摘要。
@@ -98,7 +105,7 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 ### 8. 分发、应用内更新与打包
 
 - **应用内下载与原子更新**（[AppUpdateService.swift](file:///Users/a003/dsh-workspace/repo-dashboard/macos/Sources/FizzDeck/Services/AppUpdateService.swift)）：GitHub Releases 检查、DMG 下载、`.sha256` 校验、挂载验证 Bundle ID 与签名、同卷暂存替换、自动重启。
-- **版本注入**（[build_and_run.sh](file:///Users/a003/dsh-workspace/repo-dashboard/macos/script/build_and_run.sh)）：默认 `0.8.0` / Build `16`，支持 `VERSION`、`BUILD_NUM` 环境变量覆盖。
+- **版本注入**（[build_and_run.sh](../macos/script/build_and_run.sh)）：默认 `0.9.0` / Build `23`，支持 `VERSION`、`BUILD_NUM` 环境变量覆盖。
 - **DMG 打包**（[package_dmg.sh](file:///Users/a003/dsh-workspace/repo-dashboard/macos/script/package_dmg.sh)）：默认 ad-hoc；支持 `--sign-identity` / `DEVELOPER_ID_APP`、Hardened Runtime、DMG 签名、`--notarize` + `NOTARY_PROFILE`、staple 与 `spctl` 校验。
 - **校验文件**：打包结束自动生成同名 `.sha256`，格式为 `shasum -a 256` 仅含文件名，供应用内更新和 GitHub Release 上传。
 
@@ -109,10 +116,10 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 | 类别 | 现状 | 下一步 |
 | :--- | :--- | :--- |
 | **公开安装包签名** | 默认 ad-hoc、未公证；macOS 可能在首次打开时拦截，允许信任的应用需在「隐私与安全性」内操作。Developer ID 公证须提供分发凭据 | 用真实 Developer ID 凭据打一次公证包，并在 Release Notes 明确标注 |
-| **应用内更新实机验证** | 原子更新、SHA-256、挂载校验和替换回滚均有实现与测试；两个旧版本到 v0.8.0 的真实更新尚待验证 | 在新版进入 Latest 后，分别从 v0.5.3 与 v0.7.4 按[实机清单](../macos/README.md)验证状态保留 |
+| **应用内更新实机验证** | 原子更新、SHA-256、挂载校验和替换回滚均有实现与测试；隔离升级证据见 [HANDOFF](../HANDOFF.md) | 下一公开版分发后按[实机清单](../macos/README.md)从 v0.5.3、v0.8.0 复走真实下载及更新 |
 | **对话标记** | 依赖临时 Git 对象，通常保留约 14 天；非 Git 项目只能纯标记 | 可在后续版本增加更明显的过期提示与固定入口 |
 | **长期性能与无障碍** | 千项目原生表格 60.1 FPS、万会话 FTS P95 0.96 ms。干净/有改动项目的版本页键盘往返、四页签与全局快捷键已真机验证；最终页签标题已核对 | 补 VoiceOver 朗读与其他页面的焦点链，见[系统验收](SYSTEM_INTEGRATION.md) |
-| **Worktree 与 Web UI** | Worktree 偏展示/只读；Web UI 是轻量补充，不承担原生菜单栏、通知和公证分发 | 按实际需求决定是否继续对齐 |
+| **Worktree 与 Web UI** | 本地 Build 19 原生端支持安全创建、合并和移除 Worktree；Web UI 保留六页签 | v1.0 前单独决定旧伴生 Web 的去留 |
 
 ---
 
@@ -137,12 +144,13 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 | `v0.7.4` | 正式分发：版本统一、签名/公证脚本、双语新手文档、官网同步 | 已发布（ad-hoc，未公证） |
 | `v0.7.5` | 周回顾、文件反查、菜单栏与运行时体检 | 独立 Build 13 候选已验，未替换 Latest |
 | `v0.7.6` / `v0.7.7` / `v0.8.0` | 事件体检、项目记忆、系统集成 | 已随 Build 16 公开，见顶部逐项状态 |
+| `v0.8.1`–`v0.8.6` | 原生 UI、Worktree、接力和复盘 | Build 17–22 本地分波候选，见顶部逐项状态 |
 
 ---
 
 ## 六、独立 `v0.7.5` 候选的历史验收清单
 
-以下命令仅适用于冻结的 Build 13 源码；当前工作树默认生成 `0.8.0 / 16`。
+以下命令仅适用于冻结的 Build 13 源码；当前工作树默认生成 `0.9.0 / 23`。
 
 ### 1. 本地脚本与构建
 

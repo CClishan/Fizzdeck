@@ -175,9 +175,68 @@ final class DashboardMetricsTests: XCTestCase {
         XCTAssertTrue(kpi.costIsEstimate)
         XCTAssertEqual(kpi.weekOverWeekCostDeltaPercent ?? 0, 100.0, accuracy: 0.01)
 
-        let byTool = DashboardMetrics.costBreakdown(projects: [pA, pB], mode: .byTool, now: now, calendar: calendar)
+        let recap = WeeklyRecapService.build(projects: [pA, pB], now: now, calendar: calendar)
+        let byTool = DashboardMetrics.costBreakdown(sessions: recap.analysis.sessions, mode: .byTool)
         XCTAssertEqual(byTool.count, 2)
         XCTAssertEqual(byTool[0].fraction, 0.75, accuracy: 0.001)
+    }
+
+    func testWorkbenchTrendsCompareAdjacentWeeksAndCountDistinctFiles() {
+        let path = "/tmp/studio"
+        let now = date("2026-11-26 15:00")
+        let sessions = [
+            SessionRecord(tool: "codex", id: "old", cwd: path, startedAt: nil, modified: date("2026-11-19 10:00"), usage: .init(totalTokens: 50), costUSD: 1, touchedFiles: ["README.md"]),
+            SessionRecord(tool: "codex", id: "start", cwd: path, startedAt: nil, modified: date("2026-11-20 00:00"), usage: .init(totalTokens: 150), costUSD: 2, touchedFiles: ["README.md", "Sources/App.swift"]),
+            SessionRecord(tool: "codex", id: "today", cwd: path, startedAt: nil, modified: now, usage: .init(totalTokens: 50), costUSD: 0, touchedFiles: ["README.md"]),
+            SessionRecord(tool: "codex", id: "future", cwd: path, startedAt: nil, modified: date("2026-11-27 00:00"), costUSD: 99),
+        ]
+        let activity = RepoCommitActivity(path: path, head: "head", authorEmails: [], windowDays: 371,
+            timestamps: [date("2026-11-19 10:00"), now, now].map { Int($0.timeIntervalSince1970) }, updatedAt: now)
+        let kpi = DashboardMetrics.kpiSummary(projects: [makeProject(path: path, sessions: sessions)],
+            commitActivity: .init(byProject: [path: activity]), now: now, calendar: calendar)
+
+        XCTAssertEqual(kpi.sessions.samples, [1, 0, 0, 0, 0, 0, 1])
+        XCTAssertEqual(kpi.touchedFiles.samples, [2, 0, 0, 0, 0, 0, 1])
+        XCTAssertEqual(kpi.weeklyTouchedFiles, 2)
+        XCTAssertEqual(kpi.touchedFiles.change, 1)
+        XCTAssertEqual(kpi.commits.samples, [0, 0, 0, 0, 0, 0, 2])
+        XCTAssertEqual(kpi.commits.change, 1)
+        XCTAssertEqual(kpi.cost.samples, [2, 0, 0, 0, 0, 0, 0])
+        XCTAssertEqual(kpi.cost.change, 1)
+        XCTAssertNil(kpi.sessions.change)
+        XCTAssertNil(kpi.tokens.change)
+    }
+
+    func testTrendSuppressesSmallBaselinesAndCapsOnlyGrowthAboveTwoHundredPercent() {
+        func change(_ current: Double?, _ previous: Double?, minimum: Double) -> Double? {
+            DashboardTrend(samples: [1, 2], current: current, previous: previous, minimumPrevious: minimum).change
+        }
+
+        XCTAssertNil(change(3, 2, minimum: 3))
+        XCTAssertNil(change(0.60, 0.49, minimum: 0.50))
+        XCTAssertEqual(change(1.50, 0.50, minimum: 0.50), 2)
+        XCTAssertNil(change(1.51, 0.50, minimum: 0.50))
+        XCTAssertEqual(change(9, 3, minimum: 3), 2)
+        XCTAssertNil(change(10, 3, minimum: 3))
+        XCTAssertEqual(change(0, 3, minimum: 3), -1)
+        XCTAssertNil(change(0, 0, minimum: 0))
+        XCTAssertNil(change(5, nil, minimum: 0))
+        XCTAssertNil(change(.infinity, 5, minimum: 0))
+    }
+
+    func testWorkbenchTrendsKeepUnknownUsageAndAnEmptyBaselineDistinctFromZero() {
+        let now = date("2026-11-26 15:00")
+        let path = "/tmp/studio"
+        let session = SessionRecord(tool: "codex", id: "new", cwd: path, startedAt: nil, modified: now)
+        let kpi = DashboardMetrics.kpiSummary(projects: [makeProject(path: path, sessions: [session])],
+            commitActivity: .empty, now: now, calendar: calendar)
+
+        XCTAssertEqual(kpi.weeklySessions, 1)
+        XCTAssertNil(kpi.sessions.change)
+        XCTAssertNil(kpi.weeklyCostUSD)
+        XCTAssertTrue(kpi.cost.samples.isEmpty)
+        XCTAssertNil(kpi.cost.change)
+        XCTAssertTrue(kpi.tokens.samples.isEmpty)
     }
 
     func testCostBreakdownMergesTailIntoOther() {
@@ -200,11 +259,33 @@ final class DashboardMetricsTests: XCTestCase {
             )
         }
 
-        let segments = DashboardMetrics.costBreakdown(projects: projects, mode: .byProject, now: now, calendar: calendar)
+        let recap = WeeklyRecapService.build(projects: projects, now: now, calendar: calendar)
+        let segments = DashboardMetrics.costBreakdown(sessions: recap.analysis.sessions, mode: .byProject)
         XCTAssertEqual(segments.count, 6)
         XCTAssertEqual(segments.last?.id, "other")
         XCTAssertEqual(segments.last?.label, "其他")
         XCTAssertEqual(segments.last?.costUSD ?? 0, 3.0, accuracy: 0.001)
+    }
+
+    func testCostCompositionFollowsRecapPeriodAndIgnoresZeroShareCategories() throws {
+        let now = date("2026-11-26 15:00")
+        let today = SessionRecord(tool: "codex", id: "1", cwd: "/tmp/a", startedAt: nil,
+                                  modified: now, costUSD: 1.5)
+        let unknown = SessionRecord(tool: "cursor", id: "2", cwd: "/tmp/b", startedAt: nil,
+                                    modified: now, usage: .init(totalTokens: 2_000))
+        let earlier = SessionRecord(tool: "claude", id: "3", cwd: "/tmp/b", startedAt: nil,
+                                    modified: date("2026-11-12 10:00"), costUSD: 0.5)
+        let projects = [makeProject(path: "/tmp/a", sessions: [today]), makeProject(path: "/tmp/b", sessions: [unknown, earlier])]
+        let week = WeeklyRecapService.build(projects: projects, now: now, calendar: calendar)
+        let month = WeeklyRecapService.build(projects: projects, range: .month, now: now, calendar: calendar)
+        let single = DashboardMetrics.costBreakdown(sessions: week.analysis.sessions, mode: .byTool)
+        XCTAssertEqual(single.map(\.id), ["codex"])
+        XCTAssertEqual(try XCTUnwrap(single.first).fraction, 1)
+        XCTAssertEqual(DashboardMetrics.costBreakdown(sessions: month.analysis.sessions, mode: .byProject).map(\.fraction), [0.75, 0.25])
+        let tokenOnly = DashboardMetrics.costBreakdown(sessions: week.analysis.sessions.filter { $0.record.id == "2" }, mode: .byProject)
+        XCTAssertEqual(try XCTUnwrap(tokenOnly.first).tokens, 2_000)
+        XCTAssertEqual(try XCTUnwrap(tokenOnly.first).costUSD, 0)
+        XCTAssertEqual(week.analysis.totals.cost.unpriced, 1)
     }
 
     func testContinueWorkTimelineHealthAlertsAndIdlePartition() {

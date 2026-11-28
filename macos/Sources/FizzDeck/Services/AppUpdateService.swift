@@ -821,7 +821,7 @@ final class AppUpdateController {
                 title: "发现 FizzDeck v\(release.version)",
                 subtitle: "可下载 arm64 DMG",
                 microViz: .pipeline(step: 0, state: .live),
-                tint: FizzTheme.accent,
+                tint: .secondary,
                 action: ToastAction(
                     title: "下载更新",
                     symbol: "arrow.down.circle"
@@ -837,7 +837,7 @@ final class AppUpdateController {
                 title: "正在下载更新\(version)",
                 subtitle: "\(percent)% · \(Format.bytes(received)) / \(Format.bytes(total))",
                 microViz: .pipeline(step: 0, state: .running),
-                tint: FizzTheme.accent,
+                tint: .secondary,
                 action: nil
             )
 
@@ -846,7 +846,7 @@ final class AppUpdateController {
                 title: "正在校验更新",
                 subtitle: "SHA-256 · Bundle ID · codesign",
                 microViz: .pipeline(step: 1, state: .running),
-                tint: FizzTheme.accent,
+                tint: .secondary,
                 action: nil
             )
 
@@ -855,7 +855,7 @@ final class AppUpdateController {
                 title: "更新已就绪",
                 subtitle: "校验通过，可安装并重启",
                 microViz: .pipeline(step: 2, state: .live),
-                tint: .green,
+                tint: FizzTheme.statusSuccess,
                 action: ToastAction(
                     title: "安装并重启",
                     symbol: "arrow.triangle.2.circlepath"
@@ -870,7 +870,7 @@ final class AppUpdateController {
                 title: "正在安装更新",
                 subtitle: "应用将自动重启",
                 microViz: .pipeline(step: 3, state: .running),
-                tint: FizzTheme.accent,
+                tint: .secondary,
                 action: nil
             )
 
@@ -879,7 +879,7 @@ final class AppUpdateController {
                 title: "更新失败",
                 subtitle: message,
                 microViz: .pipeline(step: 1, state: .failed),
-                tint: .orange,
+                tint: FizzTheme.statusWarning,
                 action: ToastAction(
                     title: "重新检查",
                     symbol: "arrow.clockwise"

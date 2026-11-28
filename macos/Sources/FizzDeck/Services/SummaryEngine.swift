@@ -88,7 +88,11 @@ enum SelfUsageLedger {
             calendar.date(byAdding: .day, value: -max(1, windowDays), to: now) ?? now
         }
 
-        let recent = load(from: file).filter { $0.timestamp >= cutoff }
+        return totals(since: cutoff, through: now, from: file)
+    }
+
+    static func totals(since start: Date, through end: Date, from file: URL = AppPaths.selfUsageFile) -> SelfUsageTotals {
+        let recent = load(from: file).filter { $0.timestamp >= start && $0.timestamp <= end }
         guard !recent.isEmpty else { return .zero }
 
         let totalTokens = recent.reduce(0) { $0 + max(0, $1.inputTokens) + max(0, $1.outputTokens) }

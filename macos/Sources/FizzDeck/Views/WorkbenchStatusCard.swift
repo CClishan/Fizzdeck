@@ -3,7 +3,6 @@ import SwiftUI
 struct WorkbenchStatusCard: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
-    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
 
     let runningProjects: [RepoProject]
     let cloudProjects: [RepoProject]
@@ -15,195 +14,92 @@ struct WorkbenchStatusCard: View {
             .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
     }
 
-    private var hasContent: Bool {
-        !runningProjects.isEmpty || !activeAIProjects.isEmpty || !healthAlerts.isEmpty || !cloudProjects.isEmpty
-    }
-
     var body: some View {
-        if hasContent {
-            VStack(alignment: .leading, spacing: 14) {
-                if !runningProjects.isEmpty || !activeAIProjects.isEmpty {
-                    runningSection
-                }
-
-                if (!runningProjects.isEmpty || !activeAIProjects.isEmpty) && !healthAlerts.isEmpty {
-                    Divider()
-                        .opacity(0.45)
-                }
-
-                if !healthAlerts.isEmpty {
-                    healthSection
-                }
-                ForEach(cloudProjects) { project in
-                    Button { store.openProject(project, tab: .version) } label: {
-                        HStack(spacing: 8) {
-                            FizzIcon(symbol: "arrow.down.circle", size: 13)
-                            Text(project.displayName).lineLimit(1)
-                            Spacer(minLength: 4)
-                            Text("云端领先 \(project.behind) 个提交").foregroundStyle(.secondary)
-                        }
-                        .font(.caption)
-                    }
-                    .buttonStyle(.plain)
-                    .help("查看版本")
-                }
-            }
-            .padding(16)
-            .fizzCard(radius: FizzRadius.panel)
-        }
-    }
-
-    private var runningSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                RunningPulseDot(size: 7)
-                Text("正在运行")
-                    .font(.system(size: 13, weight: .semibold))
-                Text("\(runningProjects.count + activeAIProjects.count)")
-                    .font(.caption.monospacedDigit())
+        let active = activeAIProjects
+        if !runningProjects.isEmpty || !active.isEmpty || !healthAlerts.isEmpty || !cloudProjects.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("运行与健康")
+                    .font(FizzTypography.caption(.medium))
                     .foregroundStyle(.secondary)
-                Spacer(minLength: 0)
-            }
-
-            ForEach(runningProjects) { project in
-                HStack(spacing: 8) {
-                    Button {
-                        store.openProject(project)
-                    } label: {
-                        HStack(spacing: 7) {
-                            ProjectBadgeIcon(project: project, size: 20, framed: false)
-                            Text(project.displayName)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(runningProjects) { project in runningRow(project) }
+                ForEach(active) { project in
+                    HStack(spacing: FizzSpacing.row) {
+                        RunningPulseDot()
+                        Text("AI 正在 \(project.displayName) 里干活")
+                        Spacer(minLength: FizzSpacing.row)
+                        FizzActionButton(title: "去看看", height: .compact) {
+                            store.openProject(project, tab: .progress)
                         }
                     }
-                    .buttonStyle(.plain)
-
-                    if let port = project.run?.port, port > 0 {
-                        Text(verbatim: ":\(port)")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 4)
-
-                    if let preview = project.run?.previewURL {
-                        Button(copyMode == .plain ? "打开看看" : "预览") {
-                            SystemActions.openURL(preview)
-                        }
-                        .buttonStyle(.glass)
-                        .controlSize(.mini)
-                    } else if let port = project.run?.port, port > 0 {
-                        Button(copyMode == .plain ? "打开看看" : "预览") {
-                            SystemActions.openURL("http://127.0.0.1:\(port)")
-                        }
-                        .buttonStyle(.glass)
-                        .controlSize(.mini)
-                    }
-
-                    Button("停止…") {
-                        Task { await actions.stop(project, store: store) }
-                    }
-                    .buttonStyle(.glass)
-                    .controlSize(.mini)
-                    .disabled(actions.isBusy(project.path))
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(
-                    FizzTheme.recessedFill,
-                    in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                )
-            }
-
-            ForEach(activeAIProjects) { project in
-                HStack(spacing: 8) {
-                    RunningPulseDot(size: 6)
-                    ProjectBadgeIcon(project: project, size: 18, framed: false)
-                    Text("AI 正在 \(project.displayName) 里干活")
-                        .font(.system(size: 12, weight: .medium))
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    Button("去看看") {
-                        store.openProject(project, tab: .progress)
+                ForEach(healthAlerts) { alert in healthRow(alert) }
+                ForEach(cloudProjects) { project in
+                    HStack(spacing: FizzSpacing.row) {
+                        FizzStatusDot(tint: FizzTheme.statusWarning)
+                        Text(project.displayName)
+                        Text("云端领先 \(project.behind) 个提交").foregroundStyle(.secondary)
+                        Spacer(minLength: FizzSpacing.row)
+                        FizzIconButton(title: "查看版本", symbol: "chevron.right", height: .compact) {
+                            store.openProject(project, tab: .version)
+                        }
                     }
-                    .buttonStyle(.glass)
-                    .controlSize(.mini)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(
-                    FizzTheme.recessedFill,
-                    in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                )
+            }
+            .font(FizzTypography.caption)
+            .padding(.horizontal, FizzSpacing.panel)
+            .padding(.vertical, FizzSpacing.row)
+            .fizzCard()
+        }
+    }
+
+    private func runningRow(_ project: RepoProject) -> some View {
+        HStack(spacing: FizzSpacing.row) {
+            FizzStatusDot(tint: FizzTheme.statusSuccess)
+            Button(project.displayName) { store.openProject(project) }
+                .buttonStyle(.plain)
+                .accessibilityHint("服务正在运行")
+            if let port = project.run?.port, port > 0 {
+                Text(verbatim: ":\(port)")
+                    .font(FizzTypography.monoSmall)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: FizzSpacing.row)
+            FizzActionButton(title: "停止…", height: .compact, role: .destructive) {
+                Task { await actions.stop(project, store: store) }
+            }
+            .disabled(actions.isBusy(project.path))
+            if let preview = previewURL(project) {
+                FizzIconButton(title: "预览", symbol: "arrow.up.right", height: .compact) {
+                    SystemActions.openURL(preview)
+                }
             }
         }
     }
 
-    private var healthSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                FizzIcon(symbol: "exclamationmark.triangle", size: 12)
-                    .foregroundStyle(.orange)
-                Text("健康提醒")
-                    .font(.system(size: 13, weight: .semibold))
-                Spacer(minLength: 0)
-            }
-
-            ForEach(healthAlerts) { alert in
-                HStack(spacing: 8) {
-                    FizzIcon(symbol: alertSymbol(alert.kind), size: 12)
-                        .foregroundStyle(.orange)
-                        .frame(width: 16)
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(alert.title)
-                            .font(.system(size: 12, weight: .medium))
-                            .lineLimit(1)
-                        Text(alert.detail)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-
-                    Spacer(minLength: 6)
-
-                    switch alert.kind {
-                    case .highCleanup:
-                        Button("去清理") {
-                            store.openCleanup()
-                        }
-                        .buttonStyle(.glass)
-                        .controlSize(.mini)
-                    case .staleDirty:
-                        if let path = alert.targetProjectPath,
-                           let project = store.projects.first(where: { $0.path == path }) {
-                            Button("查看") {
-                                store.openProject(project, tab: .version)
-                            }
-                            .buttonStyle(.glass)
-                            .controlSize(.mini)
-                        }
-                    case .lowDisk:
-                        EmptyView()
-                    }
+    private func healthRow(_ alert: HealthAlert) -> some View {
+        HStack(spacing: FizzSpacing.row) {
+            FizzStatusDot(tint: FizzTheme.statusWarning)
+            Text(alert.title)
+            Text(alert.detail).foregroundStyle(.secondary)
+            Spacer(minLength: FizzSpacing.row)
+            switch alert.kind {
+            case .highCleanup:
+                FizzActionButton(title: "去清理", height: .compact) { store.openCleanup() }
+            case .staleDirty:
+                if let path = alert.targetProjectPath, let project = store.projects.first(where: { $0.path == path }) {
+                    FizzActionButton(title: "查看", height: .compact) { store.openProject(project, tab: .version) }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(
-                    FizzTheme.recessedFill,
-                    in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                )
+            case .lowDisk:
+                EmptyView()
             }
         }
+        .frame(minHeight: FizzControlHeight.compact.rawValue)
     }
 
-    private func alertSymbol(_ kind: HealthAlert.Kind) -> String {
-        switch kind {
-        case .lowDisk: "internaldrive"
-        case .highCleanup: "archivebox"
-        case .staleDirty: "exclamationmark.triangle"
-        }
+    private func previewURL(_ project: RepoProject) -> String? {
+        if let url = project.run?.previewURL { return url }
+        guard let port = project.run?.port, port > 0 else { return nil }
+        return "http://127.0.0.1:\(port)"
     }
 }

@@ -72,6 +72,18 @@ final class ProjectActions {
         busy[path] != nil
     }
 
+    func hasRunningWorktreeActivity(at path: String) -> Bool {
+        func contains(_ candidate: String) -> Bool {
+            let candidate = PathTools.canonical(candidate)
+            return candidate == path || candidate.hasPrefix(path + "/")
+        }
+        return busy.keys.contains(where: contains)
+            || devProcesses.contains { $0.value.isRunning && contains($0.key) }
+            || testRuns.values.contains { $0.status == .running && contains($0.path) }
+            || scriptRuns.values.contains { $0.status == .running && contains($0.projectPath) }
+            || ProjectTrialService.shared.runs.contains { $0.value.status == .running && contains($0.key) }
+    }
+
     func message(for path: String) -> String? {
         messages[path]
     }
@@ -147,7 +159,7 @@ final class ProjectActions {
             subtitle: run.command,
             step: 0,
             state: .running,
-            tint: FizzTheme.accent,
+            tint: .secondary,
             action: nil
         )
         busy[project.path] = .launching
@@ -163,7 +175,7 @@ final class ProjectActions {
                 subtitle: "日志目录不可写",
                 step: 0,
                 state: .failed,
-                tint: .orange,
+                tint: FizzTheme.statusWarning,
                 action: retryAction(for: project, store: store)
             )
             return
@@ -190,7 +202,7 @@ final class ProjectActions {
                 subtitle: error.localizedDescription,
                 step: 0,
                 state: .failed,
-                tint: .red,
+                tint: FizzTheme.statusDanger,
                 action: retryAction(for: project, store: store)
             )
             return
@@ -228,7 +240,7 @@ final class ProjectActions {
                     subtitle: "localhost:\(run.port)",
                     step: 4,
                     state: .live,
-                    tint: .green,
+                    tint: FizzTheme.statusSuccess,
                     action: ToastAction(
                         title: "打开预览",
                         symbol: "arrow.up.forward.square"
@@ -250,7 +262,7 @@ final class ProjectActions {
                 subtitle: "PID \(process.processIdentifier) · 等待 localhost:\(run.port)",
                 step: 2,
                 state: .running,
-                tint: FizzTheme.accent,
+                tint: .secondary,
                 action: nil
             )
         } else {
@@ -263,7 +275,7 @@ final class ProjectActions {
                 subtitle: tail.isEmpty ? "进程已退出" : String(tail.prefix(100)),
                 step: 0,
                 state: .failed,
-                tint: .red,
+                tint: FizzTheme.statusDanger,
                 action: retryAction(for: project, store: store)
             )
         }
@@ -276,7 +288,7 @@ final class ProjectActions {
             let hint = "请到体检的「开发监听端口」逐个核对 PID。"
             messages[path] = "\(reason)。\(hint)"
             presentNotice()
-            ToastCenter.shared.show(reason, symbol: "info.circle", tint: .orange, duration: 8, subtitle: hint,
+            ToastCenter.shared.show(reason, symbol: "info.circle", tint: FizzTheme.statusWarning, duration: 8, subtitle: hint,
                                     action: ToastAction(title: "去体检", symbol: "stethoscope") { store.openCleanup() })
         }
         func registered() -> Bool { store.projects.contains { $0.path == path && $0.run == project.run } }
@@ -318,7 +330,7 @@ final class ProjectActions {
             subtitle: conflict.occupants.map { "PID \($0.pid)" }.joined(separator: " · "),
             step: 0,
             state: .running,
-            tint: FizzTheme.accent,
+            tint: .secondary,
             action: nil
         )
         busy[project.path] = .launching
@@ -338,7 +350,7 @@ final class ProjectActions {
                 subtitle: result.message,
                 step: 0,
                 state: .failed,
-                tint: .orange,
+                tint: FizzTheme.statusWarning,
                 action: ToastAction(
                     title: "再次尝试",
                     symbol: "arrow.clockwise"
@@ -680,7 +692,7 @@ final class ProjectActions {
             ToastCenter.shared.show(
                 succeeded ? "脚本完成" : "脚本失败",
                 symbol: succeeded ? "checkmark.circle.fill" : "xmark.circle.fill",
-                tint: succeeded ? .green : .red,
+                tint: succeeded ? FizzTheme.statusSuccess : FizzTheme.statusDanger,
                 subtitle: state.script.name,
                 microViz: .bars(
                     values: [max(0, state.duration ?? 0)],
@@ -726,7 +738,7 @@ final class ProjectActions {
             ToastCenter.shared.show(
                 passed ? "测试通过" : "测试失败",
                 symbol: passed ? "checkmark.seal.fill" : "xmark.octagon.fill",
-                tint: passed ? .green : .red,
+                tint: passed ? FizzTheme.statusSuccess : FizzTheme.statusDanger,
                 subtitle: "\(summary.passed) 通过 · \(summary.failed) 失败 · \(durationLabel(state.duration))",
                 microViz: .tests(passed: summary.passed, failed: summary.failed),
                 action: ToastAction(
@@ -760,7 +772,7 @@ final class ProjectActions {
             subtitle: conflict.occupantSummary,
             step: 0,
             state: .failed,
-            tint: .orange,
+            tint: FizzTheme.statusWarning,
             action: ToastAction(
                 title: "释放并重试",
                 symbol: "arrow.clockwise"

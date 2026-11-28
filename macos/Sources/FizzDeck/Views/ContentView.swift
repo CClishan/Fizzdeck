@@ -8,6 +8,7 @@ struct ContentView: View {
 
     @State private var pendingRoute: AppRouting.ProjectRequest?
     @State private var handoff: RepoProject?
+    @State private var showingWeeklyRecap = false
     private static let routeLog = Logger(subsystem: "com.a003.fizzdeck", category: "routing")
 
     var body: some View {
@@ -52,7 +53,7 @@ struct ContentView: View {
                     Button {
                         sidebarCollapsed.toggle()
                     } label: {
-                        FizzIcon(symbol: "sidebar.left", size: FizzIconScale.toolbar)
+                        FizzIcon(.md, symbol: "sidebar.left")
                     }
                     .help(sidebarCollapsed ? "展开侧栏" : "折叠侧栏")
                     .accessibilityLabel(sidebarCollapsed ? "展开侧栏" : "折叠侧栏")
@@ -62,7 +63,7 @@ struct ContentView: View {
                     Button {
                         store.openDashboard()
                     } label: {
-                        FizzIcon(symbol: "chevron.left", size: FizzIconScale.toolbar)
+                        FizzIcon(.md, symbol: "chevron.left")
                     }
                     .help("返回工作台")
                     .accessibilityLabel("返回工作台")
@@ -73,7 +74,7 @@ struct ContentView: View {
                             announceProjectRescan(project)
                         }
                     } label: {
-                        FizzIcon(symbol: "arrow.clockwise", size: FizzIconScale.toolbar)
+                        FizzIcon(.md, symbol: "arrow.clockwise")
                             .symbolEffect(
                                 .rotate,
                                 options: .repeating,
@@ -93,7 +94,7 @@ struct ContentView: View {
                         Label {
                             Text("重新扫描")
                         } icon: {
-                            FizzIcon(symbol: "arrow.clockwise", size: FizzIconScale.toolbar)
+                            FizzIcon(.md, symbol: "arrow.clockwise")
                                 .symbolEffect(
                                     .rotate,
                                     options: .repeating,
@@ -110,7 +111,7 @@ struct ContentView: View {
                         Label {
                             Text("文件夹")
                         } icon: {
-                            FizzIcon(symbol: "folder", size: FizzIconScale.toolbar)
+                            FizzIcon(.md, symbol: "folder")
                         }
                     }
                     .help("查看已加入文件夹，或扫描新目录")
@@ -121,7 +122,7 @@ struct ContentView: View {
                 Button {
                     store.toggleCommandPalette()
                 } label: {
-                    FizzIcon(symbol: "magnifyingglass", size: FizzIconScale.toolbar)
+                    FizzIcon(.md, symbol: "magnifyingglass")
                 }
                 .help("搜索项目、分支、远程或动作（⌘K）")
                 .accessibilityLabel("搜索")
@@ -158,6 +159,7 @@ struct ContentView: View {
         }
         .onChange(of: store.phase) { applyProjectRequest() }
         .sheet(item: $handoff) { HandoffCardSheet(project: $0) }
+        .sheet(isPresented: $showingWeeklyRecap) { WeeklyRecapSheet(projects: store.projects) }
         .animation(
             FizzMotion.resolved(reduceMotion, FizzMotion.panel),
             value: store.isCommandPalettePresented
@@ -183,9 +185,9 @@ struct ContentView: View {
     private var detailContent: some View {
         switch store.destination {
         case .dashboard:
-            WorkbenchDashboardView()
+            WorkbenchDashboardView { showingWeeklyRecap = true }
         case .conversations:
-            ConversationsWorkspaceView()
+            ConversationsWorkspaceView { showingWeeklyRecap = true }
         case .library(let query):
             LibraryView(query: query)
         case .cleanup:
@@ -207,7 +209,7 @@ struct ContentView: View {
         ToastCenter.shared.show(
             "重新扫描完成",
             symbol: "arrow.clockwise.circle.fill",
-            tint: FizzTheme.accent,
+            tint: Color.secondary,
             subtitle: "\(store.projects.count) 个项目 · \(Format.relative(store.scannedAt ?? Date()))",
             microViz: .bars(values: counts, improved: false)
         )
@@ -221,7 +223,7 @@ struct ContentView: View {
         ToastCenter.shared.show(
             "已刷新 \(project.displayName)",
             symbol: "arrow.clockwise.circle.fill",
-            tint: FizzTheme.accent,
+            tint: Color.secondary,
             subtitle: project.branch ?? project.group,
             microViz: .bars(values: values, improved: false)
         )

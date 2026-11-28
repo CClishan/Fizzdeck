@@ -4,7 +4,6 @@ import SwiftUI
 struct SessionsTabView: View {
     let project: RepoProject
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var toolFilter = SessionToolFilter.all
     @State private var liveProcesses: [String: [LiveSessionProcess]] = [:]
     @State private var pendingEnd: SessionRecord?
@@ -56,14 +55,14 @@ struct SessionsTabView: View {
                                     .map { DetectedTool(rawValue: $0)?.title ?? $0.capitalized }
                                     .joined(separator: " · "),
                                 symbol: "bubble.left.and.bubble.right",
-                                tint: .purple
+                                tint: Color.secondary
                             )
                             GlassStatCard(
                                 title: "最近会话",
                                 value: Format.relative(project.sessions.lastSessionAt),
                                 detail: project.sessions.lastTool?.capitalized,
                                 symbol: "clock",
-                                tint: .blue
+                                tint: Color.secondary
                             )
                             if project.sessions.totalTokens > 0 {
                                 GlassStatCard(
@@ -71,7 +70,7 @@ struct SessionsTabView: View {
                                     value: Format.tokens(project.sessions.totalTokens),
                                     detail: costDetail,
                                     symbol: "chart.bar.doc.horizontal",
-                                    tint: .orange
+                                    tint: FizzTheme.statusWarning
                                 )
                             }
                         }
@@ -81,8 +80,8 @@ struct SessionsTabView: View {
                                 Label(sessionFeedback.message, systemImage: sessionFeedback.failed
                                     ? "exclamationmark.triangle"
                                     : "checkmark.circle")
-                                    .font(.callout)
-                                    .foregroundStyle(sessionFeedback.failed ? Color.orange : Color.green)
+                                    .font(FizzTypography.font(12))
+                                    .foregroundStyle(.secondary)
 
                                 Spacer(minLength: 8)
 
@@ -107,11 +106,11 @@ struct SessionsTabView: View {
                         Panel(title: "最近会话", symbol: "clock.arrow.circlepath") {
                             if sessions.isEmpty {
                                 HStack(spacing: 8) {
-                                    FizzIcon(symbol: "line.3.horizontal.decrease.circle", size: 12)
+                                    FizzIcon(.sm, symbol: "line.3.horizontal.decrease.circle")
                                 Text("没有 \(toolFilter.title) 会话")
                                     Spacer(minLength: 0)
                                 }
-                                .font(.callout)
+                                .font(FizzTypography.font(12))
                                 .foregroundStyle(.secondary)
                                 .padding(.vertical, 10)
                             } else {
@@ -172,37 +171,9 @@ struct SessionsTabView: View {
     }
 
     private var toolPicker: some View {
-        GlassEffectContainer(spacing: 2) {
-            HStack(spacing: 1) {
-                ForEach(availableFilters) { option in
-                    Button {
-                        withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
-                            toolFilter = option
-                        }
-                    } label: {
-                        Text(option.title)
-                            .font(.system(size: 10.5, weight: toolFilter == option ? .semibold : .medium))
-                            .foregroundStyle(toolFilter == option ? Color.primary : Color.secondary)
-                            .padding(.horizontal, 8)
-                            .frame(height: 22)
-                            .background {
-                                if toolFilter == option {
-                                    Capsule()
-                                        .fill(FizzTheme.elevatedFill)
-                                        .fizzAdaptiveShadow(.subtle)
-                                }
-                            }
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(toolFilter == option ? .isSelected : [])
-                    .accessibilityRemoveTraits(toolFilter == option ? [] : .isSelected)
-                    .accessibilityLabel(option.title)
-                    .accessibilityHint("只显示 \(option.title) 会话")
-                }
-            }
-            .padding(2)
-            .glassEffect(.regular.interactive(), in: Capsule())
+        FizzSegmentedCapsule(items: availableFilters, selection: $toolFilter, height: .compact) { option, selected in
+            Text(option.title)
+                .font(FizzTypography.caption(selected ? .semibold : .medium))
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("会话工具筛选")
@@ -215,55 +186,34 @@ struct SessionsTabView: View {
         let isResuming = resumingSessionID == session.stableID
 
         return HStack(alignment: .top, spacing: 10) {
-            FizzIcon(symbol: toolSymbol(session.tool), size: 13)
-                .foregroundStyle(toolTint(session.tool))
+            FizzIcon(.md, symbol: toolSymbol(session.tool))
+                .foregroundStyle(.secondary)
                 .frame(width: 16, height: 20)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Text(toolName(session.tool))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(FizzTypography.font(12, weight: .semibold))
                     if session.isWorkspaceSummary {
                         TagChip(text: "工作区", tint: .secondary, compact: true)
                     }
                     if isLive {
-                        TagChip(text: "运行中", tint: .green, compact: true)
+                        TagChip(text: "运行中", tint: FizzTheme.statusSuccess, compact: true)
                     }
                     Text(Format.relative(session.modified))
-                        .font(.system(size: 10.5))
+                        .font(FizzTypography.monoSmall)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 8)
                     if !exactProcesses.isEmpty {
-                        Button {
+                        FizzActionButton(title: "结束", symbol: "stop.circle", height: .compact, role: .destructive) {
                             pendingEnd = session
-                        } label: {
-                            Label("结束", systemImage: "stop.circle")
                         }
-                        .buttonStyle(.glass)
-                        .controlSize(.small)
                         .help("结束 PID \(exactProcesses.map { String($0.pid) }.joined(separator: ", "))")
                         .accessibilityLabel("结束 \(toolName(session.tool)) 会话")
                         .accessibilityHint("只结束命令行中明确包含这个会话 ID 的进程")
                     }
-                    if DetectedTool(rawValue: session.tool)?.supportsResume == true {
-                        Button {
-                            Task { await resume(session) }
-                        } label: {
-                            if isResuming {
-                                ProgressView()
-                                    .controlSize(.mini)
-                            } else {
-                                Label(isLive ? "回到会话" : "继续", systemImage: "play.fill")
-                            }
-                        }
-                        .buttonStyle(.glassProminent)
-                        .tint(FizzTheme.accent)
-                        .controlSize(.small)
-                        .disabled(resumingSessionID != nil)
-                        .accessibilityLabel(isLive ? "回到 \(toolName(session.tool)) 会话" : "继续 \(toolName(session.tool)) 会话")
-                    }
                     if let command = session.resumeCommand {
-                        Button {
+                        FizzIconButton(title: "复制 \(toolName(session.tool)) 恢复命令", symbol: "doc.on.doc", height: .compact) {
                             SystemActions.copy(command)
                             endFeedbackSessionID = nil
                             sessionFeedback = SessionFeedback(
@@ -272,25 +222,31 @@ struct SessionsTabView: View {
                                 fallbackCommand: nil,
                                 needsAutomationPermission: false
                             )
-                        } label: {
-                            FizzIcon(symbol: "doc.on.doc", size: 11)
                         }
-                        .buttonStyle(.glass)
-                        .controlSize(.small)
-                        .help("复制恢复命令")
-                        .accessibilityLabel("复制 \(toolName(session.tool)) 恢复命令")
+                    }
+                    if DetectedTool(rawValue: session.tool)?.supportsResume == true {
+                        FizzActionButton(
+                            title: isResuming ? "继续中…" : (isLive ? "回到会话" : "继续"),
+                            symbol: "play.fill",
+                            height: .compact,
+                            prominence: .primary
+                        ) {
+                            Task { await resume(session) }
+                        }
+                        .disabled(resumingSessionID != nil)
+                        .accessibilityLabel(isLive ? "回到 \(toolName(session.tool)) 会话" : "继续 \(toolName(session.tool)) 会话")
                     }
                 }
 
                 Text(session.lastUser ?? (session.isWorkspaceSummary ? "工作区活动摘要" : "未读取到最后一条用户消息"))
-                    .font(.callout)
+                    .font(FizzTypography.font(12))
                     .foregroundStyle(session.lastUser == nil ? .secondary : .primary)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let command = session.resumeCommand {
                     Text(verbatim: command)
-                        .font(.system(size: 10.5, design: .monospaced))
+                        .font(FizzTypography.monoSmall)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .textSelection(.enabled)
@@ -310,7 +266,7 @@ struct SessionsTabView: View {
                                 .truncationMode(.middle)
                         }
                     }
-                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .font(FizzTypography.micro)
                     .foregroundStyle(.tertiary)
                 }
             }
@@ -382,9 +338,6 @@ struct SessionsTabView: View {
         DetectedTool(rawValue: tool)?.symbol ?? "sparkles"
     }
 
-    private func toolTint(_ tool: String) -> Color {
-        DetectedTool(rawValue: tool)?.tint ?? .secondary
-    }
 }
 
 private struct SessionFeedback {

@@ -6,11 +6,11 @@ APP_NAME="FizzDeck"
 BUNDLE_ID="com.a003.fizzdeck"
 case "$MODE" in
   run|--build-only|--sign-local|sign-local|--debug|debug|--logs|logs|--telemetry|telemetry|--verify|verify) ;;
-  *) echo "usage: [VERSION=0.8.0 BUILD_NUM=16] $0 [run|--build-only|--sign-local|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
+  *) echo "usage: [VERSION=0.9.0 BUILD_NUM=23] $0 [run|--build-only|--sign-local|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
 esac
 MIN_SYSTEM_VERSION="26.0"
-VERSION="${VERSION:-0.8.0}"
-BUILD_NUM="${BUILD_NUM:-16}"
+VERSION="${VERSION:-0.9.0}"
+BUILD_NUM="${BUILD_NUM:-23}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${FIZZDECK_DIST_DIR:-$ROOT_DIR/dist}"
@@ -39,6 +39,7 @@ cp "$ROOT_DIR/Resources/FizzDeck_logo_light.svg" "$APP_RESOURCES/FizzDeck_logo_l
 cp "$ROOT_DIR/Resources/FizzDeck_logo_dark.svg" "$APP_RESOURCES/FizzDeck_logo_dark.svg"
 cp "$ROOT_DIR/Resources/FizzDeck.icns" "$APP_RESOURCES/FizzDeck.icns"
 cp -R "$ROOT_DIR/Resources/Icons" "$APP_RESOURCES/Icons"
+cp -R "$ROOT_DIR/Resources/Fonts" "$APP_RESOURCES/Fonts"
 "$ROOT_DIR/script/bundle_intents.sh" "$APP_RESOURCES"
 
 cat >"$INFO_PLIST" <<PLIST
@@ -56,6 +57,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$APP_NAME</string>
   <key>CFBundleIconFile</key>
   <string>FizzDeck.icns</string>
+  <key>ATSApplicationFontsPath</key>
+  <string>Fonts</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

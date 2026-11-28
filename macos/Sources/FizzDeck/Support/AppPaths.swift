@@ -47,6 +47,50 @@ enum PathTools {
         )
     }
 
+    static func localFilePath(_ raw: String) -> String? {
+        guard !raw.utf8.contains(0) else { return nil }
+        if raw.hasPrefix("/") { return raw }
+        guard let url = URLComponents(string: raw), url.scheme?.lowercased() == "file",
+              url.host?.isEmpty != false || url.host?.lowercased() == "localhost",
+              url.user == nil, url.port == nil, url.query == nil, url.fragment == nil,
+              !url.percentEncodedPath.contains("%00"),
+              let path = url.percentEncodedPath.removingPercentEncoding,
+              path.hasPrefix("/"), !path.utf8.contains(0) else { return nil }
+        return path
+    }
+
+    static func projectRelativeFile(_ raw: String, in cwd: String) -> String? {
+        guard !raw.isEmpty, raw.utf8.count <= 4096, !raw.utf8.contains(0) else { return nil }
+        let path: String
+        if let local = localFilePath(raw) {
+            path = local
+        } else {
+            guard URLComponents(string: raw)?.scheme == nil else { return nil }
+            path = cwd + "/" + raw
+        }
+
+        guard let resolved = canonicalWithMissingSuffix(path) else { return nil }
+        let root = cwd.hasSuffix("/") ? cwd : cwd + "/"
+        guard resolved.hasPrefix(root), resolved.count > root.count else { return nil }
+        return String(resolved.dropFirst(root.count))
+    }
+
+    static func canonicalWithMissingSuffix(_ path: String) -> String? {
+        // Foundation only resolves symlinks if the full path exists. An edit may add or delete a file.
+        guard path.hasPrefix("/") else { return nil }
+        let original = trimTrailingSlash(path)
+        var ancestor = original[...]
+        for _ in 0..<32 {
+            if FileManager.default.fileExists(atPath: String(ancestor)) {
+                let suffix = ancestor == "/" ? original : String(original[ancestor.endIndex...])
+                return normalize(canonical(String(ancestor)) + suffix)
+            }
+            guard ancestor != "/", let slash = ancestor.lastIndex(of: "/") else { return nil }
+            ancestor = original[..<(slash == original.startIndex ? original.index(after: slash) : slash)]
+        }
+        return nil
+    }
+
     static func displayPath(_ path: String) -> String {
         let home = AppPaths.home.path
         if path == home { return "~" }

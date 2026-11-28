@@ -1,16 +1,5 @@
 import SwiftUI
 
-enum ProjectBadgeTone: String, Sendable {
-    case neutral
-    case secondary
-    case purple
-    case cyan
-    case green
-    case orange
-    case blue
-    case pink
-}
-
 enum ProjectBadgeKind: String, CaseIterable, Sendable {
     case next
     case vite
@@ -123,18 +112,6 @@ enum ProjectBadgeKind: String, CaseIterable, Sendable {
         }
     }
 
-    var tone: ProjectBadgeTone {
-        switch self {
-        case .next: .neutral
-        case .vite, .astro: .purple
-        case .react, .flutter, .go: .cyan
-        case .vue, .nuxt, .miniProgram: .green
-        case .svelte, .swift, .rust, .cloudflare: .orange
-        case .game: .pink
-        case .python, .docker, .web: .blue
-        case .cli, .other: .secondary
-        }
-    }
 }
 
 struct ProjectBadgeIcon: View {
@@ -144,6 +121,15 @@ struct ProjectBadgeIcon: View {
 
     private var kind: ProjectBadgeKind {
         ProjectBadgeKind.resolve(stacks: project.stacks, kind: project.kind)
+    }
+
+    private var symbolSize: FizzIconSize {
+        switch size {
+        case ..<20: .xs
+        case ..<32: .sm
+        case ..<48: .md
+        default: .lg
+        }
     }
 
     var body: some View {
@@ -159,6 +145,12 @@ struct ProjectBadgeIcon: View {
             glyph
         }
         .frame(width: size, height: size)
+        .overlay(alignment: .bottomTrailing) {
+            if let tag = project.color {
+                Circle().fill(tag.color).frame(width: 6, height: 6)
+                    .help(tag.label)
+            }
+        }
         .accessibilityHidden(true)
     }
 
@@ -166,30 +158,14 @@ struct ProjectBadgeIcon: View {
     private var glyph: some View {
         if let text = kind.badgeText {
             Text(text)
-                .font(.system(
-                    size: size * (framed ? 0.42 : 0.56),
-                    weight: .heavy,
-                    design: .rounded
-                ))
-                .foregroundStyle(tint)
+                .font(FizzTypography.font(size * (framed ? 0.42 : 0.56), weight: .bold))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         } else if let symbol = kind.symbol {
-            FizzIcon(symbol: symbol, size: size * (framed ? 0.38 : 0.5))
-                .foregroundStyle(tint)
+            FizzIcon(symbolSize, symbol: symbol)
+                .foregroundStyle(.secondary)
         }
     }
 
-    private var tint: Color {
-        switch kind.tone {
-        case .neutral: .primary
-        case .secondary: .secondary
-        case .purple: .purple
-        case .cyan: .cyan
-        case .green: .green
-        case .orange: .orange
-        case .blue: .blue
-        case .pink: .pink
-        }
-    }
 }

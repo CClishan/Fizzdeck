@@ -12,8 +12,8 @@ struct ProjectListRow: View {
     var body: some View {
         HStack(spacing: 10) {
             if selecting {
-                FizzIcon(symbol: selected ? "checkmark.circle.fill" : "circle", size: 15)
-                    .foregroundStyle(selected ? accent : Color.secondary.opacity(0.55))
+                FizzIcon(.md, symbol: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? Color.primary : Color.secondary.opacity(0.55))
                     .frame(width: 16)
             }
 
@@ -22,23 +22,23 @@ struct ProjectListRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(project.displayName)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(FizzTypography.cardTitle)
                         .lineLimit(1)
                     if project.starred {
-                        FizzIcon(symbol: "star.fill", size: 9)
-                            .foregroundStyle(.yellow)
+                        FizzIcon(.xs, symbol: "star.fill")
+                            .foregroundStyle(Color.secondary)
                     }
                     if project.dirtyCount > 0 {
                         TagChip(
                             text: "\(project.dirtyCount) 处改动",
-                            tint: .orange,
+                            tint: FizzTheme.statusWarning,
                             compact: true
                         )
                         .help("\(project.dirtyCount) 处未提交改动")
                     }
                 }
                 Text(secondaryText)
-                    .font(.caption2)
+                    .font(FizzTypography.micro)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -49,7 +49,7 @@ struct ProjectListRow: View {
                 HomeToolBadge(tool: tool)
             }
             if let stack = firstStack {
-                TagChip(text: stack.0, tint: stack.1, compact: true)
+                TagChip(text: stack, compact: true)
             }
 
             Text(Format.relative(project.recent))
@@ -71,13 +71,13 @@ struct ProjectListRow: View {
                 PortStatusBadge(state: project.port, port: project.run?.port)
             }
         }
-        .font(.caption2.monospacedDigit())
+        .font(FizzTypography.micro)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background {
             if selected {
                 RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                    .fill(accent.opacity(0.10))
+                    .fill(FizzTheme.selectedFill)
             } else if hovering {
                 RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
                     .fill(FizzTheme.mutedFill)
@@ -87,7 +87,7 @@ struct ProjectListRow: View {
             if selected {
                 RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
                     .strokeBorder(
-                        accent.opacity(0.28),
+                        FizzTheme.stroke,
                         lineWidth: 1
                     )
             }
@@ -122,12 +122,7 @@ struct ProjectListRow: View {
         return project.group
     }
 
-    private var accent: Color {
-        project.color?.color ?? ProjectGrouping.color(for: project.group)
-    }
-
-    private var firstStack: (String, Color)? {
-        guard let group = project.stacks.first, let item = group.items.first else { return nil }
-        return (item, group.color)
+    private var firstStack: String? {
+        project.stacks.first?.items.first
     }
 }

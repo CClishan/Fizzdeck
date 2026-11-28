@@ -5,9 +5,9 @@ struct SessionCostTotal: Equatable, Sendable {
     private(set) var priced = 0
     private(set) var unpriced = 0
 
-    mutating func add(_ session: SessionRecord) {
+    mutating func add(_ session: SessionRecord, countZeroAsUnpriced: Bool = false) {
         let cost = session.costUSD ?? PricingCatalog.estimate(model: session.model, usage: session.usage)
-        if let cost, cost.isFinite, cost >= 0 {
+        if let cost, cost.isFinite, cost >= 0, !countZeroAsUnpriced || cost > 0 {
             subtotal += cost
             priced += 1
         } else {

@@ -640,7 +640,154 @@ final class SessionIndexTests: XCTestCase {
         XCTAssertFalse(decoded.endedWithError)
         XCTAssertNil(decoded.turnCount)
         XCTAssertNil(decoded.durationMinutes)
+        XCTAssertNil(decoded.agentTimeSeconds)
+        XCTAssertNil(decoded.testResult)
         XCTAssertEqual(decoded.primaryIntent, "old")
+    }
+
+    func testCodexUsesPairedTurnEventsAndLinksPTYTestExit() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let file = home.appendingPathComponent(".codex/sessions/rollout-metrics.jsonl")
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let first = #"""
+        {"timestamp":"2026-11-26T10:00:00Z","type":"session_meta","payload":{"id":"metrics","cwd":"/tmp/app"}}
+        {"timestamp":"2026-11-26T10:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"one"}}
+        {"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"回归验证"}]}}
+        {"type":"event_msg","payload":{"type":"user_message","message":"回归验证"}}
+        {"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"swift","arguments":"{\"cmd\":\"swift test --filter Panel\"}"}}
+        {"type":"response_item","payload":{"type":"function_call_output","call_id":"swift","output":"Chunk ID: abcd\nWall time: 0.10 seconds\nProcess exited with code 1\nFinal output:\nProcess exited with code 0"}}
+        {"timestamp":"2026-11-26T10:00:04Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"one","duration_ms":2500}}
+        """#
+        try first.write(to: file, atomically: true, encoding: .utf8)
+        func read() throws -> SessionRecord { try XCTUnwrap(SessionIndex.build(homeDirectory: home, cacheFile: nil).first) }
+        let failed = try read()
+        XCTAssertEqual(failed.agentTimeSeconds, 2)
+        XCTAssertEqual(failed.turnCount, 1)
+        XCTAssertEqual(failed.testResult, .failed)
+
+        let second = #"""
+        {"timestamp":"2026-11-26T11:00:00Z","type":"event_msg","payload":{"type":"turn_started","turn_id":"two"}}
+        {"type":"event_msg","payload":{"type":"user_message","message":"继续"}}
+        {"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"node","arguments":"{\"cmd\":\"npx --yes vitest run\"}"}}
+        {"type":"response_item","payload":{"type":"function_call_output","call_id":"node","output":"Chunk ID: abcd\nWall time: 0.1 seconds\nProcess running with session ID 17\nOutput:\nProcess exited with code 1"}}
+        {"type":"response_item","payload":{"type":"function_call_output","call_id":"unrelated","output":{"exit_code":1}}}
+        {"type":"response_item","payload":{"type":"function_call","name":"write_stdin","call_id":"poll","arguments":"{\"session_id\":17,\"chars\":\"\"}"}}
+        {"type":"response_item","payload":{"type":"function_call_output","call_id":"poll","output":{"chunk_id":"abcd","exit_code":0,"output":"passed"}}}
+        {"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"other","arguments":{"cmd":"echo 'vitest run'"}}}
+        {"type":"response_item","payload":{"type":"function_call_output","call_id":"other","output":{"chunk_id":"efgh","session_id":17}}}
+        {"type":"response_item","payload":{"type":"function_call","name":"write_stdin","call_id":"other-poll","arguments":{"session_id":17}}}
+        {"type":"response_item","payload":{"type":"function_call_output","call_id":"other-poll","output":{"chunk_id":"efgh","exit_code":1}}}
+        {"timestamp":"2026-11-26T11:00:07Z","type":"event_msg","payload":{"type":"turn_complete","turn_id":"two"}}
+        """#
+        try (first + "\n" + second).write(to: file, atomically: true, encoding: .utf8)
+        let passed = try read()
+        XCTAssertEqual(passed.agentTimeSeconds, 9)
+        XCTAssertEqual(passed.durationMinutes, 60)
+        XCTAssertEqual(passed.turnCount, 2)
+        XCTAssertEqual(passed.testResult, .passed)
+    }
+
+    func testCodexNoTestRequiresCompleteLogAndReparsesWave4CacheOnce() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let file = home.appendingPathComponent(".codex/sessions/rollout-old-cache.jsonl")
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let transcript = #"""
+        {"type":"session_meta","payload":{"id":"old-cache","cwd":"/tmp/app"}}
+        {"type":"event_msg","payload":{"type":"task_started","turn_id":"one"}}
+        {"type":"event_msg","payload":{"type":"user_message","message":"写下 swift test 这几个字"}}
+        {"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"echo","arguments":{"cmd":"echo 'swift test; npm test'"}}}
+        {"type":"response_item","payload":{"type":"function_call_output","call_id":"echo","output":{"exit_code":0,"output":"swift test; npm test"}}}
+        {"type":"event_msg","payload":{"type":"task_complete","turn_id":"one","duration_ms":4200}}
+        """#
+        try transcript.write(to: file, atomically: true, encoding: .utf8)
+        let cache = home.appendingPathComponent("cache.json")
+        let stamp = try FileManager.default.attributesOfItem(atPath: file.path)
+        let date = try XCTUnwrap(stamp[.modificationDate] as? Date)
+        try FileTools.writeJSON(["version": 5, "entries": [PathTools.normalize(file.path): [
+            "mtime": date.timeIntervalSince1970, "fileSize": transcript.utf8.count,
+            "record": ["tool": "codex", "id": "old-cache", "cwd": "/tmp/app", "modified": 0, "lastUser": "old cache"],
+        ]]], to: cache)
+
+        let rebuilt = try XCTUnwrap(SessionIndex.build(homeDirectory: home, cacheFile: cache).first)
+        XCTAssertEqual(rebuilt.lastUser, "写下 swift test 这几个字")
+        XCTAssertEqual(rebuilt.agentTimeSeconds, 4)
+        XCTAssertEqual(rebuilt.testResult, .notRun)
+        let upgradedCache = try Data(contentsOf: cache)
+        XCTAssertEqual(SessionIndex.build(homeDirectory: home, cacheFile: cache), [rebuilt])
+        XCTAssertEqual(try Data(contentsOf: cache), upgradedCache)
+
+        let active = #"{"type":"event_msg","payload":{"type":"task_started","turn_id":"two"}}"#
+        try (transcript + "\n" + active).write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertNil(SessionIndex.build(homeDirectory: home, cacheFile: cache).first?.testResult)
+        try (transcript + "\n{" ).write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertNil(SessionIndex.build(homeDirectory: home, cacheFile: nil).first?.testResult)
+    }
+
+    func testClaudeUsesDurationMarkersAndBashResultForTheMatchingCall() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let file = home.appendingPathComponent(".claude/projects/-tmp-app/metrics.jsonl")
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let first = #"""
+        {"type":"user","cwd":"/tmp/app","message":{"role":"user","content":"运行 pytest"}}
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","id":"bash-1","input":{"command":"python3 -m pytest"}}]}}
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"mismatched","content":"Exit code 0"}]}}
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"bash-1","is_error":true,"content":"Exit code 1\nFAILED example.py"}]},"toolUseResult":"Error: Exit code 1\nFAILED example.py"}
+        {"timestamp":"2026-11-26T10:00:03Z","type":"system","subtype":"turn_duration","uuid":"duration-one","durationMs":3200}
+        {"timestamp":"2026-11-26T10:00:03Z","type":"system","subtype":"turn_duration","uuid":"duration-one","durationMs":3200}
+        """#
+        try first.write(to: file, atomically: true, encoding: .utf8)
+        func read() throws -> SessionRecord { try XCTUnwrap(SessionIndex.build(homeDirectory: home, cacheFile: nil).first) }
+        let failed = try read()
+        XCTAssertEqual(failed.agentTimeSeconds, 3)
+        XCTAssertEqual(failed.turnCount, 1)
+        XCTAssertEqual(failed.testResult, .failed)
+
+        let second = #"""
+        {"type":"user","cwd":"/tmp/app","message":{"role":"user","content":"再试一次"}}
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","id":"bash-2","input":{"command":"go test ./..."}}]}}
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","id":"bash-2","input":{"command":"go test ./..."}}]}}
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"bash-2","content":"ok"}]},"toolUseResult":{"stdout":"ok","stderr":"","interrupted":false,"isImage":false}}
+        {"timestamp":"2026-11-26T12:00:02Z","type":"system","subtype":"turn_duration","uuid":"duration-two","durationMs":2400}
+        """#
+        let full = first + "\n" + second
+        try full.write(to: file, atomically: true, encoding: .utf8)
+        let passed = try read()
+        XCTAssertEqual(passed.agentTimeSeconds, 5)
+        XCTAssertEqual(passed.turnCount, 2)
+        XCTAssertEqual(passed.testResult, .passed)
+
+        let rejected = #"""
+        {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","id":"bash-3","input":{"command":"npm test"}}]}}
+        {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"bash-3","is_error":true,"content":"The user denied this tool call"}]}}
+        """#
+        try (full + "\n" + rejected).write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertNil(try read().testResult)
+    }
+
+    func testTestCommandMatcherAcceptsCommonWrappersAndRejectsAmbiguousExit() throws {
+        for command: Any in ["swift test", "pytest -q", "jest", "vitest run", "cargo +stable test", "go test ./...",
+                             "npm test", "make -C fixtures test", "npm exec -- jest", "pnpm exec vitest run",
+                             "CI=true npx --yes vitest run", ["/bin/zsh", "-lc", "uv run pytest"]] {
+            var tests = SessionLogMetrics.Tests()
+            let attempt = try XCTUnwrap(tests.start(command), "\(command)")
+            tests.finish(attempt, exitCode: 0)
+            XCTAssertEqual(tests.result(complete: true), .passed, "\(command)")
+        }
+        for command in ["echo 'swift test'", "printf 'npm test'", "grep 'cargo test' README", "jest --listTests",
+                        "npm -v", "pytest --collect-only", "make -n test", "git diff > output.txt", "echo hi # ; go test"] {
+            var tests = SessionLogMetrics.Tests()
+            XCTAssertNil(tests.start(command), command)
+            XCTAssertEqual(tests.result(complete: true), .notRun, command)
+        }
+        for (command, code) in [("swift test | tail -5", 0), ("false && pytest", 1), ("cd missing && npm test", 1), ("jest", 127)] {
+            var tests = SessionLogMetrics.Tests()
+            let attempt = try XCTUnwrap(tests.start(command), command)
+            tests.finish(attempt, exitCode: code)
+            XCTAssertNil(tests.result(complete: true), command)
+        }
     }
 
     private func runSQLite(_ statements: [String], database: URL) throws {

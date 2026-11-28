@@ -16,22 +16,6 @@ enum ProjectGrouping {
     }
 
     static func color(for group: String) -> Color {
-        if let kind = ProjectKind.allCases.first(where: { $0.title == group }) {
-            return kind.color
-        }
-        return customColors[paletteIndex(for: group)]
-    }
-
-    private static let customColors: [Color] = [
-        .blue, .purple, .green, .orange, .pink, .teal, .indigo, .brown,
-    ]
-
-    static func paletteIndex(for group: String) -> Int {
-        var hash: UInt64 = 14695981039346656037
-        for byte in group.utf8 {
-            hash ^= UInt64(byte)
-            hash &*= 1099511628211
-        }
-        return Int(hash % UInt64(customColors.count))
+        ProjectAccentColor.color(for: group)
     }
 }

@@ -3,7 +3,6 @@ import SwiftUI
 struct RunTabView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
-    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
 
     let project: RepoProject
 
@@ -45,20 +44,9 @@ struct RunTabView: View {
                     ServicesPanel(project: project, hasTrialPanel: true)
                 } else {
                     Panel(title: "运行服务", symbol: "play.circle") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("暂未识别到可自动启动的开发或测试命令")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                            HStack(spacing: 8) {
-                                Button {
-                                    SystemActions.openTerminal(project.path)
-                                } label: {
-                                    Label("在终端打开", systemImage: "terminal")
-                                }
-                                .buttonStyle(.glass)
-                                .controlSize(.small)
-                            }
-                        }
+                        Text("暂未识别到可自动启动的开发或测试命令")
+                            .font(FizzTypography.body)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -129,7 +117,7 @@ struct RunTabView: View {
                     ToastCenter.shared.show(
                         result.message,
                         symbol: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                        tint: result.succeeded ? .green : .orange
+                        tint: result.succeeded ? FizzTheme.statusSuccess : FizzTheme.statusWarning
                     )
                     await store.refreshDoctor(for: project, scope: .focused)
                 }
@@ -150,18 +138,16 @@ struct RunTabView: View {
             title: report.issues.isEmpty ? "已忽略的体检项" : "开始之前有 \(report.issues.count) 个问题",
             symbol: report.issues.isEmpty ? "checkmark.circle" : "exclamationmark.triangle.fill"
         ) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: FizzSpacing.grid) {
                 ForEach(report.issues) { issue in
-                    HStack(alignment: .center, spacing: 10) {
-                        Circle()
-                            .fill(issue.severity == .critical ? Color.red : Color.orange)
-                            .frame(width: 7, height: 7)
+                    HStack(alignment: .center, spacing: FizzSpacing.row) {
+                        FizzStatusDot(tint: issue.severity == .critical ? FizzTheme.statusDanger : FizzTheme.statusWarning)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(issue.title)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(FizzTypography.cardTitle)
                             Text(issue.detail)
-                                .font(.caption)
+                                .font(FizzTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -175,7 +161,7 @@ struct RunTabView: View {
                        (!installState.output.isEmpty || installState.status == .running) {
                         ScrollView {
                             Text(installState.output.isEmpty ? "正在执行 \(installState.script.command)…" : LogTailReader.tail(installState.output, maxLines: 40))
-                                .font(.system(size: 10.5, design: .monospaced))
+                                .font(FizzTypography.monoSmall)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(8)
@@ -199,7 +185,11 @@ struct RunTabView: View {
         switch issue.fixAction {
         case .installDependencies(let command):
             let isRunning = actions.installRun(for: project, command: command)?.status == .running
-            Button(isRunning ? "停止" : "安装依赖") {
+            FizzActionButton(
+                title: isRunning ? "停止" : "安装依赖",
+                height: .compact,
+                prominence: isRunning ? .secondary : .primary
+            ) {
                 if isRunning {
                     actions.stopInstallDependencies(command: command, for: project)
                 } else if DoctorPreferences.hasConfirmedFirstInstall() {
@@ -208,68 +198,53 @@ struct RunTabView: View {
                     pendingInstallCommand = command
                 }
             }
-            .buttonStyle(.glassProminent)
-            .tint(isRunning ? .orange : FizzTheme.accent)
-            .controlSize(.small)
 
         case .createEnvFromExample:
-            Button("生成 .env") {
+            FizzActionButton(title: "生成 .env", height: .compact) {
                 Task {
                     if let url = DoctorService.createEnvFromExample(in: dir) {
                         SystemActions.open(url.path)
-                        ToastCenter.shared.show("已生成 .env", symbol: "doc.badge.plus", tint: .green)
+                        ToastCenter.shared.show("已生成 .env", symbol: "doc.badge.plus", tint: FizzTheme.statusSuccess)
                     }
                     await store.refreshDoctor(for: project, scope: .focused)
                 }
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
 
         case .addEnvToGitignore:
-            Button("把 .env 加入忽略") {
+            FizzActionButton(title: "把 .env 加入忽略", height: .compact) {
                 Task {
                     if LightweightProjectCheckService.addEnvFilesToGitignore(in: dir) {
-                        ToastCenter.shared.show("已把 .env 加入忽略列表", symbol: "checkmark.shield.fill", tint: .green)
+                        ToastCenter.shared.show("已把 .env 加入忽略列表", symbol: "checkmark.shield.fill", tint: FizzTheme.statusSuccess)
                     }
                     await store.refreshGit(for: project.path)
                     await store.refreshDoctor(for: project, scope: .focused)
                 }
             }
-            .buttonStyle(.glassProminent)
-            .tint(.orange)
-            .controlSize(.small)
 
         case .resolvePortConflict(let conflict):
-            Button("核对占用进程…") {
+            FizzActionButton(title: "核对占用进程…", height: .compact) {
                 pendingPortConflict = conflict
             }
             .disabled(!conflict.canStop)
-            .buttonStyle(.glassProminent)
-            .tint(.orange)
-            .controlSize(.small)
 
         case .initGitRepository:
-            EnableVersionProtectionButton(project: project).buttonStyle(.glass)
+            EnableVersionProtectionButton(project: project)
 
         case .inspectTrackedSecrets(let files):
-            Button("查看文件") {
+            FizzActionButton(title: "查看文件", height: .compact) {
                 if let first = files.first {
                     SystemActions.open("\(project.path)/\(first)")
                 }
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
 
         case .copyShellCommand(let command):
-            Button("复制切换命令") {
+            FizzActionButton(title: "复制切换命令", height: .compact) {
                 SystemActions.copy(
                     command,
                     feedback: "运行版本切换命令已复制",
                     microViz: .compact(state: .done)
                 )
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
 
         case nil:
             EmptyView()

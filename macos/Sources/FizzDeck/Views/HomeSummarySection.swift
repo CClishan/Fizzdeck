@@ -29,14 +29,14 @@ struct HomeSummarySection: View {
                     value: "\(stats.projectCount)",
                     detail: filterTitle,
                     symbol: "square.stack.3d.up",
-                    tint: FizzTheme.accent
+                    tint: .secondary
                 )
                 GlassStatCard(
                     title: "正在运行",
                     value: "\(stats.runningCount)",
                     detail: stats.runningCount == 0 ? "没有运行中的服务" : "端口已就绪",
                     symbol: "play.circle",
-                    tint: .green
+                    tint: .secondary
                 )
             }
             GridRow {
@@ -45,14 +45,14 @@ struct HomeSummarySection: View {
                     value: Format.bytes(stats.totalBytes),
                     detail: "已扫描 \(stats.projectCount) 个项目",
                     symbol: "internaldrive",
-                    tint: .blue
+                    tint: .secondary
                 )
                 GlassStatCard(
                     title: "可清理",
                     value: Format.bytes(stats.cleanupBytes),
                     detail: "\(stats.cleanupItemCount) 个目录",
                     symbol: "trash.slash",
-                    tint: .orange
+                    tint: .secondary
                 )
             }
         }
@@ -65,28 +65,28 @@ struct HomeSummarySection: View {
                 title: "项目",
                 value: "\(stats.projectCount)",
                 symbol: "square.stack.3d.up",
-                tint: FizzTheme.accent
+                tint: .secondary
             )
             summaryDivider
             HomeSummaryMetric(
                 title: "正在运行",
                 value: "\(stats.runningCount)",
                 symbol: "play.circle",
-                tint: .green
+                tint: .secondary
             )
             summaryDivider
             HomeSummaryMetric(
                 title: "磁盘占用",
                 value: Format.bytes(stats.totalBytes),
                 symbol: "internaldrive",
-                tint: .blue
+                tint: .secondary
             )
             summaryDivider
             HomeSummaryMetric(
                 title: "可清理",
                 value: Format.bytes(stats.cleanupBytes),
                 symbol: "trash.slash",
-                tint: .orange
+                tint: .secondary
             )
         }
         .padding(.vertical, 10)
@@ -108,18 +108,17 @@ private struct HomeSummaryMetric: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            FizzIcon(symbol: symbol, size: 14)
+            FizzIcon(.md, symbol: symbol)
                 .foregroundStyle(tint)
                 .frame(width: 26, height: 26)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
-                    .font(.system(size: 16, weight: .semibold))
-                    .monospacedDigit()
+                    .font(FizzTypography.font(16, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 Text(title)
-                    .font(.system(size: 10.5))
+                    .font(FizzTypography.monoSmall)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }

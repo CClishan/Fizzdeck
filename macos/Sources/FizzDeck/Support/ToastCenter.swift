@@ -137,7 +137,7 @@ struct ToastMessage: Identifiable {
         symbol: String = "checkmark.circle.fill",
         title: String,
         subtitle: String? = nil,
-        tint: Color = .green,
+        tint: Color = FizzTheme.statusSuccess,
         microViz: ToastMicroViz? = nil,
         action: ToastAction? = nil,
         duration: TimeInterval? = 2.2
@@ -172,7 +172,7 @@ final class ToastCenter {
     func show(
         _ title: String,
         symbol: String = "checkmark.circle.fill",
-        tint: Color = .green,
+        tint: Color = FizzTheme.statusSuccess,
         duration: TimeInterval? = 2.2,
         subtitle: String? = nil,
         microViz: ToastMicroViz? = nil,

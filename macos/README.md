@@ -10,6 +10,8 @@ FizzDeck reads and writes the same local state as the web UI, but runs without N
 
 **v0.8.0 (Build 16).** Doctor rechecks a focused project when its dependency or environment files change. See which process owns a development port, run a build or test on demand, and review 14 or 30 days of estimated AI costs and commits.
 
+**Local release candidate: [v0.9.0 (Build 23)](../docs/releases/v0.9.0.md).** The app ships four Obel Mono weights for Latin text and digits, with native Chinese typography. Open Recap from Workbench or Conversations to compare 7d, 30d, 90d, or all indexed history. Agent time and test outcomes appear only when the source log records enough evidence. Free or unpriced sessions are counted separately. Copy Markdown or an anonymous light/dark PNG; recap polish is off by default and sends only aggregate figures per approval.
+
 The download link points to the latest public DMG. System Shortcuts require a build signed with an Apple Team ID; the default ad-hoc DMG has none. Project opening, handoff cards and health checks can also be used in the app. See [verification details](../docs/SYSTEM_INTEGRATION.md).
 
 ## Requirements
@@ -74,10 +76,10 @@ Build, launch, and verify:
 ./script/build_and_run.sh --verify
 ```
 
-The default version is `0.8.0`, Build `16`. Both values can be overridden:
+The local build defaults to `0.9.0`, Build `23`. Both values can be overridden:
 
 ```sh
-VERSION=0.8.0 BUILD_NUM=16 ./script/build_and_run.sh --sign-local
+VERSION=0.9.0 BUILD_NUM=23 ./script/build_and_run.sh --build-only
 ```
 
 Run the Swift test baseline:
@@ -110,8 +112,8 @@ Default ad-hoc package:
 Output:
 
 ```text
-dist/FizzDeck-0.8.0-arm64.dmg
-dist/FizzDeck-0.8.0-arm64.dmg.sha256
+dist/FizzDeck-0.9.0-arm64.dmg
+dist/FizzDeck-0.9.0-arm64.dmg.sha256
 ```
 
 The checksum file is standard `shasum -a 256` output containing only the DMG filename. Custom version, build number, and output path are available:
@@ -203,17 +205,17 @@ npm run build
 
 ```sh
 ./macos/script/package_dmg.sh
-hdiutil verify macos/dist/FizzDeck-0.8.0-arm64.dmg
+hdiutil verify macos/dist/FizzDeck-0.9.0-arm64.dmg
 mkdir -p /tmp/fizzdeck-verify
-hdiutil attach -nobrowse -readonly -mountpoint /tmp/fizzdeck-verify macos/dist/FizzDeck-0.8.0-arm64.dmg
+hdiutil attach -nobrowse -readonly -mountpoint /tmp/fizzdeck-verify macos/dist/FizzDeck-0.9.0-arm64.dmg
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /tmp/fizzdeck-verify/FizzDeck.app/Contents/Info.plist
 /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' /tmp/fizzdeck-verify/FizzDeck.app/Contents/Info.plist
 codesign --verify --deep --strict /tmp/fizzdeck-verify/FizzDeck.app
 hdiutil detach /tmp/fizzdeck-verify
-cd macos/dist && shasum -a 256 -c FizzDeck-0.8.0-arm64.dmg.sha256
+cd macos/dist && shasum -a 256 -c FizzDeck-0.9.0-arm64.dmg.sha256
 ```
 
-Expected values: version `0.8.0`, build `16`.
+Expected values: version `0.9.0`, build `23`.
 
 ### 3. In-app update: v0.5.3 or v0.7.4 → v0.8.0
 
@@ -262,6 +264,18 @@ FizzDeck-0.8.0-arm64.dmg.sha256
 ```
 
 After publishing, verify the release tag, filenames, checksum, and in-app update once from a clean install.
+
+## Local Agent conversation sources (Build 20)
+
+FizzDeck reads conversations in place. Conversations from managed projects appear in the timeline, Chinese search, file history, and conversation counts.
+
+| Tool | Source and limits |
+|---|---|
+| Cursor | `~/.cursor/projects/*/agent-transcripts/`; only local projects with an explicit `workspacePath` or a unique match in Cursor's `workspace.json`. Ambiguous folders and assistant-only transcripts are skipped. The existing workspace summary remains a fallback when no transcript is imported. |
+| OpenCode | `~/.local/share/opencode/opencode.db`; reads the SQLite session, message, and part tables. Active WAL reads require the existing sidecars. Older JSON storage and custom data directories are outside this build. |
+| Windsurf | Workspace detection remains available. FizzDeck does not import default Cascade conversation history or configure hooks. |
+
+Cursor and OpenCode imports do not estimate cost or token usage and do not offer a resume command.
 
 ## Shared state
 

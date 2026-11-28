@@ -12,26 +12,17 @@ struct HandoffCopyButton: View {
     @State private var resetTask: Task<Void, Never>?
 
     var body: some View {
-        Button {
+        FizzActionButton(
+            title: copied ? "已复制" : "复制接力卡",
+            symbol: copied ? "checkmark" : "doc.on.clipboard",
+            height: compact ? .compact : .standard
+        ) {
             if NSEvent.modifierFlags.contains(.option) {
                 showingPreview = true
             } else {
                 copyNow()
             }
-        } label: {
-            HStack(spacing: 4) {
-                FizzIcon(
-                    symbol: copied ? "checkmark" : "doc.on.clipboard",
-                    size: compact ? 10 : 11
-                )
-                .foregroundStyle(copied ? Color.green : FizzTheme.accent)
-
-                Text(copied ? "已复制" : "复制接力卡")
-                    .font(.system(size: compact ? 10.5 : 12, weight: .medium))
-            }
         }
-        .buttonStyle(.glass)
-        .controlSize(compact ? .small : .regular)
         .help("复制项目进度给任意 AI 接着做（按住 ⌥ 点击可预览）")
         .accessibilityLabel("复制接力卡")
         .sheet(isPresented: $showingPreview) {
@@ -45,7 +36,7 @@ struct HandoffCopyButton: View {
             sessionLimit: sessionLimit,
             copyMode: copyMode
         )
-        SystemActions.copy(result.markdown)
+        SystemActions.copy(result.markdown, feedback: nil)
 
         let subtitle = result.redactedCount > 0
             ? "\(result.characterCount) 字 · 已打码 \(result.redactedCount) 处密钥"
@@ -54,7 +45,7 @@ struct HandoffCopyButton: View {
         ToastCenter.shared.show(
             "接力卡已复制",
             symbol: "doc.on.clipboard.fill",
-            tint: FizzTheme.accent,
+            tint: Color.secondary,
             subtitle: subtitle,
             action: ToastAction(title: "预览", symbol: "eye") {
                 showingPreview = true
@@ -86,13 +77,23 @@ struct HandoffCardSheet: View {
         }
     }
 
+    private struct RepairSnapshot {
+        let projectPath: String
+        let failure: HandoffFailure?
+    }
+
     let project: RepoProject
-    var initialLimit = 3
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(ProjectActions.self) private var actions
+    @Environment(RepositoryStore.self) private var store
     @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     @AppStorage(SummaryPreferences.enabledKey) private var aiEnabled = false
+    @AppStorage(SummaryPreferences.consentAcceptedKey) private var summaryConsent = false
     @State private var sessionLimit: Int
+    @State private var scenario: HandoffCardScenario = .resume
+    @State private var repairSnapshot: RepairSnapshot?
+    @State private var editors: [ProjectEditor] = []
     @State private var edition: Edition = .rule
     @State private var aiMarkdown: String?
     @State private var isGeneratingAI = false
@@ -102,211 +103,261 @@ struct HandoffCardSheet: View {
 
     init(project: RepoProject, initialLimit: Int = 3) {
         self.project = project
-        self.initialLimit = initialLimit
         let clamped = [1, 3, 5].contains(initialLimit) ? initialLimit : 3
         _sessionLimit = State(initialValue: clamped)
     }
 
-    private var ruleResult: HandoffCardResult {
-        HandoffCardBuilder.build(
-            project: project,
-            sessionLimit: sessionLimit,
-            copyMode: copyMode
-        )
+    private var canUseAI: Bool { scenario == .resume && aiEnabled && summaryConsent }
+
+    private var repairPath: String? { scenario == .fixError ? project.path : nil }
+
+    private var scenarioSelection: Binding<HandoffCardScenario> {
+        Binding(get: { scenario }, set: { choice in
+            guard choice != scenario else { return }
+            resetAI()
+            repairSnapshot = nil
+            scenario = choice
+        })
     }
 
-    private var showingAIBody: Bool {
-        edition == .ai && aiMarkdown != nil && !aiTimedOutToRule
+    private var editionSelection: Binding<Edition> {
+        Binding(get: { edition }, set: { choice in
+            guard choice != edition else { return }
+            resetAI()
+            if choice == .ai, canUseAI {
+                edition = .ai
+                startAIGeneration()
+            }
+        })
     }
 
     private var showingAIShimmer: Bool {
         edition == .ai && isGeneratingAI && !aiTimedOutToRule && aiMarkdown == nil
     }
 
-    private var activeMarkdown: String {
-        if showingAIBody, let aiMarkdown {
-            return aiMarkdown
-        }
-        return ruleResult.markdown
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("接力卡预览 · \(project.displayName)")
-                        .font(.system(size: 16, weight: .semibold))
-                    HStack(spacing: 8) {
-                        Text("\(activeMarkdown.count) 字 · 含最近 \(ruleResult.includedSessionCount) 次对话")
-                            .font(.caption)
+        let waitingForRepair = repairPath != nil && repairSnapshot?.projectPath != repairPath
+        let rule = HandoffCardBuilder.build(
+            project: project, scenario: scenario, sessionLimit: sessionLimit, copyMode: copyMode,
+            localFailure: waitingForRepair ? nil : repairSnapshot?.failure
+        )
+        let polished = canUseAI && edition == .ai && !aiTimedOutToRule ? aiMarkdown : nil
+        let markdown = polished ?? rule.markdown
+
+        VStack(spacing: 0) {
+            FizzSheetHeader(title: "接力卡预览", subtitle: SecretRedactor.redact(project.displayName).text) { dismiss() }
+                .padding(.horizontal, FizzSpacing.page)
+                .padding(.vertical, FizzSpacing.panel)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: FizzSpacing.grid) {
+                previewControls
+                if !waitingForRepair {
+                    HStack(spacing: FizzSpacing.row) {
+                        let sessionCount = scenario == .resume ? " · 含最近 \(rule.includedSessionCount) 次对话" : ""
+                        Text("\(markdown.count) 字\(sessionCount)")
+                            .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
-                        if ruleResult.redactedCount > 0 {
-                            TagChip(
-                                text: "已自动打码 \(ruleResult.redactedCount) 处密钥",
-                                tint: .orange,
-                                compact: true
-                            )
+                        if rule.redactedCount > 0 {
+                            TagChip(text: "已自动打码 \(rule.redactedCount) 处密钥", compact: true)
                         }
                     }
                 }
-
-                Spacer(minLength: 12)
-
-                if aiEnabled {
-                    Picker("版本", selection: $edition) {
-                        ForEach(Edition.allCases) { item in
-                            Text(item.title).tag(item)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .frame(width: 146)
-                }
-
-                Picker("对话条数", selection: $sessionLimit) {
-                    Text("最近 1 次").tag(1)
-                    Text("最近 3 次").tag(3)
-                    Text("最近 5 次").tag(5)
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 210)
+                aiStatus
+                preview(markdown, waitingForRepair: waitingForRepair)
             }
+            .padding(FizzSpacing.page)
 
-            if aiTimedOutToRule && isGeneratingAI {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.mini)
-                    Text("AI 仍在整理中，先显示规则版，不用干等…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } else if aiReadyBanner {
-                HStack(spacing: 8) {
-                    FizzIcon(symbol: "sparkles", size: 12)
-                        .foregroundStyle(FizzTheme.accent)
-                    Text("✦ AI 版已就绪")
-                        .font(.caption.weight(.medium))
-                    Button("切换查看") {
-                        aiTimedOutToRule = false
-                        aiReadyBanner = false
-                    }
-                    .buttonStyle(.plain)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(FizzTheme.accent)
-                    Spacer()
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(FizzTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
-            }
+            Divider()
 
-            Group {
-                if showingAIShimmer {
-                    VStack(alignment: .leading, spacing: 10) {
-                        FizzShimmerPlaceholder(width: 320, height: 14)
-                        FizzShimmerPlaceholder(width: 520, height: 12)
-                        FizzShimmerPlaceholder(width: 460, height: 12)
-                        FizzShimmerPlaceholder(width: 380, height: 12)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, minHeight: 280, maxHeight: 420, alignment: .topLeading)
-                } else {
-                    ScrollView {
-                        Text(verbatim: activeMarkdown)
-                            .font(.system(size: 11.5, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                    }
-                    .frame(minHeight: 280, maxHeight: 420)
-                }
-            }
-            .background(
-                FizzTheme.recessedFill,
-                in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                    .strokeBorder(FizzTheme.stroke, lineWidth: 1)
-            }
-
-            HStack {
-                Text("只复制到剪贴板，不会修改项目文件")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 12)
-
-                Button("关闭") {
-                    dismiss()
-                }
-                .buttonStyle(.glass)
-
-                Button {
-                    SystemActions.copy(activeMarkdown)
-                    ToastCenter.shared.show(
-                        "接力卡已复制",
-                        symbol: "doc.on.clipboard.fill",
-                        tint: FizzTheme.accent,
-                        subtitle: "\(activeMarkdown.count) 字"
-                    )
-                    dismiss()
-                } label: {
-                    Label("复制到剪贴板", systemImage: "doc.on.clipboard")
-                }
-                .buttonStyle(.glassProminent)
-                .tint(FizzTheme.accent)
-            }
+            footer(markdown)
+                .disabled(waitingForRepair)
+                .padding(.horizontal, FizzSpacing.page)
+                .padding(.vertical, FizzSpacing.grid)
         }
-        .padding(22)
         .frame(width: 640)
-        .onChange(of: edition) {
-            if edition == .ai {
-                startAIGeneration()
-            } else {
-                aiTask?.cancel()
-                isGeneratingAI = false
-                aiTimedOutToRule = false
-                aiReadyBanner = false
-            }
+        .onExitCommand { dismiss() }
+        .task(id: project.path) {
+            let path = project.path
+            let available = await Task.detached(priority: .utility) { ProjectEditor.available(for: path) }.value
+            guard !Task.isCancelled else { return }
+            editors = available
         }
-        .onChange(of: sessionLimit) {
-            if edition == .ai {
-                startAIGeneration()
-            }
+        .task(id: repairPath) {
+            guard let path = repairPath else { return }
+            let failure = await HandoffCardBuilder.loadLocalFailure(
+                for: project, actions: actions, projectPaths: store.projects.map(\.path)
+            )
+            guard !Task.isCancelled else { return }
+            repairSnapshot = RepairSnapshot(projectPath: path, failure: failure)
         }
+        .onChange(of: canUseAI) {
+            if !canUseAI { resetAI() }
+        }
+        .onChange(of: sessionLimit) { resetAI() }
+        .onChange(of: copyMode) { resetAI() }
+        .onChange(of: project.path) { resetAI() }
         .onDisappear {
             aiTask?.cancel()
         }
     }
 
-    private func startAIGeneration() {
+    private var previewControls: some View {
+        VStack(alignment: .leading, spacing: FizzSpacing.row) {
+            previewPicker("接力场景", items: HandoffCardScenario.allCases, selection: scenarioSelection) { $0.title }
+            if scenario == .resume {
+                HStack(spacing: FizzSpacing.row) {
+                    if canUseAI {
+                        previewPicker("版本", items: Edition.allCases, selection: editionSelection) { $0.title }
+                            .help("选择 AI 版会发送脱敏后的项目接力信息进行润色")
+                    }
+                    previewPicker("对话条数", items: [1, 3, 5], selection: $sessionLimit) { "最近 \($0) 次" }
+                }
+            }
+        }
+    }
+
+    private func footer(_ markdown: String) -> some View {
+        FizzSheetFooter {
+            FizzActionButton(title: "复制并打开终端", symbol: "terminal", height: .standard, prominence: .primary) {
+                copy(markdown) { SystemActions.openTerminal(project.path) }
+            }
+            .keyboardShortcut(.defaultAction)
+
+            FizzMenuButton(title: "其他复制方式", symbol: "chevron.down", height: .standard) {
+                Button("只复制", systemImage: "doc.on.clipboard") { copy(markdown) }
+                if !editors.isEmpty {
+                    Divider()
+                    ForEach(editors) { editor in
+                        Button("复制并打开 \(editor.title)") {
+                            copy(markdown) { SystemActions.open(project.path, in: editor) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func copy(_ markdown: String, then open: () -> Void = {}) {
+        let text = SecretRedactor.redact(markdown).text
+        SystemActions.copy(text, feedback: nil)
+        ToastCenter.shared.show("接力卡已复制", symbol: "doc.on.clipboard.fill", tint: FizzTheme.statusSuccess,
+                                subtitle: "\(text.count) 字")
+        open()
+        dismiss()
+    }
+
+    private func previewPicker<Item: Hashable>(
+        _ title: String, items: [Item], selection: Binding<Item>, label: @escaping (Item) -> String
+    ) -> some View {
+        FizzSegmentedCapsule(
+            items: items, selection: selection, height: .compact,
+            keyboardNavigation: true
+        ) { item, _ in
+            Text(label(item)).font(FizzTypography.caption(.medium))
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+    }
+
+    @ViewBuilder
+    private var aiStatus: some View {
+        if canUseAI && aiTimedOutToRule && isGeneratingAI {
+            HStack(spacing: FizzSpacing.row) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text("AI 仍在整理中，先显示规则版，不用干等…")
+                    .font(FizzTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else if canUseAI && aiReadyBanner {
+            HStack(spacing: FizzSpacing.row) {
+                FizzIcon(.sm, symbol: "sparkles")
+                    .foregroundStyle(Color.secondary)
+                Text("AI 版已就绪")
+                    .font(FizzTypography.caption(.medium))
+                Spacer()
+                FizzActionButton(title: "切换查看", height: .compact) {
+                    aiTimedOutToRule = false
+                    aiReadyBanner = false
+                }
+            }
+            .padding(FizzSpacing.row)
+            .background(FizzTheme.recessedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control))
+        }
+    }
+
+    private func preview(_ markdown: String, waitingForRepair: Bool) -> some View {
+        Group {
+            if waitingForRepair {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("正在整理本地失败记录")
+                    .frame(maxWidth: .infinity, minHeight: 280)
+            } else if canUseAI && showingAIShimmer {
+                VStack(alignment: .leading, spacing: FizzSpacing.row) {
+                    FizzShimmerPlaceholder(width: 320, height: 14)
+                    FizzShimmerPlaceholder(width: 520, height: 12)
+                    FizzShimmerPlaceholder(width: 460, height: 12)
+                    FizzShimmerPlaceholder(width: 380, height: 12)
+                    Spacer(minLength: 0)
+                }
+                .padding(FizzSpacing.panel)
+                .frame(maxWidth: .infinity, minHeight: 280, maxHeight: 420, alignment: .topLeading)
+            } else {
+                ScrollView {
+                    Text(verbatim: markdown)
+                        .font(FizzTypography.mono)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(FizzSpacing.panel)
+                }
+                .frame(minHeight: 280, maxHeight: 420)
+            }
+        }
+        .background(FizzTheme.recessedFill, in: RoundedRectangle(cornerRadius: FizzRadius.inset))
+        .overlay {
+            RoundedRectangle(cornerRadius: FizzRadius.inset)
+                .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+        }
+    }
+
+    private func resetAI() {
         aiTask?.cancel()
+        aiTask = nil
+        edition = .rule
         aiMarkdown = nil
         aiReadyBanner = false
         aiTimedOutToRule = false
+        isGeneratingAI = false
+    }
+
+    private func startAIGeneration() {
+        guard canUseAI, edition == .ai else { return }
         isGeneratingAI = true
 
         aiTask = Task {
+            guard !Task.isCancelled, canUseAI, edition == .ai else { return }
             let timeoutTask = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled, isGeneratingAI, aiMarkdown == nil else { return }
                 aiTimedOutToRule = true
             }
 
-            let generated = await SummaryEngine.shared.generateHandoffMarkdown(
-                for: project,
-                sessionLimit: sessionLimit,
-                copyMode: copyMode
-            )
+            let generated = await withTaskCancellationHandler {
+                await SummaryEngine.shared.generateHandoffMarkdown(
+                    for: project, sessionLimit: sessionLimit, copyMode: copyMode
+                )
+            } onCancel: {
+                timeoutTask.cancel()
+            }
             timeoutTask.cancel()
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, canUseAI, edition == .ai else { return }
 
             isGeneratingAI = false
             if let generated, !generated.isEmpty {
-                aiMarkdown = generated
+                aiMarkdown = SecretRedactor.redact(generated).text
                 if aiTimedOutToRule {
                     aiReadyBanner = true
                 }

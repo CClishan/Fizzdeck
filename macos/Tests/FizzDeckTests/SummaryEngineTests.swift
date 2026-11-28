@@ -309,10 +309,9 @@ final class SummaryEngineTests: XCTestCase {
         )
 
         let segments = DashboardMetrics.costBreakdown(
-            projects: [project],
+            sessions: WeeklyRecapService.build(projects: [project], now: now).analysis.sessions,
             mode: .byTool,
-            selfUsage: weekly,
-            now: now
+            selfUsage: weekly
         )
         let selfSegment = segments.first { $0.id == "fizzdeck-self" }
         XCTAssertNotNil(selfSegment)

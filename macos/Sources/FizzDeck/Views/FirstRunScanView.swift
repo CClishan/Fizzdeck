@@ -64,9 +64,9 @@ struct FirstRunScanView: View {
             FizzLogo(size: 32)
             VStack(alignment: .leading, spacing: 2) {
                 Text("发现本机项目")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(FizzTypography.font(18, weight: .semibold))
                 Text("先快速预览目录标记与工具痕迹，由你决定把哪些项目加入 FizzDeck。")
-                    .font(.system(size: 12))
+                    .font(FizzTypography.font(12))
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -109,9 +109,9 @@ struct FirstRunScanView: View {
             VStack(alignment: .leading, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(FizzTypography.cardTitle)
                     Text(subtitle)
-                        .font(.caption)
+                        .font(FizzTypography.micro(.regular))
                         .foregroundStyle(.secondary)
                 }
 
@@ -131,15 +131,15 @@ struct FirstRunScanView: View {
                             .toggleStyle(.checkbox)
                             .labelsHidden()
 
-                            FizzIcon(symbol: "folder.fill", size: 15)
-                                .foregroundStyle(.blue)
+                            FizzIcon(.md, symbol: "folder.fill")
+                                .foregroundStyle(Color.secondary)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(scope.title)
-                                    .font(.system(size: 12.5, weight: .medium))
+                                    .font(FizzTypography.body(.medium))
                                 if let detail = scope.detail {
                                     Text(detail)
-                                        .font(.caption2)
+                                        .font(FizzTypography.micro)
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -147,7 +147,7 @@ struct FirstRunScanView: View {
                             Spacer()
 
                             Text("深度 \(scope.maxDepth)")
-                                .font(.caption2)
+                                .font(FizzTypography.micro)
                                 .foregroundStyle(.tertiary)
                         }
                         .padding(.horizontal, 12)
@@ -183,15 +183,13 @@ struct FirstRunScanView: View {
             ProgressView()
                 .controlSize(.large)
             Text("已发现 \(progress.discoveredCount) 个项目")
-                .font(.system(size: 18, weight: .semibold))
-                .monospacedDigit()
+                .font(FizzTypography.font(18, weight: .semibold))
             Text("已扫描 \(progress.scannedFolders) 个目录")
-                .font(.caption)
+                .font(FizzTypography.micro(.regular))
                 .foregroundStyle(.secondary)
-                .monospacedDigit()
             if !progress.currentPath.isEmpty {
                 Text(PathTools.displayPath(progress.currentPath))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(FizzTypography.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -220,7 +218,7 @@ struct FirstRunScanView: View {
                 Spacer()
 
                 Text("已选 \(selectedScopes.count) 个目录")
-                    .font(.caption)
+                    .font(FizzTypography.micro(.regular))
                     .foregroundStyle(.secondary)
 
                 Button("一键开始扫描", action: startScan)
@@ -256,7 +254,7 @@ struct FirstRunScanView: View {
                 Spacer()
 
                 Text("已选 \(selectedProjects.count) 个项目")
-                    .font(.caption)
+                    .font(FizzTypography.micro(.regular))
                     .foregroundStyle(.secondary)
 
                 Button {

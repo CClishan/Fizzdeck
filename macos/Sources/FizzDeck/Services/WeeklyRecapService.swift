@@ -21,6 +21,7 @@ struct WeeklyRecapTopFile: Identifiable, Equatable, Sendable {
 }
 
 struct WeeklyRecap: Equatable, Sendable {
+    let range: WeeklyRecapRange
     let windowStart: Date
     let generatedAt: Date
     let activeProjects: [WeeklyRecapProject]
@@ -29,6 +30,7 @@ struct WeeklyRecap: Equatable, Sendable {
     let savedVersionCount: Int
     let cost: SessionCostTotal
     let topFiles: [WeeklyRecapTopFile]
+    let analysis: WeeklyRecapAnalysis
     let markdown: String
 
     var hasActivity: Bool {
@@ -44,21 +46,33 @@ struct WeeklyRecap: Equatable, Sendable {
 enum WeeklyRecapService {
     static func build(
         projects: [RepoProject],
+        range: WeeklyRecapRange = .week,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> WeeklyRecap {
         let endDay = calendar.startOfDay(for: now)
-        let windowStart = calendar.date(byAdding: .day, value: -6, to: endDay)
-            ?? now.addingTimeInterval(-6 * 24 * 60 * 60)
+        let windowStart: Date
+        if let days = range.days {
+            windowStart = calendar.date(byAdding: .day, value: 1 - days, to: endDay) ?? endDay
+        } else {
+            windowStart = allTimeStart(projects: projects, now: now, calendar: calendar)
+        }
+        let previousStart = range.days.flatMap { calendar.date(byAdding: .day, value: -$0, to: windowStart) }
+        var previous = previousStart.map { _ in WeeklyRecapTotals() }
+        var rows: [WeeklyRecapSession] = []
         var projectSummaries: [WeeklyRecapProject] = []
         var fileSessionCounts: [String: (project: String, path: String, count: Int)] = [:]
         var globalFiles = Set<String>()
 
         for project in projects {
-            let sessions = project.sessions.recentSessions.filter {
-                $0.kind == .conversation
-                    && $0.modified >= windowStart
-                    && $0.modified <= now
+            var sessions: [SessionRecord] = []
+            for session in project.sessions.recentSessions where session.kind == .conversation && session.modified <= now {
+                if session.modified >= windowStart {
+                    sessions.append(session)
+                    rows.append(.init(projectPath: project.path, projectName: project.displayName, record: session))
+                } else if let previousStart, session.modified >= previousStart {
+                    previous?.add(session)
+                }
             }
             let commits = savedVersionCount(
                 in: project.weekly,
@@ -96,7 +110,7 @@ enum WeeklyRecapService {
                     sessionCount: sessions.count,
                     changedFileCount: projectFiles.count,
                     savedVersionCount: commits,
-                    cost: sessions.reduce(into: SessionCostTotal()) { $0.add($1) },
+                    cost: sessions.reduce(into: SessionCostTotal()) { $0.add($1, countZeroAsUnpriced: true) },
                     lastActivityAt: max(
                         sessions.map(\.modified).max() ?? .distantPast,
                         project.recent ?? .distantPast
@@ -131,19 +145,26 @@ enum WeeklyRecapService {
 
         let sessionCount = projectSummaries.reduce(0) { $0 + $1.sessionCount }
         let savedVersionCount = projectSummaries.reduce(0) { $0 + $1.savedVersionCount }
-        let cost = projectSummaries.reduce(into: SessionCostTotal()) { $0.add($1.cost) }
+        let analysis = WeeklyRecapAnalysis.build(
+            sessions: rows, previous: previous, previousStart: previousStart,
+            start: windowStart, now: now, calendar: calendar
+        )
+        let cost = analysis.totals.cost
         let markdown = makeMarkdown(
+            range: range,
             windowStart: windowStart,
             generatedAt: now,
+            calendar: calendar,
             projects: projectSummaries,
             sessionCount: sessionCount,
             changedFileCount: globalFiles.count,
             savedVersionCount: savedVersionCount,
-            cost: cost,
+            totals: analysis.totals,
             topFiles: topFiles
         )
 
         return WeeklyRecap(
+            range: range,
             windowStart: windowStart,
             generatedAt: now,
             activeProjects: projectSummaries,
@@ -152,8 +173,30 @@ enum WeeklyRecapService {
             savedVersionCount: savedVersionCount,
             cost: cost,
             topFiles: topFiles,
+            analysis: analysis,
             markdown: SecretRedactor.redact(markdown).text
         )
+    }
+
+    private static func allTimeStart(projects: [RepoProject], now: Date, calendar: Calendar) -> Date {
+        var first = now
+        let today = WorkbenchMetrics.dayKey(now, calendar: calendar)
+        var earliestCommit: String?
+        for project in projects {
+            for session in project.sessions.recentSessions where session.kind == .conversation && session.modified < first {
+                first = session.modified
+            }
+            for (key, count) in project.weekly where count > 0 && key <= today && key < (earliestCommit ?? "~") {
+                earliestCommit = key
+            }
+        }
+        if let earliestCommit {
+            let fields = earliestCommit.split(separator: "-").compactMap { Int($0) }
+            if fields.count == 3, let date = calendar.date(from: DateComponents(year: fields[0], month: fields[1], day: fields[2])) {
+                first = min(first, date)
+            }
+        }
+        return calendar.startOfDay(for: first)
     }
 
     static func savedVersionCount(
@@ -190,29 +233,33 @@ enum WeeklyRecapService {
     }
 
     private static func makeMarkdown(
+        range: WeeklyRecapRange,
         windowStart: Date,
         generatedAt: Date,
+        calendar: Calendar,
         projects: [WeeklyRecapProject],
         sessionCount: Int,
         changedFileCount: Int,
         savedVersionCount: Int,
-        cost: SessionCostTotal,
+        totals: WeeklyRecapTotals,
         topFiles: [WeeklyRecapTopFile]
     ) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_Hans")
-        formatter.dateFormat = "M 月 d 日"
-        let range = "\(formatter.string(from: windowStart)) – \(formatter.string(from: generatedAt))"
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = range == .all ? "yyyy 年 M 月 d 日" : "M 月 d 日"
+        let dates = "\(formatter.string(from: windowStart)) – \(formatter.string(from: generatedAt))"
 
         var lines = [
-            "# FizzDeck 本周回顾",
+            range == .week ? "# FizzDeck 本周回顾" : "# FizzDeck 跨 Agent 复盘",
             "",
-            "**\(range)**",
+            "**\(dates)**",
             "",
         ]
 
         guard sessionCount > 0 || savedVersionCount > 0 else {
-            lines.append("这周还没有新的 AI 对话或保存记录。")
+            lines.append("这段时间还没有新的 AI 对话或保存记录。")
             lines.append("下次和 AI 一起改完东西，再回来看看。")
             lines.append("")
             lines.append("> 由 FizzDeck 在本机汇总，密钥已脱敏。")
@@ -220,7 +267,7 @@ enum WeeklyRecapService {
         }
 
         lines.append(
-            "这 7 天里，你在 \(projects.count) 个项目里和 AI 聊了 \(sessionCount) 次，"
+            "\(range.periodTitle)，你在 \(projects.count) 个项目里和 AI 聊了 \(sessionCount) 次，"
                 + "改了 \(changedFileCount) 个文件，存下 \(savedVersionCount) 个版本。"
         )
         lines.append("")
@@ -241,7 +288,7 @@ enum WeeklyRecapService {
         }
 
         lines.append("")
-        lines.append("估算费用：**\(cost.description)**")
+        lines.append("估算费用：**\(totals.cost.description)** · AI 干活时长：**\(WeeklyRecapMetric.agentTime.label(totals.value(.agentTime)))** · Tokens：**\(WeeklyRecapMetric.tokens.label(totals.value(.tokens)))**")
         lines.append("")
         lines.append("> 由 FizzDeck 在本机汇总，密钥已脱敏。")
         return lines.joined(separator: "\n")

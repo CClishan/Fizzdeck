@@ -57,7 +57,6 @@ private extension Int {
 }
 
 struct CommitHeatmapCard: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("fizzdeck.heatmap.range") private var rangeRaw = HeatmapRange.weeks26.rawValue
     @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
@@ -95,22 +94,20 @@ struct CommitHeatmapCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(copyMode == .plain ? FizzCopy.heatmapTitle(.plain) : "提交热力图")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(FizzTypography.cardTitle)
                         .foregroundStyle(.primary)
 
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text("\(data.totalCommits)")
-                            .font(.system(size: 22, weight: .semibold))
-                            .monospacedDigit()
+                            .font(FizzTypography.pageTitle)
                             .contentTransition(.numericText())
                             .foregroundStyle(.primary)
 
                         Text(copyMode == .plain
                             ? "次活动 · 连续 \(data.currentStreak) 天"
                             : "次 · 连续 \(data.currentStreak) 天")
-                            .font(.system(size: 11))
+                            .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
-                            .monospacedDigit()
                             .contentTransition(.numericText())
                     }
                     .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: rangeRaw)
@@ -158,7 +155,7 @@ struct CommitHeatmapCard: View {
                     )
 
                     Text(hoverLabel(for: hoveredCell))
-                        .font(.system(size: 10.5, weight: .medium))
+                        .font(FizzTypography.monoSmall(.medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -188,7 +185,7 @@ struct CommitHeatmapCard: View {
             )
         ) { item, selected in
             Text(item.title)
-                .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
+                .font(FizzTypography.monoSmall(selected ? .semibold : .medium))
             }
     }
 
@@ -231,7 +228,7 @@ struct CommitHeatmapCard: View {
                 .overlay {
                     if isHovered {
                         Circle()
-                            .strokeBorder(colorScheme == .dark ? Color.white : FizzTheme.accent, lineWidth: 1.2)
+                            .strokeBorder(Color.primary, lineWidth: 1.2)
                             .scaleEffect(1.38)
                     }
                 }
@@ -255,23 +252,12 @@ struct CommitHeatmapCard: View {
     }
 
     private func dotColor(level: Int) -> Color {
-        if colorScheme == .dark {
-            let gold = Color(red: 0xF5 / 255, green: 0xC4 / 255, blue: 0x51 / 255)
-            switch level {
-            case 0: return Color.white.opacity(0.10)
-            case 1: return gold.opacity(0.32)
-            case 2: return gold.opacity(0.56)
-            case 3: return gold.opacity(0.78)
-            default: return gold
-            }
-        }
-
         switch level {
-        case 0: return Color.primary.opacity(0.08)
-        case 1: return Color(red: 0xF4 / 255, green: 0xD5 / 255, blue: 0x7A / 255)
-        case 2: return Color(red: 0xE6 / 255, green: 0xAE / 255, blue: 0x32 / 255)
-        case 3: return Color(red: 0xCE / 255, green: 0x85 / 255, blue: 0x10 / 255)
-        default: return Color(red: 0x9F / 255, green: 0x5D / 255, blue: 0x06 / 255)
+        case 0: FizzTheme.selectedFill
+        case 1: FizzTheme.accent.opacity(0.30)
+        case 2: FizzTheme.accent.opacity(0.50)
+        case 3: FizzTheme.accent.opacity(0.73)
+        default: FizzTheme.accent
         }
     }
 
@@ -279,7 +265,7 @@ struct CommitHeatmapCard: View {
         HStack(spacing: 8) {
             if let hoveredCell {
                 Text(hoverLabel(for: hoveredCell))
-                    .font(.system(size: 10.5))
+                    .font(FizzTypography.monoSmall)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -287,7 +273,7 @@ struct CommitHeatmapCard: View {
                 Text(copyMode == .plain
                     ? "最长连续 \(summary.longestStreak) 天 · 点击查看对话"
                     : "最长连续 \(summary.longestStreak) 天 · 点击有提交的日期筛选项目")
-                    .font(.system(size: 10.5))
+                    .font(FizzTypography.monoSmall)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }

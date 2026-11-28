@@ -4,8 +4,8 @@ set -euo pipefail
 APP_NAME="FizzDeck"
 BUNDLE_ID="com.a003.fizzdeck"
 MIN_SYSTEM_VERSION="26.0"
-VERSION="${VERSION:-0.8.0}"
-BUILD_NUM="${BUILD_NUM:-16}"
+VERSION="${VERSION:-0.9.0}"
+BUILD_NUM="${BUILD_NUM:-23}"
 CONFIG="release"
 SKIP_FINDER_LAYOUT=0
 OUTPUT_DMG=""
@@ -64,8 +64,8 @@ usage: package_dmg.sh [options]
 
 Options:
   --output <path>          Custom DMG output path
-  --version <ver>          App version (default: 0.8.0, env: VERSION)
-  --build-num <num>        Bundle build number (default: 16, env: BUILD_NUM)
+  --version <ver>          App version (default: 0.9.0, env: VERSION)
+  --build-num <num>        Bundle build number (default: 23, env: BUILD_NUM)
   --sign-identity <id>     Developer ID Application identity
                            (or set DEVELOPER_ID_APP)
   --notarize               Submit the signed DMG with notarytool and staple it
@@ -148,6 +148,7 @@ cp "$ROOT_DIR/Resources/FizzDeck_logo_light.svg" "$APP_RESOURCES/FizzDeck_logo_l
 cp "$ROOT_DIR/Resources/FizzDeck_logo_dark.svg" "$APP_RESOURCES/FizzDeck_logo_dark.svg"
 cp "$ROOT_DIR/Resources/FizzDeck.icns" "$APP_RESOURCES/FizzDeck.icns"
 cp -R "$ROOT_DIR/Resources/Icons" "$APP_RESOURCES/Icons"
+cp -R "$ROOT_DIR/Resources/Fonts" "$APP_RESOURCES/Fonts"
 "$ROOT_DIR/script/bundle_intents.sh" "$APP_RESOURCES"
 
 cat >"$APP_CONTENTS/Info.plist" <<PLIST
@@ -165,6 +166,8 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
   <string>$APP_NAME</string>
   <key>CFBundleIconFile</key>
   <string>FizzDeck.icns</string>
+  <key>ATSApplicationFontsPath</key>
+  <string>Fonts</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

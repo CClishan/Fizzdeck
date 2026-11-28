@@ -21,15 +21,13 @@ struct CleanupTabView: View {
                             : "",
                         detail: "只复制命令，不执行删除",
                         symbol: "trash.slash",
-                        tint: .orange,
                         valuePlaceholder: project.sizeLoadState != .ready
                     )
                     GlassStatCard(
                         title: "命中目录",
                         value: "\(project.cleanup.items.count)",
                         detail: "依赖、缓存、构建产物、归档",
-                        symbol: "folder.badge.minus",
-                        tint: .red
+                        symbol: "folder.badge.minus"
                     )
                 }
 
@@ -91,16 +89,16 @@ struct CleanupTabView: View {
 
     private func cleanupRow(_ item: CleanupItem) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            FizzIcon(symbol: kindSymbol(item.kind), size: 14)
-                .foregroundStyle(kindColor(item.kind))
+            FizzIcon(.md, symbol: kindSymbol(item.kind))
+                .foregroundStyle(.secondary)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(item.label)
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(FizzTypography.font(12, weight: .semibold))
                     Text(Format.bytes(item.bytes))
-                        .font(.caption.monospacedDigit())
+                        .font(FizzTypography.micro(.regular))
                         .foregroundStyle(.secondary)
                 }
                 HStack(spacing: 5) {
@@ -110,7 +108,7 @@ struct CleanupTabView: View {
                         Text(item.regen)
                     }
                 }
-                .font(.caption2)
+                .font(FizzTypography.micro)
                 .foregroundStyle(.secondary)
             }
 
@@ -128,9 +126,9 @@ struct CleanupTabView: View {
             } label: {
                 if copyMode == .plain {
                     Label("移到废纸篓", systemImage: "trash")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(FizzTypography.caption(.medium))
                 } else {
-                    FizzIcon(symbol: "doc.on.doc", size: 12)
+                    FizzIcon(.sm, symbol: "doc.on.doc")
                 }
             }
             .buttonStyle(.glass)
@@ -145,12 +143,12 @@ struct CleanupTabView: View {
         let dir = URL(fileURLWithPath: project.path)
         let res = DoctorService.trashCleanupItems([item], in: dir)
         if let err = res.error {
-            ToastCenter.shared.show(err, symbol: "exclamationmark.triangle.fill", tint: .orange)
+            ToastCenter.shared.show(err, symbol: "exclamationmark.triangle.fill", tint: FizzTheme.statusWarning)
         } else {
             ToastCenter.shared.show(
                 "已移入废纸篓（\(Format.bytes(res.freedBytes))）",
                 symbol: "trash.fill",
-                tint: .green,
+                tint: FizzTheme.statusSuccess,
                 subtitle: item.label
             )
             await store.rescanProjects([project])
@@ -164,11 +162,11 @@ struct CleanupTabView: View {
         return VStack(spacing: 4) {
             HStack {
                 Text(row.isDirectory ? "▸ \(row.label)" : row.label)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(FizzTypography.caption)
                     .lineLimit(1)
                 Spacer()
                 Text(Format.bytes(row.bytes))
-                    .font(.caption.monospacedDigit())
+                    .font(FizzTypography.micro(.regular))
                     .foregroundStyle(.secondary)
             }
             GeometryReader { proxy in
@@ -176,7 +174,7 @@ struct CleanupTabView: View {
                     Capsule()
                         .fill(Color.secondary.opacity(0.10))
                     Capsule()
-                        .fill(Color.accentColor.opacity(0.55))
+                        .fill(Color.secondary.opacity(0.55))
                         .frame(width: max(2, proxy.size.width * ratio))
                 }
             }
@@ -194,14 +192,5 @@ struct CleanupTabView: View {
         }
     }
 
-    private func kindColor(_ kind: String) -> Color {
-        switch kind {
-        case "deps": .green
-        case "build": .orange
-        case "tmp": .red
-        case "archive": .purple
-        default: .secondary
-        }
-    }
 
 }

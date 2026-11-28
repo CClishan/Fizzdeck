@@ -48,21 +48,21 @@ struct ScanReportView: View {
 
             if report.reachedLimit {
                 HStack(spacing: 6) {
-                    FizzIcon(symbol: "info.circle", size: 12)
-                        .foregroundStyle(.blue)
+                    FizzIcon(.sm, symbol: "info.circle")
+                        .foregroundStyle(Color.secondary)
                     Text("已达到单次预览上限（300 个候选），建议缩小目录范围或先加入常用项目。")
-                        .font(.caption)
+                        .font(FizzTypography.micro(.regular))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous))
+                .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous))
             }
 
             HStack(spacing: 10) {
                 Text("共发现 \(report.projects.count) 个项目 · 当前显示 \(filteredProjects.count) 个")
-                    .font(.caption)
+                    .font(FizzTypography.micro(.regular))
                     .foregroundStyle(.secondary)
 
                 Spacer()
@@ -75,14 +75,14 @@ struct ScanReportView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundStyle(.blue)
+                .font(FizzTypography.micro(.regular))
+                .foregroundStyle(Color.secondary)
 
                 Button("清空") {
                     selected.removeAll()
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
+                .font(FizzTypography.micro(.regular))
                 .foregroundStyle(.secondary)
                 .disabled(selected.isEmpty)
             }
@@ -100,12 +100,12 @@ struct ScanReportView: View {
                         ForEach(groupedProjects, id: \.kind.id) { group in
                             VStack(alignment: .leading, spacing: 0) {
                                 HStack(spacing: 6) {
-                                    FizzIcon(symbol: group.kind.symbol, size: 12)
-                                        .foregroundStyle(group.kind.color)
+                                    FizzIcon(.sm, symbol: group.kind.symbol)
+                                        .foregroundStyle(.secondary)
                                     Text(group.kind.title)
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(FizzTypography.font(12, weight: .semibold))
                                     Text("\(group.items.count)")
-                                        .font(.caption2.monospacedDigit())
+                                        .font(FizzTypography.micro)
                                         .foregroundStyle(.secondary)
                                 }
                                 .padding(.horizontal, 12)
@@ -134,7 +134,7 @@ struct ScanReportView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
                 Text("识别工具")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(FizzTypography.caption(.medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 58, alignment: .leading)
                     .padding(.top, 4)
@@ -154,7 +154,7 @@ struct ScanReportView: View {
                         chipButton(
                             title: count > 0 ? "\(tool.title) \(count)" : tool.title,
                             symbol: tool.symbol,
-                            tint: tool.tint,
+                            tint: .secondary,
                             active: toolFilter == tool,
                             dimmed: count == 0
                         ) {
@@ -166,7 +166,7 @@ struct ScanReportView: View {
 
             HStack(alignment: .top, spacing: 8) {
                 Text("识别类型")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(FizzTypography.caption(.medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 58, alignment: .leading)
                     .padding(.top, 4)
@@ -186,7 +186,7 @@ struct ScanReportView: View {
                         chipButton(
                             title: count > 0 ? "\(kind.title) \(count)" : kind.title,
                             symbol: kind.symbol,
-                            tint: kind.color,
+                            tint: .secondary,
                             active: kindFilter == kind,
                             dimmed: count == 0
                         ) {
@@ -210,9 +210,9 @@ struct ScanReportView: View {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 4) {
-                FizzIcon(symbol: symbol, size: 10)
+                FizzIcon(.xs, symbol: symbol)
                 Text(title)
-                    .font(.system(size: 11, weight: active ? .semibold : .medium))
+                    .font(FizzTypography.caption(active ? .semibold : .medium))
             }
             .foregroundStyle(active ? Color.white : (dimmed ? Color.secondary.opacity(0.6) : tint))
             .padding(.horizontal, 9)
@@ -232,10 +232,10 @@ struct ScanReportView: View {
     private var permissionRecoveryCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                FizzIcon(symbol: "lock.shield", size: 14)
-                    .foregroundStyle(.orange)
+                FizzIcon(.md, symbol: "lock.shield")
+                    .foregroundStyle(.secondary)
                 Text("部分受保护目录未获读取权限（\(report.permissionDeniedPaths.count) 处）")
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(FizzTypography.body(.semibold))
                 Spacer()
                 Button("重新扫描", action: onRescan)
                     .buttonStyle(.glass)
@@ -243,7 +243,7 @@ struct ScanReportView: View {
             }
 
             Text(report.permissionDeniedPaths.map(PathTools.displayPath).joined(separator: " · "))
-                .font(.system(size: 10.5, design: .monospaced))
+                .font(FizzTypography.monoSmall)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
 
@@ -263,10 +263,10 @@ struct ScanReportView: View {
             }
         }
         .padding(12)
-        .background(Color.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous))
+        .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: FizzRadius.card, style: .continuous)
-                .strokeBorder(Color.orange.opacity(0.25), lineWidth: 1)
+                .strokeBorder(FizzTheme.stroke, lineWidth: 1)
         }
     }
 
@@ -275,17 +275,17 @@ struct ScanReportView: View {
         let isSelected = selected.contains(candidate.path)
 
         return HStack(spacing: 10) {
-            FizzIcon(symbol: "folder.fill", size: 16)
-                .foregroundStyle(managed ? .green : (isSelected ? FizzTheme.accent : candidate.kind.color))
+            FizzIcon(.md, symbol: "folder.fill")
+                .foregroundStyle(isSelected ? Color.primary : Color.secondary)
                 .frame(width: 22)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(candidate.name)
-                        .font(.system(size: 12.5, weight: .semibold))
+                        .font(FizzTypography.body(.semibold))
 
                     if candidate.hasGit {
-                        TagChip(text: "git", tint: .green, compact: true)
+                        TagChip(text: "git", compact: true)
                     }
 
                     if !candidate.highConfidence {
@@ -293,12 +293,12 @@ struct ScanReportView: View {
                     }
 
                     ForEach(candidate.tools) { tool in
-                        TagChip(text: tool.shortTitle, tint: tool.tint, compact: true)
+                        TagChip(text: tool.shortTitle, compact: true)
                     }
                 }
 
                 Text(PathTools.displayPath(candidate.path))
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(FizzTypography.monoSmall)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -308,8 +308,8 @@ struct ScanReportView: View {
 
             if managed {
                 Label("已加入", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.green)
+                    .font(FizzTypography.caption(.medium))
+                    .foregroundStyle(.secondary)
             } else {
                 Toggle("", isOn: Binding(
                     get: { selected.contains(candidate.path) },

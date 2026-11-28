@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 
 enum ProjectKind: String, CaseIterable, Codable, Identifiable, Hashable, Sendable {
     case web
@@ -36,17 +35,6 @@ enum ProjectKind: String, CaseIterable, Codable, Identifiable, Hashable, Sendabl
         }
     }
 
-    var color: Color {
-        switch self {
-        case .web: .blue
-        case .macApp: .indigo
-        case .miniProgram: .green
-        case .flutter: .cyan
-        case .game: .pink
-        case .cli: .orange
-        case .other: .secondary
-        }
-    }
 }
 
 enum ProjectKindDetector {

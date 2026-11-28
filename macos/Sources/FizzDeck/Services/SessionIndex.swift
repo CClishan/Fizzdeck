@@ -6,6 +6,10 @@ enum SessionRecordKind: String, Codable, Sendable, Hashable {
     case workspaceSummary
 }
 
+enum SessionTestResult: String, Codable, Sendable, Hashable {
+    case passed, failed, notRun
+}
+
 struct SessionRecord: Codable, Sendable, Hashable {
     let tool: String
     let id: String
@@ -24,6 +28,8 @@ struct SessionRecord: Codable, Sendable, Hashable {
     var endedWithError: Bool = false
     var turnCount: Int? = nil
     var durationMinutes: Int? = nil
+    var agentTimeSeconds: Int? = nil
+    var testResult: SessionTestResult? = nil
 
     init(
         tool: String,
@@ -42,7 +48,9 @@ struct SessionRecord: Codable, Sendable, Hashable {
         lastError: String? = nil,
         endedWithError: Bool = false,
         turnCount: Int? = nil,
-        durationMinutes: Int? = nil
+        durationMinutes: Int? = nil,
+        agentTimeSeconds: Int? = nil,
+        testResult: SessionTestResult? = nil
     ) {
         self.tool = tool
         self.id = id
@@ -61,6 +69,8 @@ struct SessionRecord: Codable, Sendable, Hashable {
         self.endedWithError = endedWithError
         self.turnCount = turnCount
         self.durationMinutes = durationMinutes
+        self.agentTimeSeconds = agentTimeSeconds.flatMap { $0 > 0 ? $0 : nil }
+        self.testResult = testResult
     }
 
     init(from decoder: Decoder) throws {
@@ -82,6 +92,8 @@ struct SessionRecord: Codable, Sendable, Hashable {
         endedWithError = try container.decodeIfPresent(Bool.self, forKey: .endedWithError) ?? false
         turnCount = try container.decodeIfPresent(Int.self, forKey: .turnCount)
         durationMinutes = try container.decodeIfPresent(Int.self, forKey: .durationMinutes)
+        agentTimeSeconds = try container.decodeIfPresent(Int.self, forKey: .agentTimeSeconds).flatMap { $0 > 0 ? $0 : nil }
+        testResult = try container.decodeIfPresent(SessionTestResult.self, forKey: .testResult)
     }
 
     var stableID: String { "\(tool):\(id)" }
@@ -121,6 +133,8 @@ private struct SessionCacheEntry: Codable {
     let mtime: TimeInterval
     let fileSize: Int64
     let record: SessionRecord?
+    var databaseRevision: Int64? = nil
+    var metricsVersion: Int? = nil
 }
 
 private struct SessionCachePayload: Codable {
@@ -131,6 +145,7 @@ private struct SessionCachePayload: Codable {
 enum SessionIndex {
     private static let scanBytes = 8 * 1024 * 1024
     private static let cacheVersion = 5
+    private static let transcriptMetricsVersion = 1
     private static let maxTouchedFiles = 40
     private static let maxErrorCharacters = 240
     private static let maxIDEWorkspaces = 300
@@ -166,6 +181,7 @@ enum SessionIndex {
             let stamp = fileStamp(file)
             if let stamp,
                let cached = cache[key],
+               cached.metricsVersion == transcriptMetricsVersion,
                abs(cached.mtime - stamp.mtime) < 0.001,
                cached.fileSize == stamp.fileSize {
                 nextCache[key] = cached
@@ -175,7 +191,9 @@ enum SessionIndex {
             let record = parseCodex(file)
             if let record { records.append(record) }
             if let stamp {
-                nextCache[key] = SessionCacheEntry(mtime: stamp.mtime, fileSize: stamp.fileSize, record: record)
+                nextCache[key] = SessionCacheEntry(
+                    mtime: stamp.mtime, fileSize: stamp.fileSize, record: record, metricsVersion: transcriptMetricsVersion
+                )
                 changed = true
             }
         }
@@ -186,6 +204,7 @@ enum SessionIndex {
                 let stamp = fileStamp(file)
                 if let stamp,
                    let cached = cache[key],
+                   cached.metricsVersion == transcriptMetricsVersion,
                    abs(cached.mtime - stamp.mtime) < 0.001,
                    cached.fileSize == stamp.fileSize {
                     nextCache[key] = cached
@@ -195,7 +214,9 @@ enum SessionIndex {
                 let record = parseClaude(file, directoryName: directory.lastPathComponent)
                 if let record { records.append(record) }
                 if let stamp {
-                    nextCache[key] = SessionCacheEntry(mtime: stamp.mtime, fileSize: stamp.fileSize, record: record)
+                    nextCache[key] = SessionCacheEntry(
+                        mtime: stamp.mtime, fileSize: stamp.fileSize, record: record, metricsVersion: transcriptMetricsVersion
+                    )
                     changed = true
                 }
             }
@@ -285,10 +306,57 @@ enum SessionIndex {
         changed = changed || agyResult.changed
         nextCache.merge(agyResult.cacheEntries) { _, new in new }
 
+        var cursorConversations: [String: SessionRecord] = [:]
+        for source in CursorSessionReader.sources(in: homeDirectory).sorted(by: { $0.url.path < $1.url.path }) {
+            guard let stamp = fileStamp(source.url) else { continue }
+            let key = "cursor:\(source.cwd)\0\(PathTools.normalize(source.url.path))"
+            let entry: SessionCacheEntry
+            if let existing = cache[key], existing.mtime == stamp.mtime, existing.fileSize == stamp.fileSize {
+                entry = existing
+            } else {
+                let record = CursorSessionReader.parse(
+                    source, modified: Date(timeIntervalSince1970: stamp.mtime), fileSize: stamp.fileSize
+                )
+                entry = SessionCacheEntry(mtime: stamp.mtime, fileSize: stamp.fileSize, record: record)
+                changed = true
+            }
+            nextCache[key] = entry
+            if let record = entry.record,
+               cursorConversations[record.id].map({ $0.modified < record.modified }) ?? true {
+                cursorConversations[record.id] = record
+            }
+        }
+        records.append(contentsOf: cursorConversations.values)
+
+        let database = OpenCodeSessionReader.database(in: homeDirectory)
+        let openCodePrefix = openCodeCachePrefix(for: database)
+        let previous = cache.reduce(into: [String: OpenCodeSessionReader.Snapshot]()) { result, pair in
+            guard pair.key.hasPrefix(openCodePrefix), let revision = pair.value.databaseRevision else { return }
+            result[String(pair.key.dropFirst(openCodePrefix.count))] = .init(revision: revision, record: pair.value.record)
+        }
+        if let snapshots = OpenCodeSessionReader.read(database: database, cached: previous) {
+            for (id, snapshot) in snapshots {
+                nextCache[openCodePrefix + id] = SessionCacheEntry(
+                    mtime: 0, fileSize: 0, record: snapshot.record, databaseRevision: snapshot.revision
+                )
+                if previous[id]?.revision != snapshot.revision { changed = true }
+                if let record = snapshot.record { records.append(record) }
+            }
+        } else if OpenCodeSessionReader.sourceExists(at: database) {
+            // A busy or temporarily unreadable database must not evict last known records or revisions.
+            for (id, snapshot) in previous {
+                let key = openCodePrefix + id
+                nextCache[key] = cache[key]
+                if let record = snapshot.record { records.append(record) }
+            }
+        }
+
+        let cursorCwds = Set(cursorConversations.values.compactMap(\.cwd))
         let ideResult = ideWorkspaceRecords(
             homeDirectory: homeDirectory,
             cache: cache,
-            readDatabase: true
+            readDatabase: true,
+            skipCursorCwds: cursorCwds
         )
         records.append(contentsOf: ideResult.records)
         changed = changed || ideResult.changed
@@ -415,6 +483,17 @@ enum SessionIndex {
             map["agy"] = agyCwds
         }
 
+        let cursorCwds = CursorSessionReader.workspaceCwds(in: homeDirectory)
+        if !cursorCwds.isEmpty { map["cursor", default: []].formUnion(cursorCwds) }
+
+        let database = OpenCodeSessionReader.database(in: homeDirectory)
+        if OpenCodeSessionReader.sourceExists(at: database) {
+            let prefix = openCodeCachePrefix(for: database)
+            for (key, entry) in cache where key.hasPrefix(prefix) {
+                if let cwd = entry.record?.cwd { map["opencode", default: []].insert(cwd) }
+            }
+        }
+
         for record in ideWorkspaceRecords(
             homeDirectory: homeDirectory,
             cache: cache,
@@ -492,6 +571,10 @@ enum SessionIndex {
         return (modified.timeIntervalSince1970, size.int64Value)
     }
 
+    private static func openCodeCachePrefix(for sqlite: URL) -> String {
+        "opencode:\(PathTools.normalize(sqlite.path))\0"
+    }
+
     private static func bundleStamp(_ urls: [URL]) -> (mtime: TimeInterval, fileSize: Int64)? {
         let stamps = urls.compactMap(fileStamp)
         guard !stamps.isEmpty else { return nil }
@@ -567,7 +650,8 @@ enum SessionIndex {
     }
 
     private static func parseCodex(_ file: URL) -> SessionRecord? {
-        guard let modified = FileTools.modificationDate(file) else { return nil }
+        guard let stamp = fileStamp(file) else { return nil }
+        let modified = Date(timeIntervalSince1970: stamp.mtime)
         let head = FileTools.head(file, bytes: 32 * 1024)
         guard let firstLine = head.split(separator: "\n").first,
               let data = String(firstLine).data(using: .utf8),
@@ -590,20 +674,14 @@ enum SessionIndex {
         var endedWithError = false
         var model: String?
         var usage: TokenUsage?
+        var coverage = SessionLogMetrics.Coverage()
+        var metrics = CodexLogMetrics()
+        var promptSource: String?
 
         FileTools.scanLines(in: file, maxBytes: scanBytes) { line in
-            if let message = codexUserMessage(in: line) {
-                if firstUser == nil { firstUser = message }
-                lastUser = message
-                userTurnCount += 1
-                endedWithError = false
-            }
-
-            guard let lineData = line.data(using: .utf8),
-                  let object = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
-            else { return false }
-
-            if let ts = (object["timestamp"] as? String).flatMap(Format.isoDate) {
+            guard let object = coverage.consume(line) else { return false }
+            let timestamp = (object["timestamp"] as? String).flatMap(Format.isoDate)
+            if let ts = timestamp {
                 if lastTimestamp == nil || ts > lastTimestamp! {
                     lastTimestamp = ts
                 }
@@ -612,6 +690,21 @@ enum SessionIndex {
             let topType = object["type"] as? String
             if let linePayload = object["payload"] as? [String: Any] {
                 let payloadType = linePayload["type"] as? String
+                if topType == "event_msg", ["task_started", "turn_started"].contains(payloadType ?? "") {
+                    promptSource = nil
+                }
+                if let prompt = codexUserMessage(type: topType, payload: linePayload) {
+                    // Some rollout versions write both the response item and the user event.
+                    if promptSource == nil || promptSource == prompt.source || lastUser != prompt.text {
+                        if firstUser == nil { firstUser = prompt.text }
+                        lastUser = prompt.text
+                        userTurnCount += 1
+                        endedWithError = false
+                        metrics.hasCleanEnd = false
+                    }
+                    promptSource = prompt.source
+                }
+                metrics.consume(type: topType, payload: linePayload, timestamp: timestamp)
 
                 if topType == "turn_context", let lineModel = linePayload["model"] as? String {
                     model = lineModel
@@ -665,6 +758,9 @@ enum SessionIndex {
             endedAt: lastTimestamp ?? modified
         )
         let cost = PricingCatalog.estimate(model: model, usage: usage)
+        let current = fileStamp(file)
+        let complete = coverage.covers(fileSize: stamp.fileSize) && current?.mtime == stamp.mtime
+            && current?.fileSize == stamp.fileSize
 
         return SessionRecord(
             tool: "codex",
@@ -681,13 +777,109 @@ enum SessionIndex {
             touchedFiles: touchedFiles,
             lastError: lastError,
             endedWithError: endedWithError,
-            turnCount: userTurnCount > 0 ? userTurnCount : nil,
-            durationMinutes: durationMinutes
+            turnCount: complete && userTurnCount > 0 ? userTurnCount : nil,
+            durationMinutes: durationMinutes,
+            agentTimeSeconds: metrics.time.seconds,
+            testResult: metrics.tests.result(complete: complete && metrics.isComplete && userTurnCount > 0)
         )
     }
 
+    private struct CodexLogMetrics {
+        var time = SessionLogMetrics.AgentTime()
+        var tests = SessionLogMetrics.Tests()
+        var hasCleanEnd = false
+        private var openTurns: [String: Int] = [:]
+        private var endedTurns = Set<String>()
+        private var execCalls = Set<String>()
+        private var pollCalls: [String: Int] = [:]
+        private var shellCalls: [String: SessionLogMetrics.Tests.Attempt] = [:]
+        private var shellSessions: [Int: SessionLogMetrics.Tests.Attempt] = [:]
+
+        var isComplete: Bool { hasCleanEnd && openTurns.isEmpty }
+
+        mutating func consume(type: String?, payload: [String: Any], timestamp: Date?) {
+            switch (type, payload["type"] as? String) {
+            case ("event_msg", "task_started"), ("event_msg", "turn_started"):
+                hasCleanEnd = false
+                if let id = payload["turn_id"] as? String, openTurns[id] == nil {
+                    openTurns[id] = Self.epochMilliseconds(payload["started_at"]) ?? Self.milliseconds(timestamp) ?? 0
+                }
+            case ("event_msg", "task_complete"), ("event_msg", "turn_complete"), ("event_msg", "turn_aborted"):
+                guard let id = payload["turn_id"] as? String, endedTurns.insert(id).inserted else { return }
+                let started = openTurns.removeValue(forKey: id)
+                let start = Self.epochMilliseconds(payload["started_at"]) ?? started
+                let end = Self.epochMilliseconds(payload["completed_at"]) ?? Self.milliseconds(timestamp)
+                if let duration = SessionLogMetrics.integer(payload["duration_ms"]), duration >= 0 {
+                    if let end, end > duration { time.add(start: end - duration, end: end) }
+                    else { time.add(milliseconds: duration) }
+                } else if let start, let end { time.add(start: start, end: end) }
+                hasCleanEnd = payload["type"] as? String != "turn_aborted" && (payload["error"] == nil || payload["error"] is NSNull)
+            case ("response_item", "function_call"):
+                guard let id = payload["call_id"] as? String, let name = payload["name"] as? String else { return }
+                let args = Self.object(payload["arguments"])
+                if ["exec_command", "shell_command", "shell"].contains(name) {
+                    guard execCalls.insert(id).inserted else { return }
+                    hasCleanEnd = false
+                    shellCalls[id] = tests.start(args?["cmd"] ?? args?["command"])
+                } else if name == "write_stdin", let session = SessionLogMetrics.integer(args?["session_id"]) {
+                    pollCalls[id] = session
+                    shellCalls[id] = shellSessions[session]
+                }
+            case ("response_item", "function_call_output"):
+                guard let id = payload["call_id"] as? String, execCalls.contains(id) || pollCalls[id] != nil else { return }
+                let status = Self.shellStatus(payload["output"])
+                let attempt = shellCalls[id]
+                if let session = status.session { shellSessions[session] = attempt }
+                if let session = pollCalls.removeValue(forKey: id), status.exit != nil { shellSessions[session] = nil }
+                if let attempt { tests.finish(attempt, exitCode: status.exit) }
+            case ("event_msg", "exec_command_end"):
+                guard payload["source"] as? String != "user_shell", payload["status"] as? String != "declined",
+                      let id = payload["call_id"] as? String else { return }
+                let attempt = shellCalls[id] ?? tests.start(payload["command"])
+                if let attempt { tests.finish(attempt, exitCode: SessionLogMetrics.integer(payload["exit_code"])) }
+            default: break
+            }
+        }
+
+        private static func epochMilliseconds(_ value: Any?) -> Int? {
+            guard let seconds = SessionLogMetrics.integer(value), seconds > 0, seconds <= Int.max / 1_000 else { return nil }
+            return seconds * 1_000
+        }
+
+        private static func milliseconds(_ date: Date?) -> Int? {
+            date.flatMap { Int(exactly: ($0.timeIntervalSince1970 * 1_000).rounded()) }
+        }
+
+        private static func object(_ value: Any?) -> [String: Any]? {
+            if let object = value as? [String: Any] { return object }
+            guard let text = value as? String, text.first == "{" else { return nil }
+            return (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any]
+        }
+
+        private static func shellStatus(_ value: Any?) -> (exit: Int?, session: Int?) {
+            if let result = object(value) {
+                let metadata = result["metadata"] as? [String: Any]
+                return (SessionLogMetrics.integer(metadata?["exit_code"] ?? result["exit_code"]),
+                        SessionLogMetrics.integer(metadata?["session_id"] ?? result["session_id"]))
+            }
+            guard let text = value as? String else { return (nil, nil) }
+            // Only the executor's header can provide status; subsequent command output is untrusted.
+            let lines = text.prefix(512).split(separator: "\n", maxSplits: 3)
+            guard lines.count >= 3, lines[0].hasPrefix("Chunk ID: "), lines[1].hasPrefix("Wall time: ") else { return (nil, nil) }
+            for (prefix, isSession) in [("Process exited with code ", false), ("Exit code: ", false),
+                                        ("Process running with session ID ", true), ("Session ID: ", true)] {
+                if lines[2].hasPrefix(prefix) {
+                    let number = Int(lines[2].dropFirst(prefix.count).trimmingCharacters(in: .whitespacesAndNewlines))
+                    return isSession ? (nil, number) : (number, nil)
+                }
+            }
+            return (nil, nil)
+        }
+    }
+
     private static func parseClaude(_ file: URL, directoryName: String) -> SessionRecord? {
-        guard let modified = FileTools.modificationDate(file) else { return nil }
+        guard let stamp = fileStamp(file) else { return nil }
+        let modified = Date(timeIntervalSince1970: stamp.mtime)
         var cwd: String?
         var startedAt: Date?
         var lastTimestamp: Date?
@@ -703,11 +895,16 @@ enum SessionIndex {
         var costUsage: TokenUsage?
         var messageUsage: TokenUsage?
         var messageModel: String?
+        var coverage = SessionLogMetrics.Coverage()
+        var agentTime = SessionLogMetrics.AgentTime()
+        var tests = SessionLogMetrics.Tests()
+        var shellCalls: [String: SessionLogMetrics.Tests.Attempt] = [:]
+        var seenShellCalls = Set<String>()
+        var timedTurns = Set<String>()
+        var hasCleanEnd = false
 
         FileTools.scanLines(in: file, maxBytes: scanBytes) { line in
-            guard let data = line.data(using: .utf8),
-                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { return false }
+            guard let object = coverage.consume(line) else { return false }
 
             if cwd == nil, let value = object["cwd"] as? String, !value.isEmpty {
                 cwd = value
@@ -719,9 +916,23 @@ enum SessionIndex {
             }
 
             let topType = object["type"] as? String
+            let mainThread = object["isSidechain"] as? Bool != true
+            if mainThread, topType == "system", object["subtype"] as? String == "turn_duration",
+               let duration = SessionLogMetrics.integer(object["durationMs"]), duration >= 0 {
+                let id = object["uuid"] as? String ?? object["timestamp"] as? String
+                if id.map({ timedTurns.insert($0).inserted }) ?? true {
+                    agentTime.add(milliseconds: duration)
+                    hasCleanEnd = true
+                }
+            }
             if topType == "user", let message = object["message"] as? [String: Any] {
                 if let items = message["content"] as? [[String: Any]] {
-                    for item in items where item["type"] as? String == "tool_result" {
+                    let results = items.filter { $0["type"] as? String == "tool_result" }
+                    for item in results {
+                        if mainThread, let id = item["tool_use_id"] as? String, let attempt = shellCalls[id] {
+                            let metadata = results.count == 1 ? object["toolUseResult"] : nil
+                            tests.finish(attempt, exitCode: claudeBashExit(result: item, metadata: metadata))
+                        }
                         if item["is_error"] as? Bool == true {
                             let errText = text(from: item["content"])
                             lastError = meaningfulErrorSnippet(from: errText) ?? "工具调用失败"
@@ -733,16 +944,24 @@ enum SessionIndex {
                 }
                 if message["role"] as? String == "user" {
                     let cleaned = cleanUserText(text(from: message["content"]))
-                    if !cleaned.isEmpty {
+                    if !cleaned.isEmpty, object["isMeta"] as? Bool != true {
                         if firstUser == nil { firstUser = cleaned }
                         lastUser = cleaned
                         userTurnCount += 1
                         endedWithError = false
+                        if mainThread { hasCleanEnd = false }
                     }
                 }
             } else if topType == "assistant", let message = object["message"] as? [String: Any] {
+                if mainThread, let reason = message["stop_reason"] as? String { hasCleanEnd = reason == "end_turn" }
                 if let items = message["content"] as? [[String: Any]] {
                     for item in items where item["type"] as? String == "tool_use" {
+                        let id = item["id"] as? String
+                        if mainThread, item["name"] as? String == "Bash", id.map({ seenShellCalls.insert($0).inserted }) ?? true {
+                            hasCleanEnd = false
+                            let attempt = tests.start((item["input"] as? [String: Any])?["command"])
+                            if let id { shellCalls[id] = attempt }
+                        }
                         if let name = item["name"] as? String,
                            ["Edit", "Write", "MultiEdit", "NotebookEdit"].contains(name),
                            let input = item["input"] as? [String: Any] {
@@ -813,6 +1032,9 @@ enum SessionIndex {
         let finalModel = cost != nil ? costModel : messageModel
         let finalUsage = cost != nil ? costUsage : messageUsage
         let finalCost = cost ?? PricingCatalog.estimate(model: finalModel, usage: finalUsage)
+        let current = fileStamp(file)
+        let complete = coverage.covers(fileSize: stamp.fileSize) && current?.mtime == stamp.mtime
+            && current?.fileSize == stamp.fileSize
 
         return SessionRecord(
             tool: "claude",
@@ -829,9 +1051,29 @@ enum SessionIndex {
             touchedFiles: touchedFiles,
             lastError: lastError,
             endedWithError: endedWithError,
-            turnCount: userTurnCount > 0 ? userTurnCount : nil,
-            durationMinutes: durationMinutes
+            turnCount: complete && userTurnCount > 0 ? userTurnCount : nil,
+            durationMinutes: durationMinutes,
+            agentTimeSeconds: agentTime.seconds,
+            testResult: tests.result(complete: complete && hasCleanEnd && userTurnCount > 0)
         )
+    }
+
+    private static func claudeBashExit(result: [String: Any], metadata: Any?) -> Int? {
+        if let shell = metadata as? [String: Any] {
+            guard shell["interrupted"] as? Bool == false, shell["backgroundTaskId"] == nil,
+                  shell["timedOutAfterMs"] == nil else { return nil }
+            if let code = SessionLogMetrics.integer(shell["exitCode"]) { return code }
+            if result["is_error"] as? Bool != true, shell["stdout"] is String, shell["stderr"] is String { return 0 }
+        }
+        guard result["is_error"] as? Bool == true else { return nil }
+        // is_error also covers rejected approvals and interruption; require the Bash exit header.
+        for value in [metadata as? String, result["content"] as? String].compactMap({ $0 }) {
+            let line = value.prefix(160).split(whereSeparator: \.isNewline).first?.trimmingCharacters(in: .whitespaces) ?? ""
+            for prefix in ["Error: Exit code ", "Exit code "] where line.hasPrefix(prefix) {
+                if let code = Int(line.dropFirst(prefix.count)), code != 0 { return code }
+            }
+        }
+        return nil
     }
 
     private static func parseGrok(
@@ -1009,7 +1251,8 @@ enum SessionIndex {
     private static func ideWorkspaceRecords(
         homeDirectory: URL,
         cache: [String: SessionCacheEntry],
-        readDatabase: Bool
+        readDatabase: Bool,
+        skipCursorCwds: Set<String> = []
     ) -> (records: [SessionRecord], cacheEntries: [String: SessionCacheEntry], changed: Bool) {
         var records: [SessionRecord] = []
         var cacheEntries: [String: SessionCacheEntry] = [:]
@@ -1024,13 +1267,16 @@ enum SessionIndex {
         for (tool, relativePath, databaseName) in applications {
             let storageRoot = appSupport.appendingPathComponent(relativePath, isDirectory: true)
             for directory in FileTools.childDirectories(of: storageRoot).prefix(maxIDEWorkspaces) {
+                let workspaceFile = directory.appendingPathComponent("workspace.json")
+                if tool == "cursor", !skipCursorCwds.isEmpty,
+                   let cwd = ideWorkspaceDirectory(workspaceFile), skipCursorCwds.contains(PathTools.canonical(cwd)) { continue }
                 let workspace = IDEWorkspace(
                     tool: tool,
                     directory: directory,
                     databaseName: databaseName
                 )
                 let files = [
-                    directory.appendingPathComponent("workspace.json"),
+                    workspaceFile,
                     directory.appendingPathComponent(databaseName),
                     directory.appendingPathComponent("\(databaseName)-wal"),
                 ]
@@ -1060,12 +1306,7 @@ enum SessionIndex {
 
     private static func parseIDEWorkspace(_ workspace: IDEWorkspace, readDatabase: Bool) -> SessionRecord? {
         let workspaceFile = workspace.directory.appendingPathComponent("workspace.json")
-        guard let json = FileTools.json(workspaceFile),
-              let folder = json["folder"] as? String,
-              let url = URL(string: folder),
-              url.isFileURL,
-              !url.path.isEmpty
-        else { return nil }
+        guard let cwd = ideWorkspaceDirectory(workspaceFile) else { return nil }
 
         let files = [
             workspaceFile,
@@ -1081,12 +1322,18 @@ enum SessionIndex {
         return SessionRecord(
             tool: workspace.tool,
             id: workspace.directory.lastPathComponent,
-            cwd: url.path,
+            cwd: cwd,
             startedAt: nil,
             modified: modified,
             lastUser: lastUser,
             kind: .workspaceSummary
         ).withLastUserFallback("\(title) 工作区活动")
+    }
+
+    private static func ideWorkspaceDirectory(_ workspaceFile: URL) -> String? {
+        guard let json = FileTools.json(workspaceFile),
+              let folder = json["folder"] as? String else { return nil }
+        return PathTools.localFilePath(folder)
     }
 
     private static func lastUserMessage(inDatabase url: URL) -> String? {
@@ -1239,31 +1486,30 @@ enum SessionIndex {
         (value as? NSNumber)?.intValue ?? 0
     }
 
-    private static func codexUserMessage(in line: String) -> String? {
-        guard line.contains("\"UserMessage\"") || line.contains("\"user\"") else {
-            return nil
-        }
-        guard let data = line.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let payload = object["payload"] as? [String: Any]
-        else { return nil }
-
+    private static func codexUserMessage(type: String?, payload: [String: Any]) -> (text: String, source: String)? {
         let content: Any?
-        if object["type"] as? String == "event_msg",
-           payload["type"] as? String == "item_completed",
-           let item = payload["item"] as? [String: Any],
-           item["type"] as? String == "UserMessage" {
-            content = item["content"]
-        } else if object["type"] as? String != "event_msg",
-                  payload["role"] as? String == "user" {
+        let source: String
+        if type == "event_msg" {
+            switch payload["type"] as? String {
+            case "user_message":
+                content = payload["message"]
+                source = "user_message"
+            case "item_completed":
+                guard let item = payload["item"] as? [String: Any], item["type"] as? String == "UserMessage" else { return nil }
+                content = item["content"]
+                source = "item_completed"
+            default: return nil
+            }
+        } else if payload["role"] as? String == "user" {
             content = payload["content"]
+            source = "response_item"
         } else {
             return nil
         }
 
         let text = cleanUserText(text(from: content))
         guard !text.isEmpty, !text.hasPrefix("<") else { return nil }
-        return text
+        return (text, source)
     }
 
     private static func text(from content: Any?) -> String {

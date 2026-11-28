@@ -46,7 +46,7 @@ enum SystemActions {
                 ToastCenter.shared.show(
                     feedback,
                     symbol: "doc.on.doc.fill",
-                    tint: FizzTheme.accent,
+                    tint: .secondary,
                     microViz: microViz
                 )
             }

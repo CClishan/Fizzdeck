@@ -11,6 +11,8 @@ jobs:
     needs: ci
     runs-on: macos-26
     timeout-minutes: 45
+    outputs:
+      notarized: ${{ steps.package.outputs.notarized }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate tag and architecture
@@ -18,6 +20,7 @@ jobs:
           [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$(uname -m)" == arm64 ]]
           grep -Fq 'VERSION="${VERSION:-'"${GITHUB_REF_NAME#v}"'}"' macos/script/package_dmg.sh
       - name: Build and verify distribution image
+        id: package
         env:
           DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
           CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
@@ -25,7 +28,13 @@ jobs:
           NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
-        run: ./macos/script/ci_package.sh
+        run: |
+          ./macos/script/ci_package.sh
+          if [[ -n "$DEVELOPER_ID_APP" ]]; then
+            echo "notarized=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "notarized=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: FizzDeck-${{ github.ref_name }}-arm64
@@ -39,13 +48,28 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: docs/releases
       - uses: actions/download-artifact@v4
         with:
           name: FizzDeck-${{ github.ref_name }}-arm64
       - name: Verify and upload both assets to a draft
         env:
           GH_TOKEN: ${{ github.token }}
+          NOTARIZED: ${{ needs.dmg.outputs.notarized }}
         run: |
           file="FizzDeck-${GITHUB_REF_NAME#v}-arm64.dmg"
           sha256sum -c "$file.sha256"
-          gh release create "$GITHUB_REF_NAME" "$file" "$file.sha256" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --generate-notes
+          notes="$RUNNER_TEMP/release-notes.md"
+          : > "$notes"
+          if [[ -f "docs/releases/$GITHUB_REF_NAME.md" ]]; then
+            cat "docs/releases/$GITHUB_REF_NAME.md" >> "$notes"
+          fi
+          case "$NOTARIZED" in
+            true) signing='Developer ID 签名，已通过 Apple 公证并附加公证票据。' ;;
+            false) signing='ad-hoc 签名，无 Team ID，未经 Apple 公证。' ;;
+            *) exit 1 ;;
+          esac
+          printf '\n**安装包签名：** %s\n' "$signing" >> "$notes"
+          gh release create "$GITHUB_REF_NAME" "$file" "$file.sha256" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --notes-file "$notes" --generate-notes
