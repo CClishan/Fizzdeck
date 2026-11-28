@@ -64,6 +64,8 @@ Build 21 审核通过后按[完整基线](output/wave-086/baseline-verification.
 
 菜单栏遥控器、临期标记按项目提醒与两处中文数字排版均已完成。正式构建零警告错误，395/395 通过。菜单三种复制均脱敏，主窗口始终最小化；进度页固定、工作台按批忽略、重启后新标记继续提醒均在隔离实例实测。发现并修正了状态栏反复重排和旧标记路径别名漏报。[实拍、原文、隔离核对与本轮差异](output/release-v0.9.2/REVIEW.md) · [发行说明](docs/releases/v0.9.2.md)。本轮无发布；Build 25 已审核通过，未单独发布。
 
-## v0.9.3 / Build 26 · 已审核
+## v0.9.3 / Build 26 · 已发布
 
 原生界面语言与 Git 术语模式可独立切换；完成两种窗口宽度的英文走查、中英四页前台实拍、匿名分享 PNG 和官网双语四态验收。干净严格构建无诊断，410 项测试全部通过，无跳过。官网展示图按语言选取，实际响应字节与源 WebP 一致。[审核索引](output/release-v0.9.3/REVIEW.md) · [发行说明](docs/releases/v0.9.3.md)。审核已确认；复盘日期、表头与官网搜索文案随正式版本更新。
+
+[正式 Release](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.3) 已设为 Latest；公开 DMG 与 `.sha256` 已匿名下载核对。[官网提交 `12642ec`](https://github.com/CClishan/koroo-blog/commit/12642ec0f456dad7845d1e79c26a22769f8b5a10) 已部署，HTML 与全部 13 个依赖通过生产域名复验。

@@ -68,4 +68,4 @@
 - [x] 独立网页构建和 Chrome 四态、严格构建、全量测试与隔离核对。
 
 - [x] 审核修正：复盘日期与表头、双语搜索文案、Build 24–26 合并发行说明。
-- [ ] 验证 Actions 的 DMG、公开 Latest 和正式域名。
+- [x] [Actions](https://github.com/CClishan/Fizzdeck/actions/runs/46168868141) 生成的 DMG 和校验文件、公开 Latest、双语[正式域名](https://koroo.top/fizzdeck)均已验证。

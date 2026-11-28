@@ -2,7 +2,7 @@
 
 更新：2026-11-29。原生产品仓库 `CClishan/Fizzdeck`，官网仓库 `CClishan/koroo-blog`。请先区分本地构建、官网部署和 GitHub Latest。
 
-## v0.9.3 / Build 26 · 已确认发布
+## v0.9.3 / Build 26 · 已公开，官网已部署
 
 [审核索引](output/release-v0.9.3/REVIEW.md) · [中英文 App 与官网原图包](output/release-v0.9.3/FizzDeck-v0.9.3-Build26-review.zip) · [本轮文件清单](output/release-v0.9.3/git-files.txt) · [发行说明](docs/releases/v0.9.3.md)。Build 24–26 合并随 v0.9.3 分发。审核后修正复盘趋势的英文日期和表头，官网两处搜索文案统一为 `English & Chinese search`。
 
@@ -14,6 +14,10 @@
 - **验收踩坑。** 不要把翻译后的占位词写成真实进程名或 SQLite 会话标题，否则已显示结果切语言时会固化旧文案；保留原始空值，到展示时翻译。锁屏不能证明前台外观，千行测试也曾拿到零帧；正式官网四图和上述完整测试均在桌面解锁后重取。浏览器复验在切换语言后等待新图解码再刷新，仍检查所有网络失败。
 
 - **发布复核。** 在中文 macOS 上实拍英文复盘，横轴依次为 `Nov 23`、`Nov 25`、`Nov 27`、`Nov 29`；`Agent time` 列实测 94pt，标题完整。[复盘原图](output/release-v0.9.3/publish/recap-en-zh-host.png)。Chrome 复验两处搜索文案在 390/1440px 的段落高度与改前相同。英文 XCTest 的独立子进程曾因硬编码中文断言失败，现依实际界面语言校验同一个云端领先数。
+- **公开安装包。** [v0.9.3 / Build 26](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.3) 已设为 [GitHub Latest](https://github.com/CClishan/Fizzdeck/releases/latest)，非草稿、非预发布。`FizzDeck-0.9.3-arm64.dmg` 为 **7,690,646 字节**，SHA-256 `3f4b95ef467cc18f836aa20be43365e2afcec11c2030c707b5a8832bd5ed306f`。从草稿下载后只读挂载，验证版本 0.9.3/26、arm64、两套语言资源、四个字体和三个快捷指令；严格签名、DMG 校验均通过。应用为 ad-hoc 签名，无 Team ID，未经 Apple 公证。公开后再次[匿名下载并逐字节核对](output/release-v0.9.3/publish/public-verification.json)。
+- **提交与构建。** tag 指向 [`cd336e1`](https://github.com/CClishan/Fizzdeck/commit/cd336e183d4cca360b8030b80e0868d4b3dc7eca)，自上次发布后主分支的 158 个路径已核对。[从 tag 源码空缓存严格构建](output/release-v0.9.3/publish/tag-clean-strict.log)无诊断；中英环境全量各 **411/411，无跳过**。[主分支 CI](https://github.com/CClishan/Fizzdeck/actions/runs/46168310575) 和 [tag 打包](https://github.com/CClishan/Fizzdeck/actions/runs/46168868141) 均通过。托管 tag 测试：411 项中 410 通过、1 跳过、0 失败；需要交互式 WindowServer 的压测已在本机两种语言全跑。
+- **官网生产验收。** [官网提交 `12642ec`](https://github.com/CClishan/koroo-blog/commit/12642ec0f456dad7845d1e79c26a22769f8b5a10) · [Vercel 部署](https://vercel.com/cclishans-projects/koroo-me/HuL5Pd6YyPeqPGC7pPE42dkZMfBD)。[正式域名](https://koroo.top/fizzdeck)的 HTML 与 13 个依赖均与审核产物逐字节相同，页面 SHA-256 `7fb9033d46260f8d134041c3af0bc637b21b4fe43a8db78a8a31a0d23e518787`。Chrome 在 1440/390px 验证中英四态，20 组标题均两行，无横向溢出、无控制台错误；两个搜索段落未增加高度。中英桌面的下载按钮均实点直达本版 Release。[线上四态实拍](output/release-v0.9.3/publish/browser/verification.json)。
+- **本次发布隔离。** 只从父目录取元数据；有变化的根：/Users/a003/.repodeck，无法据此归因。未使用剪贴板，验收 GUI 已退出。[快照](output/release-v0.9.3/publish/release-isolation.json)。
 
 ## v0.9.2 / Build 25 · 本地审核通过，未单独发布
 
@@ -47,7 +51,7 @@
 - **发布验收：** [tag 流水线](https://github.com/CClishan/Fizzdeck/actions/runs/46141685248) 生成两项资产。草稿只读挂载后实读 `0.9.0 / 23`、`com.a003.fizzdeck`、macOS 26.0、arm64，严格签名和 DMG 校验通过；四个字体、对应许可、94 个图标及三个动作元数据均匹配。公开后[匿名重新下载](output/release-v0.9.0/publish/public-verification.json)，两份文件与草稿逐字节一致。
 - **公网验收踩坑：** DMG 首次下载的 35 秒时限不足，完整重下后与草稿及旁置 SHA 一致。Chrome 会在锚点和语言 URL 改变后重新请求站点图标；连续导航可取消上一次请求。等待在途请求完成再发起下一步，[正式域名四组复测](output/release-v0.9.0/publish/browser/verification.json)无请求失败，保留了全部错误检查。
 
-| 项目 | 当前状态 |
+| 项目 | Build 23 发布时状态（历史） |
 |---|---|
 | 公开安装包 | [v0.9.0 / Build 23](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.0) 已设为 [Latest](https://github.com/CClishan/Fizzdeck/releases/latest)，非草稿、非预发布。`FizzDeck-0.9.0-arm64.dmg` 为 **7,394,979 字节**，SHA-256 `8c857280db865fe472721dedb640538c528c0c153d1e1021d02869a04ffe4ee2`；内含 App 为 ad-hoc 签名，无 Team ID，未经 Apple 公证。 |
 | v0.8.0 / Build 16 | 公开 `FizzDeck-0.8.0-arm64.dmg` 为 **6,726,887 字节**，SHA-256 `4f9334184d0596a8fbc20a46e7ab074bd9f40562007900111801079fe8cf58cf`。草稿时只读挂载实读 `0.8.0 / 16`、`com.a003.fizzdeck`、arm64、macOS 26.0、三个动作元数据，严格签名校验通过；公开后匿名重新下载两个资产，字节与草稿一致。签名为 ad-hoc，无 Team ID、未公证。本机带 Finder 排布的候选 SHA `bda4dc4de6d764d57498fed2aa86d648b174e1c0a196c866a07401990283b0db` 不适用于公开包。[发行说明](docs/releases/v0.8.0.md)。 |
