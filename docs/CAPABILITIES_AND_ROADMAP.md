@@ -1,7 +1,7 @@
 # FizzDeck 现有能力全量梳理与后续演进路线
 
-> **本地源码候选**：macOS 原生端 [`v0.9.0`（Build `23`）](releases/v0.9.0.md)｜ [公开下载](https://github.com/CClishan/Fizzdeck/releases/latest) ｜ [官网](https://koroo.top/fizzdeck)
-> Build 13 保留独立源码和安装包；Build 16 汇总三个后续阶段，见[发行说明](releases/v0.8.0.md)。当前公开版为 [v0.8.0 / Build 16](https://github.com/CClishan/Fizzdeck/releases/tag/v0.8.0)（ad-hoc，未公证）。
+> **当前公开版本**：macOS 原生端 [`v0.9.0`（Build `23`）](releases/v0.9.0.md)｜ [公开下载](https://github.com/CClishan/Fizzdeck/releases/latest) ｜ [官网](https://koroo.top/fizzdeck)
+> Build 13 保留独立源码和安装包；Build 16 汇总三个后续阶段，见[发行说明](releases/v0.8.0.md)。Build 23 已设为 [GitHub Latest](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.0)（ad-hoc 签名，无 Team ID，未经 Apple 公证）。
 
 ---
 
@@ -9,18 +9,18 @@
 
 | 版本 | 原生能力 | 分发状态 |
 |---|---|---|
-| v0.7.4 / 12 | 原生四页签、Doctor、还原与接力卡 | 上一公开版本（Build 12） |
+| v0.7.4 / 12 | 原生四页签、Doctor、还原与接力卡 | 历史公开版（Build 12） |
 | v0.7.5 / 13 | 规则版「本周回顾」、文件反查相关对话、标记过期提示、菜单栏待处理、Node/Python 版本检查 | 独立源码快照、264 项测试、真机点击和本地 ad-hoc DMG；未作为新版发布 |
 | v0.7.6 阶段 | 关注项目 manifest / lock / `.env*` 事件、单项目 L0、限频云端检查、可停 L2、端口图、语言探测、非致命问题豁免 | 随 Build 16 打包；不包含在 Build 13 |
 | v0.7.7 阶段 | 项目 14/30 天费用与提交趋势、可选 AI 周报、按栈生成忽略规则并创建首次保护基线 | 随 Build 16 打包；不包含在 Build 13 |
 | v0.8.0 阶段 | 受管项目深链、三个 App Intents、CI、tag 打包、许可、规模压测 | 深链及键盘主路径真机通过；使用 Apple Development 签名后，三个动作均从系统快捷指令执行成功。托管 CI 与分发已验证；完整 VoiceOver 和 Apple 公证待验 |
-| v0.8.1 / 17、v0.8.2 / 18 | 原生设计 Token、统一图标与动作、等高工作台指标及全页面对齐 | 本地已审核，未分发 |
-| v0.8.3 / 19、v0.8.4 / 20 | 安全创建、合并、移除 Worktree；三种接力卡；Cursor / OpenCode 本地对话索引 | 本地已审核，未分发；Windsurf 仍是工作区摘要 |
-| v0.8.5 / 21 | 跨 Agent 复盘、项目堆叠趋势、活跃热力图、测试胶囊与匿名 PNG 分享卡 | 本地已审核，复盘和官网候选图见 [HANDOFF](../HANDOFF.md) |
+| v0.8.1 / 17、v0.8.2 / 18 | 原生设计 Token、统一图标与动作、等高工作台指标及全页面对齐 | 分波已审核，随 Build 23 分发 |
+| v0.8.3 / 19、v0.8.4 / 20 | 安全创建、合并、移除 Worktree；三种接力卡；Cursor / OpenCode 本地对话索引 | 分波已审核，随 Build 23 分发；Windsurf 仍是工作区摘要 |
+| v0.8.5 / 21 | 跨 Agent 复盘、项目堆叠趋势、活跃热力图、测试胶囊与匿名 PNG 分享卡 | 已随 Build 23 分发，复盘和实拍见 [HANDOFF](../HANDOFF.md) |
 | v0.8.6 / 22 | [四层色彩预算](COLOR_RULES.md)、工作台行动区与全宽周历、复盘费用构成 | 纳入 Build 23；封存的 Wave 6 保留原貌 |
-| **v0.9.0 / 23** | 汇总 Build 17–22：Kubai 图标、浅色白底、原生玻璃侧栏、高明度项目色、光栅／ASCII 分享卡；四字重 Obel Mono + 系统中文 | 本地发布候选；双语官网使用 Build 23 隔离实拍；[公开 Latest](https://github.com/CClishan/Fizzdeck/releases/latest) 仍是 Build 16 |
+| **v0.9.0 / 23** | 汇总 Build 17–22：Kubai 图标、浅色白底、原生玻璃侧栏、高明度项目色、光栅／ASCII 分享卡；四字重 Obel Mono + 系统中文 | [已公开](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.0)；双语官网使用 Build 23 隔离实拍 |
 
-**性能与验收口径：** L0 按既有设计持续监听前 8 个关注项目，事件合并后只重检命中的项目；L1 打开工作台后按关注名单串行检查，含第 9 个及之后手动关注的 Git 项目。不拉取工作树，单项目至少间隔 24 小时；L2 必须点击。公开 Build 16 样机版首屏图片共 116,414 字节（机身 53,770，工作台 62,644），其余三张图延迟加载。Build 23 候选首屏两张共 114,922 字节；四个字体共增加 823,012 字节原生资源，不作为网页字体下载。千项目／万会话查询 P95 0.61ms，千行原生表格 59.0 FPS（本机 60 Hz、3 秒采样）。部署状态、详细测试数字和升级验收见 [HANDOFF](../HANDOFF.md)。
+**性能与验收口径：** L0 按既有设计持续监听前 8 个关注项目，事件合并后只重检命中的项目；L1 打开工作台后按关注名单串行检查，含第 9 个及之后手动关注的 Git 项目。不拉取工作树，单项目至少间隔 24 小时；L2 必须点击。公开 Build 16 样机版首屏图片共 116,414 字节（机身 53,770，工作台 62,644），其余三张图延迟加载。Build 23 官网首屏两张共 114,922 字节；四个字体共增加 823,012 字节原生资源，不作为网页字体下载。千项目／万会话查询 P95 0.61ms，千行原生表格 59.0 FPS（本机 60 Hz、3 秒采样）。部署状态、详细测试数字和升级验收见 [HANDOFF](../HANDOFF.md)。
 
 **伴生 Web：** 本轮保留原有六页签与已有操作，未把有写操作的旧网页称为只读。后续是否减为四页签、或移除写操作，另行决定。
 
@@ -144,7 +144,7 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 | `v0.7.4` | 正式分发：版本统一、签名/公证脚本、双语新手文档、官网同步 | 已发布（ad-hoc，未公证） |
 | `v0.7.5` | 周回顾、文件反查、菜单栏与运行时体检 | 独立 Build 13 候选已验，未替换 Latest |
 | `v0.7.6` / `v0.7.7` / `v0.8.0` | 事件体检、项目记忆、系统集成 | 已随 Build 16 公开，见顶部逐项状态 |
-| `v0.8.1`–`v0.8.6` | 原生 UI、Worktree、接力和复盘 | Build 17–22 本地分波候选，见顶部逐项状态 |
+| `v0.8.1`–`v0.8.6` | 原生 UI、Worktree、接力和复盘 | Build 17–22 的分波改动已随 Build 23 公开 |
 
 ---
 

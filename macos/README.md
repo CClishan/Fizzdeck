@@ -8,9 +8,9 @@ FizzDeck reads and writes the same local state as the web UI, but runs without N
 
 [Chinese README](../README.zh-CN.md)
 
-**v0.8.0 (Build 16).** Doctor rechecks a focused project when its dependency or environment files change. See which process owns a development port, run a build or test on demand, and review 14 or 30 days of estimated AI costs and commits.
+**Since v0.8.0 (Build 16).** Doctor rechecks a focused project when its dependency or environment files change. See which process owns a development port, run a build or test on demand, and review 14 or 30 days of estimated AI costs and commits.
 
-**Local release candidate: [v0.9.0 (Build 23)](../docs/releases/v0.9.0.md).** The app ships four Obel Mono weights for Latin text and digits, with native Chinese typography. Open Recap from Workbench or Conversations to compare 7d, 30d, 90d, or all indexed history. Agent time and test outcomes appear only when the source log records enough evidence. Free or unpriced sessions are counted separately. Copy Markdown or an anonymous light/dark PNG; recap polish is off by default and sends only aggregate figures per approval.
+**Public release: [v0.9.0 (Build 23)](../docs/releases/v0.9.0.md).** The app ships four Obel Mono weights for Latin text and digits, with native Chinese typography. Open Recap from Workbench or Conversations to compare 7d, 30d, 90d, or all indexed history. Agent time and test outcomes appear only when the source log records enough evidence. Free or unpriced sessions are counted separately. Copy Markdown or an anonymous light/dark PNG; recap polish is off by default and sends only aggregate figures per approval.
 
 The download link points to the latest public DMG. System Shortcuts require a build signed with an Apple Team ID; the default ad-hoc DMG has none. Project opening, handoff cards and health checks can also be used in the app. See [verification details](../docs/SYSTEM_INTEGRATION.md).
 

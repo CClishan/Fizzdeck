@@ -2,30 +2,32 @@
 
 更新：2026-11-28。原生产品仓库 `CClishan/Fizzdeck`，官网仓库 `CClishan/koroo-blog`。请先区分本地构建、官网部署和 GitHub Latest。
 
-## v0.9.0 / Build 23 · 本地发布候选（待「确认发布」）
+## v0.9.0 / Build 23 · 已公开，官网已部署
 
-[审核入口与双语截图](output/release-v0.9.0/REVIEW.md) · [拟提交文件](output/release-v0.9.0/git-files.txt) · [发行说明](docs/releases/v0.9.0.md)。当前分支 `main` 基点 `9291b2c`，保留原有 Wave 6 和 Wave 087 变更。2026-11-28 只读查询 GitHub Latest 仍为 **v0.8.0 / 16**；官网未同步。
+[GitHub Release](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.0) · [官网](https://koroo.top/fizzdeck) · [发行说明](docs/releases/v0.9.0.md) · [本机验收原图](output/release-v0.9.0/REVIEW.md)。tag 源码 [`a62b2f7`](https://github.com/CClishan/Fizzdeck/commit/a62b2f73f6c3b57a32c1216f0b9391db2df17764) 与 231 个审核文件的指纹逐一核对。
 
 - 原生包的四字重 Obel Mono 共 823,012 字节，从 OTF 读到正式 PostScript 名称与 SIL OFL 1.1。App / SwiftPM 使用各自随包资源。CoreText 逐字符验证 Latin、数字和 `⌘` 用 Obel，中文与全角标点用同字重系统中文字体。泛用系统级联可能把 Bold 配成 Semibold；取系统实际的中文 UI 字体作为首个后备，保留系统后备。字体 OFL 和 Kubai MIT 原文均已入包。
 - [严格并发构建](output/release-v0.9.0/strict-build.log)零警告、零错误；[全套 372 项](output/release-v0.9.0/swift-test.log)通过，未跳过，含 25 项设计系统、10 项分享测试。最终千项目万会话检索 P95 0.61ms，千行原生表格 59.0 FPS（60 Hz，3 秒）。[包内检查](output/release-v0.9.0/bundle.json)：arm64、版本 0.9.0/23、四个字体、94 个图标、三个系统动作。
 - [1000 / 1320pt 浅暗实拍](output/release-v0.9.0/native/QA.md)：长英文名在展开侧栏和窄行动区提前省略，现按可用宽度换行或将状态胶囊另起一行；周历、复盘和光栅/ASCII 分享卡均实拍。取 WindowServer 窗口 ID 和前台状态，另作[不含验收代码、二进制哈希相同的隔离冒烟](output/release-v0.9.0/native/stock-binary-smoke.json)。未启动或检查已安装 App，不读取真实 `.repodeck`，也未读写封存的 Wave 6 目录。
 - [官网浏览器结果](output/release-v0.9.0/web-work/latest-final-build23/verification.json)：四张本版亮色真机图、双语精简文案；Chrome 四组合共 20 组主副句全为两行，零溢出、零控制台错误。首屏两图 114,922 字节，另三图延迟加载。独立无 Swift 缓存目录构建后，用产品仓 `public/` 的清单与导出脚本在隔离官网目录复验，[HTML 与九个依赖逐字节相同](output/release-v0.9.0/site-manifest.json)。保留伴生工作台既有入口和资产。
 - 验收踩坑：全套测试若整体再套系统文件沙箱，回环 SSH 和独立 CLI 进程识别用例会受影响；[额外沙箱尝试](output/release-v0.9.0/swift-test-extra-sandbox.log)有失败。正式全跑先以 `realpath` 核对 Foundation 的隔离 home，再采用 SwiftPM 常规测试环境，所有用例均通过。GUI 的启动前沙箱保持生效。网页扫描只带所需网页输入。
-- **待授权：** 当前没有 Developer ID Application 本机身份。tag 工作流经 CI 后生成草稿，上传 DMG 与 `.sha256`，使用本版发行说明并根据实际打包结果写明 ad-hoc 未公证或 Developer ID 已公证。收到「确认发布」后再提交、推送、打 tag；验证草稿资产、版本与签名、公开 Latest，再用导出脚本同步 `koroo-blog` 并核对线上字节。不要误提交 `output/` 或原有未跟踪的 Build 21 截图。
+- **托管 CI：** 发布测试 372 项中 371 通过、0 失败，跳过需要 WindowServer 的千行压测（本机已通过）。[分支 CI](https://github.com/CClishan/Fizzdeck/actions/runs/46141685209) 初次在依赖真实睡眠的防抖突发测试失败；相同 tag 测试通过，本机隔离定向连跑六次通过，分支原生作业在同一提交重跑成功。
+- **发布验收：** [tag 流水线](https://github.com/CClishan/Fizzdeck/actions/runs/46141685248) 生成两项资产。草稿只读挂载后实读 `0.9.0 / 23`、`com.a003.fizzdeck`、macOS 26.0、arm64，严格签名和 DMG 校验通过；四个字体、对应许可、94 个图标及三个动作元数据均匹配。公开后[匿名重新下载](output/release-v0.9.0/publish/public-verification.json)，两份文件与草稿逐字节一致。
+- **公网验收踩坑：** DMG 首次下载的 35 秒时限不足，完整重下后与草稿及旁置 SHA 一致。Chrome 会在锚点和语言 URL 改变后重新请求站点图标；连续导航可取消上一次请求。等待在途请求完成再发起下一步，[正式域名四组复测](output/release-v0.9.0/publish/browser/verification.json)无请求失败，保留了全部错误检查。
 
 | 项目 | 当前状态 |
 |---|---|
-| 公开安装包 | [v0.8.0 / Build 16](https://github.com/CClishan/Fizzdeck/releases/tag/v0.8.0) 已设为 [Latest](https://github.com/CClishan/Fizzdeck/releases/latest)，非草稿、非预发布。[PR #3](https://github.com/CClishan/Fizzdeck/pull/3) 合并提交 [`3b6a846`](https://github.com/CClishan/Fizzdeck/commit/3b6a8464ee96b7531ffce3b720c0673d5b36e053) 即 tag 对应源码；[GitHub Actions](https://github.com/CClishan/Fizzdeck/actions/runs/46005894773) 生成并校验 DMG 和旁置 SHA-256。 |
+| 公开安装包 | [v0.9.0 / Build 23](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.0) 已设为 [Latest](https://github.com/CClishan/Fizzdeck/releases/latest)，非草稿、非预发布。`FizzDeck-0.9.0-arm64.dmg` 为 **7,394,979 字节**，SHA-256 `8c857280db865fe472721dedb640538c528c0c153d1e1021d02869a04ffe4ee2`；内含 App 为 ad-hoc 签名，无 Team ID，未经 Apple 公证。 |
 | v0.8.0 / Build 16 | 公开 `FizzDeck-0.8.0-arm64.dmg` 为 **6,726,887 字节**，SHA-256 `4f9334184d0596a8fbc20a46e7ab074bd9f40562007900111801079fe8cf58cf`。草稿时只读挂载实读 `0.8.0 / 16`、`com.a003.fizzdeck`、arm64、macOS 26.0、三个动作元数据，严格签名校验通过；公开后匿名重新下载两个资产，字节与草稿一致。签名为 ad-hoc，无 Team ID、未公证。本机带 Finder 排布的候选 SHA `bda4dc4de6d764d57498fed2aa86d648b174e1c0a196c866a07401990283b0db` 不适用于公开包。[发行说明](docs/releases/v0.8.0.md)。 |
 | v0.7.5 / Build 13 | 从原有未提交功能冻结独立源码，在其上升级版本：`macos/dist/FizzDeck-0.7.5-Build13-native-source.tar.gz`。源码归档 SHA-256 `414db0f4a29602463b68aa7a6443a020a6d1b79c2e8fee9915a00d83e646ed5c`。独立 `swift test` **264 项通过**。安装包 `macos/dist/FizzDeck-0.7.5-arm64.dmg`，SHA-256 `5378cbc78c863d019961e04c517ee5108af629430431f81d7afeb6bd59fbf844`，挂载后实读 `0.7.5 / 13`，`codesign --verify --deep --strict`、DMG 和旁置 SHA 校验均通过。未公证。 |
 | 阶段版本 | v0.7.6 的体检、v0.7.7 的趋势与保护、v0.8.0 的系统集成均随 Build 16 分发。独立 Build 13 安装包、校验和源码仍在 `macos/dist/candidates/v0.7.5-build13/`；不要用 Build 16 源码重建 Build 13。 |
-| 官网 | [koroo.top/fizzdeck](https://koroo.top/fizzdeck) 已上线 v0.8.0 文案，保留 Studio Display 与 Mac Studio 样机及 Build 13 实机图。官网[提交 `896e08d`](https://github.com/CClishan/koroo-blog/commit/896e08dc6baf1f9bb3f75413281f3a037c4506a7)。[Vercel 生产部署](https://vercel.com/cclishans-projects/koroo-me/FbbZUt86AY2eEqFo4YtzgLrRZrnA)成功。公网页面 SHA-256 `1a8d7743fedc671474481a3cadf21c0a953c76274e1f290a1c01df8f01ac86a0`，HTML 与 9 个依赖均与发布产物逐字节一致。 |
+| 官网 | [koroo.top/fizzdeck](https://koroo.top/fizzdeck) 已上线 Build 23。官网[提交 `ce5ff35`](https://github.com/CClishan/koroo-blog/commit/ce5ff35e174c25b6b277e79d5c9bb8d9e17d4953) · [Vercel 生产部署](https://vercel.com/cclishans-projects/koroo-me/HQyr5FnRrYSjvM5GAcfcmnpUThde)；公网页面 SHA-256 `19984fd10b9e47263eab3069a84bedb158f96226d54353f750a73d0d2b10cdf2`。HTML 和九个依赖均与审阅版逐字节一致。Chrome 1440/390px × 中英文复验 20 组主副句皆为两行，无横向溢出或控制台错误。 |
 | 本机开发签名 | 已用有效的 Apple Development 身份签好 `macos/dist/development-signed/FizzDeck.app`（`0.8.0 / 16`，原产品 Bundle ID）。严格签名校验通过；同构建的隔离副本在系统「快捷指令」中跑通了全部三项。 |
 | 外部验收 | 已实际用 Git 和 `gh` 推送源码、触发 CI 并发布。当前只有 Apple Development 测试身份，缺 Developer ID Application 与 `NOTARY_PROFILE`。v0.5.3 和 v0.7.4 的原地升级及状态保留、完整 VoiceOver 朗读尚未实测。 |
 
-**官网样机：** 原 Studio Display 与 Mac Studio 中展示真实 Build 13 工作台；其余三张为进度、版本和体检。此前已在 390px / 1440px 核对贴图、中英文和下载；WebP 边缘是 `#f6f6f6`，与展台背景同色。Build 16 文案沿用这组图片并标明截图来源。[本地预览](http://127.0.0.1:52020/landing.html)；其下载入口与公网均使用 `releases/latest`。已在 Latest 更新后部署新版文案。坐标见[官网验收](src/landing/REHEARSAL.md)。
+**前版官网样机（Build 16 历史）：** 原 Studio Display 与 Mac Studio 中展示真实 Build 13 工作台；其余三张为进度、版本和体检。此前已在 390px / 1440px 核对贴图、中英文和下载；WebP 边缘是 `#f6f6f6`，与展台背景同色。Build 16 文案沿用这组图片并标明截图来源。[本地预览](http://127.0.0.1:52020/landing.html)；其下载入口与公网均使用 `releases/latest`。已在 Latest 更新后部署新版文案。坐标见[官网验收](src/landing/REHEARSAL.md)。
 
-本次发布准备再次用 Chrome 在 1440px / 390px 各点击切换中英文，核对下载地址、版本、截图来源和屏幕贴图位置，四种组合均无横向溢出。官网导出仍为 HTML + 9 个依赖，8 个依赖与线上相同；部署只需替换 HTML 并新增带内容哈希的文案脚本。对应补丁在 `output/release-v0.8.0/koroo-fizzdeck-0.8.0.patch`，浏览器记录在 `output/playwright/fizzdeck-v0.8.0/`。不要将 Swift 编译和测试的临时目录混入 Tailwind 的网页构建目录；本次网页产物从独立、无编译缓存的源码目录生成。
+Build 16 发布准备时再次用 Chrome 在 1440px / 390px 各点击切换中英文，核对下载地址、版本、截图来源和屏幕贴图位置，四种组合均无横向溢出。官网导出仍为 HTML + 9 个依赖，8 个依赖与线上相同；部署只需替换 HTML 并新增带内容哈希的文案脚本。对应补丁在 `output/release-v0.8.0/koroo-fizzdeck-0.8.0.patch`，浏览器记录在 `output/playwright/fizzdeck-v0.8.0/`。不要将 Swift 编译和测试的临时目录混入 Tailwind 的网页构建目录；本次网页产物从独立、无编译缓存的源码目录生成。
 
 ## Wave 087 视觉验收（0.8.6 / Build 22，独立本地审核）
 

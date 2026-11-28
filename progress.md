@@ -50,6 +50,6 @@ Build 21 审核通过后按[完整基线](output/wave-086/baseline-verification.
 
 [独立补丁](output/wave-087/review.patch)以封存的 Build 22 为底；[完整源码回贴校验](output/wave-087/review-verification.txt)含文件内容、模式及 SHA-256。旧波的[1000pt 暗色复盘](output/wave-086-retake/README.md)由原 Build 22 单独补拍，两个封存件未改。仅本地待审核，未触及伴生 Web 或发布链。
 
-## v0.9.0 / Build 23 · 本地送审 · 2026-11-28
+## v0.9.0 / Build 23 · 已发布 · 2026-11-28
 
-四字重字体注册及逐字符混排、四组窄宽浅暗实拍、长名称排版和四张官网实机图均已完成。严格构建无诊断，372/372 全过。独立官网构建和导出后，Chrome 1440 / 390 的中英文四组标题全部两行；首屏 114,922 字节。[审阅清单与原图](output/release-v0.9.0/REVIEW.md)。未提交、打 tag、发布或部署，等待「确认发布」。
+四字重字体注册及逐字符混排、四组窄宽浅暗实拍、长名称排版和四张官网实机图均已完成。严格构建无诊断，372/372 全过。独立官网构建和导出后，Chrome 1440 / 390 的中英文四组标题全部两行；首屏 114,922 字节。[审阅清单与原图](output/release-v0.9.0/REVIEW.md)。随后已按确认发布为 [GitHub Latest](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.0)；[官网提交 `ce5ff35`](https://github.com/CClishan/koroo-blog/commit/ce5ff35e174c25b6b277e79d5c9bb8d9e17d4953) 已上线，HTML 与九个依赖从公网逐字节核对。
