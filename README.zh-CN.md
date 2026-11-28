@@ -12,7 +12,7 @@
 
 [English](README.md)
 
-**当前公开版：[v0.9.0（Build 23）](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.0)。** 在工作台管理 Git 并行工作区，用三种接力卡交接，检索 Cursor 和 OpenCode 对话；跨 Agent 复盘可分享光栅或 ASCII 卡片。英文和数字使用随包的 Obel Mono，中文沿用 macOS 系统字体。详见[发行说明与校验值](docs/releases/v0.9.0.md)。
+**当前公开版：[v0.9.3（Build 26）](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.3)。** 界面可切换简体中文与 English；从菜单栏继续对话、复制接力卡，在标记过期前一键固定。项目库可自动生成光栅封面，单项目也能导出匿名光栅或 ASCII 战报。[发行说明与校验值](docs/releases/v0.9.3.md)。
 
 下载按钮指向最新公开 DMG。默认临时签名包没有 Apple Team ID，不能依赖系统「快捷指令」执行动作；在 FizzDeck 内仍可打开项目、复制接力卡和查看体检。详见[签名与验收](docs/SYSTEM_INTEGRATION.md)。
 
@@ -63,7 +63,7 @@
 
 仓库默认打包使用 ad-hoc 签名，没有 Apple 公证。首次打开需要手动放行：
 
-1. 从同一个 GitHub Release 下载 DMG 和同名 `.sha256` 文件。在下载目录运行 `shasum -a 256 -c FizzDeck-0.9.0-arm64.dmg.sha256`，确认输出 `OK`。
+1. 从同一个 GitHub Release 下载 DMG 和同名 `.sha256` 文件。在下载目录运行 `shasum -a 256 -c FizzDeck-0.9.3-arm64.dmg.sha256`，确认输出 `OK`。
 2. 打开 DMG，把 FizzDeck 拖进「应用程序」，尝试打开一次。
 3. 如果 macOS 提示无法验证，且你信任本次下载，可在「系统设置 → 隐私与安全性」中为 FizzDeck 选择「仍要打开」。
 
@@ -103,10 +103,10 @@ sudo xcodebuild -license accept
 ./macos/script/build_and_run.sh --verify
 ```
 
-默认版本为 `0.9.0`、Build `23`，也可以在构建时覆盖：
+默认版本为 `0.9.3`、Build `26`，也可以在构建时覆盖：
 
 ```sh
-VERSION=0.9.0 BUILD_NUM=23 ./macos/script/build_and_run.sh --build-only
+VERSION=0.9.3 BUILD_NUM=26 ./macos/script/build_and_run.sh --build-only
 ```
 
 产物在 `macos/dist/FizzDeck.app`。用 Xcode 调试时直接打开 `macos/Package.swift`。
@@ -123,7 +123,7 @@ swift test --package-path macos
 ./macos/script/package_dmg.sh
 ```
 
-默认输出 `macos/dist/FizzDeck-0.9.0-arm64.dmg`，同时生成同名的 `FizzDeck-0.9.0-arm64.dmg.sha256`。校验文件是标准 `shasum -a 256` 格式，供应用内更新与 GitHub Release 使用。
+默认输出 `macos/dist/FizzDeck-0.9.3-arm64.dmg`，同时生成同名的 `FizzDeck-0.9.3-arm64.dmg.sha256`。校验文件是标准 `shasum -a 256` 格式，供应用内更新与 GitHub Release 使用。
 
 ### 本地网页版
 

@@ -11,26 +11,25 @@ struct AttentionQueueView: View {
     @State private var gitActions: [String: GitSyncAction] = [:]
     @State private var feedback: [String: AttentionFeedback] = [:]
     @State private var copiedItemID: String?
-    @State private var now = Date()
+    @State private var localDate = Date()
     @State private var selectedKind: ProjectAttentionKind?
 
     var showsTabs = false
-    var focusedOnly = false
     var fillHeight = false
+    var workbenchItems: [ProjectAttentionItem]?
+    var workbenchDate: Date?
     private let collapsedLimit = 4
+    private var now: Date { workbenchDate ?? localDate }
 
     private var effectiveCollapsedLimit: Int {
         copyMode == .plain ? 3 : collapsedLimit
     }
 
     private var allItems: [ProjectAttentionItem] {
-        let focusedPaths = focusedOnly
-            ? ProjectFocusPolicy.partition(projects: store.projects).focusedPaths
-            : nil
-        return ProjectAttentionQueue.items(
+        workbenchItems ?? ProjectAttentionQueue.items(
             projects: store.projects,
             testRuns: actions.testRuns,
-            focusedPaths: focusedPaths,
+            focusedPaths: nil,
             copyMode: copyMode,
             doctorReports: store.doctorReports
         )
@@ -74,7 +73,7 @@ struct AttentionQueueView: View {
                 categoryTabs
             }
             if rows.isEmpty {
-                Text("没有待处理项")
+                Text(FizzL10n.text("没有待处理项", "Nothing needs attention"))
                     .font(FizzTypography.body)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, FizzSpacing.row)
@@ -88,16 +87,21 @@ struct AttentionQueueView: View {
                             copied: copiedItemID == item.id,
                             feedback: feedback[item.id],
                             copyMode: copyMode,
-                            open: { store.openProject(item.project, tab: item.kind.tab) },
+                            open: { store.openAttentionItem(item) },
+                            dismissExpiry: item.expiringMarks.isEmpty ? nil : { dismissExpiry(item) },
                             perform: { perform($0, for: item) }
                         )
                         .contextMenu {
-                            Menu("稍后提醒") {
-                                Button("1 小时后") { snooze(item, until: Date().addingTimeInterval(60 * 60)) }
-                                Button("明天 9:00") { snooze(item, until: tomorrowMorning) }
+                            if item.kind == .expiringMarks {
+                                Button(FizzL10n.text("忽略本批提醒", "Dismiss these reminders"), systemImage: "bell.slash") { dismissExpiry(item) }
+                            } else {
+                                Menu(FizzL10n.text("稍后提醒", "Remind me later")) {
+                                    Button(FizzL10n.text("1 小时后", "In an hour")) { snooze(item, until: Date().addingTimeInterval(60 * 60)) }
+                                    Button(FizzL10n.text("明天 9:00", "Tomorrow at 9:00 AM")) { snooze(item, until: tomorrowMorning) }
+                                }
+                                Divider()
+                                Button(FizzL10n.text("忽略此提醒", "Mute this reminder"), systemImage: "bell.slash") { mute(item) }
                             }
-                            Divider()
-                            Button("忽略此提醒", systemImage: "bell.slash") { mute(item) }
                         }
 
                         if item.id != rows.last?.id {
@@ -107,13 +111,13 @@ struct AttentionQueueView: View {
                 }
             }
         } accessory: {
-            Text("\(items.count) 项")
+            Text(FizzL10n.text("\(items.count) 项", SessionSummaryText.englishCount(items.count, "item")))
                 .font(FizzTypography.caption)
                 .foregroundStyle(.secondary)
             if !suppressedItems.isEmpty { suppressedMenu }
             if filteredItems.count > effectiveCollapsedLimit {
                 FizzIconButton(
-                    title: expanded ? "收起" : "展开全部 \(filteredItems.count) 项",
+                    title: expanded ? FizzL10n.text("收起", "Collapse") : FizzL10n.text("展开全部 \(filteredItems.count) 项", "Show all \(filteredItems.count)"),
                     symbol: expanded ? "chevron.up" : "chevron.down",
                     height: .compact
                 ) {
@@ -123,22 +127,23 @@ struct AttentionQueueView: View {
         }
         .alert(item: $pendingGitAction) { pending in
             Alert(
-                title: Text("\(pending.action.title) \(pending.item.project.displayName)？"),
+                title: Text(FizzL10n.text("\(pending.action.title) \(pending.item.project.displayName)？", "\(pending.action.title) changes for \(pending.item.project.displayName)?")),
                 message: Text(pending.action.confirmation),
-                primaryButton: .cancel(Text("取消")),
+                primaryButton: .cancel(Text(FizzL10n.text("取消", "Cancel"))),
                 secondaryButton: .default(Text(pending.action.title)) {
                     Task { await performGit(pending) }
                 }
             )
         }
         .task {
+            guard workbenchDate == nil else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
                 if Task.isCancelled { break }
-                now = Date()
+                localDate = Date()
             }
         }
-        .onChange(of: items.count) {
+        .onChange(of: availableKinds.map(\.kind)) {
             if let selectedKind, !availableKinds.contains(where: { $0.kind == selectedKind }) {
                 self.selectedKind = nil
             }
@@ -154,7 +159,7 @@ struct AttentionQueueView: View {
                 horizontalPadding: 9
             ) { kind, _ in
                 HStack(spacing: 4) {
-                    Text(kind?.shortTitle ?? "全部")
+                    Text(kind?.shortTitle ?? FizzL10n.text("全部", "All"))
                     Text("\(tabCount(for: kind))")
                         .foregroundStyle(.secondary)
                 }
@@ -169,8 +174,8 @@ struct AttentionQueueView: View {
     }
 
     private var suppressedMenu: some View {
-        FizzMenuButton(title: "已静默 \(suppressedItems.count) 项", symbol: "bell.slash") {
-            Section("已静默") {
+        FizzMenuButton(title: FizzL10n.text("已静默 \(suppressedItems.count) 项", "\(suppressedItems.count) muted"), symbol: "bell.slash") {
+            Section(FizzL10n.text("已静默", "Muted")) {
                 ForEach(suppressedItems) { entry in
                     Button {
                         restore(entry)
@@ -183,7 +188,7 @@ struct AttentionQueueView: View {
                 }
             }
             Divider()
-            Button("全部恢复", systemImage: "bell", action: restoreAll)
+            Button(FizzL10n.text("全部恢复", "Restore all"), systemImage: "bell", action: restoreAll)
         }
     }
 
@@ -197,6 +202,7 @@ struct AttentionQueueView: View {
     }
 
     private func isActing(_ item: ProjectAttentionItem) -> Bool {
+        if let first = item.expiringMarks.first { return store.updatingMarkPins.contains(first.mark.id) }
         if item.kind == .testFailed, actions.testRuns[item.project.path]?.status == .running {
             return true
         }
@@ -205,6 +211,14 @@ struct AttentionQueueView: View {
 
     private func perform(_ action: AttentionInlineAction, for item: ProjectAttentionItem) {
         switch action {
+        case .pinMark:
+            guard let mark = item.expiringMarks.first?.mark else { return }
+            feedback[item.id] = nil
+            Task {
+                if !(await store.setPinned(true, for: mark)) {
+                    feedback[item.id] = .pinFailed
+                }
+            }
         case .runTests:
             feedback[item.id] = nil
             actions.runTests(item.project, store: store)
@@ -238,10 +252,7 @@ struct AttentionQueueView: View {
         if result.succeeded {
             await store.refreshGit(for: path)
         }
-        feedback[pending.item.id] = AttentionFeedback(
-            message: result.message,
-            failed: !result.succeeded
-        )
+        feedback[pending.item.id] = result.succeeded ? .gitSuccess(pending.action) : .gitFailure(result.message)
         gitActions[pending.item.id] = nil
     }
 
@@ -254,6 +265,15 @@ struct AttentionQueueView: View {
     private func mute(_ item: ProjectAttentionItem) {
         withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.quick)) {
             store.muteAttention(for: item.project, kind: item.kind)
+        }
+    }
+
+    private func dismissExpiry(_ item: ProjectAttentionItem) {
+        do {
+            try store.dismissExpiryReminders(for: Set(item.expiringMarks.map(\.mark.id)))
+            feedback[item.id] = nil
+        } catch {
+            feedback[item.id] = .dismissFailed
         }
     }
 
@@ -281,6 +301,7 @@ private struct AttentionRow: View {
     let feedback: AttentionFeedback?
     var copyMode: CopyMode = .plain
     let open: () -> Void
+    let dismissExpiry: (() -> Void)?
     let perform: (AttentionInlineAction) -> Void
 
     @State private var hovering = false
@@ -291,7 +312,13 @@ private struct AttentionRow: View {
             .foregroundStyle(.primary)
             .lineLimit(2)
             .fixedSize(horizontal: false, vertical: true)
-        TagChip(text: item.title, tint: item.kind.tint, compact: true)
+        Text(item.title)
+            .font(FizzTypography.micro)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(item.kind.tint.opacity(0.11), in: RoundedRectangle(cornerRadius: FizzRadius.inset))
     }
 
     var body: some View {
@@ -321,15 +348,16 @@ private struct AttentionRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("打开 \(item.project.displayName) 的\(item.kind.destinationTitle)；右键可稍后或忽略")
+            .help(item.kind == .expiringMarks ? FizzL10n.text("查看最早到期的标记，可在详情中永久保留", "Open the first mark to expire. Pin it in Progress to keep it.") : FizzL10n.text("打开 \(item.project.displayName) 的\(item.kind.tab.title(for: copyMode))；右键可稍后或忽略", "Open \(item.kind.tab.title(for: copyMode)) for \(item.project.displayName). Right-click to snooze or mute this reminder."))
 
             if isActing {
                 ProgressView()
                     .controlSize(.mini)
                     .frame(width: FizzControlHeight.compact.rawValue, height: FizzControlHeight.compact.rawValue)
             } else if let inlineAction {
-                if copyMode == .plain {
-                    FizzActionButton(title: copied ? "已复制" : inlineAction.plainTitle, height: .compact) {
+                if copyMode == .plain || inlineAction == .pinMark {
+                    let title = inlineAction == .pinMark && item.expiringMarks.count > 1 ? FizzL10n.text("固定最早到期", "Pin earliest") : inlineAction.plainTitle
+                    FizzActionButton(title: copied ? FizzL10n.text("已复制", "Copied") : title, height: .compact, keyboardNavigation: inlineAction == .pinMark) {
                         perform(inlineAction)
                     }
                 } else {
@@ -338,7 +366,10 @@ private struct AttentionRow: View {
                     }
                 }
             } else {
-                FizzIconButton(title: "查看\(item.kind.destinationTitle)", symbol: "chevron.right", height: .compact, action: open)
+                FizzIconButton(title: FizzL10n.text("查看\(item.kind.tab.title(for: copyMode))", "View \(item.kind.tab.title(for: copyMode))"), symbol: "chevron.right", height: .compact, action: open)
+            }
+            if let dismissExpiry {
+                FizzIconButton(title: FizzL10n.text("忽略本批提醒", "Dismiss these reminders"), symbol: "bell.slash", height: .compact, action: dismissExpiry)
             }
         }
         .padding(.vertical, FizzSpacing.row)
@@ -349,6 +380,7 @@ private struct AttentionRow: View {
 }
 
 private enum AttentionInlineAction {
+    case pinMark
     case runTests
     case pull
     case push
@@ -356,24 +388,27 @@ private enum AttentionInlineAction {
 
     var title: String {
         switch self {
-        case .runTests: "运行测试"
-        case .pull: "拉取远端"
-        case .push: "推送提交"
-        case .copyCleanup: "复制清理命令"
+        case .pinMark: FizzL10n.text("固定保留", "Pin mark")
+        case .runTests: FizzL10n.text("运行测试", "Run tests")
+        case .pull: FizzL10n.text("拉取远端", "Pull from remote")
+        case .push: FizzL10n.text("推送提交", "Push commits")
+        case .copyCleanup: FizzL10n.text("复制清理命令", "Copy cleanup commands")
         }
     }
 
     var plainTitle: String {
         switch self {
-        case .runTests: "重新检查"
-        case .pull: "更新代码"
-        case .push: "上传版本"
-        case .copyCleanup: "复制命令"
+        case .pinMark: title
+        case .runTests: FizzL10n.text("重新检查", "Check again")
+        case .pull: FizzL10n.text("更新代码", "Update code")
+        case .push: FizzL10n.text("上传版本", "Upload version")
+        case .copyCleanup: FizzL10n.text("复制命令", "Copy command")
         }
     }
 
     var symbol: String {
         switch self {
+        case .pinMark: "pin"
         case .runTests: "play.fill"
         case .pull: "arrow.down"
         case .push: "arrow.up"
@@ -398,14 +433,28 @@ private struct SuppressedAttentionItem: Identifiable {
     var id: String { item.id }
 }
 
-private struct AttentionFeedback {
-    let message: String
-    let failed: Bool
+private enum AttentionFeedback {
+    case pinFailed, dismissFailed, gitSuccess(GitSyncAction), gitFailure(String)
+
+    var failed: Bool {
+        if case .gitSuccess = self { return false }
+        return true
+    }
+
+    var message: String {
+        switch self {
+        case .pinFailed: FizzL10n.text("未能固定标记，请刷新后重试", "Couldn’t pin the mark. Refresh and try again.")
+        case .dismissFailed: FizzL10n.text("未能保存忽略状态", "Couldn’t save the dismissal.")
+        case .gitSuccess(let action): action.successMessage
+        case .gitFailure(let message): message
+        }
+    }
 }
 
 private extension ProjectAttentionItem {
     var inlineAction: AttentionInlineAction? {
         switch kind {
+        case .expiringMarks: .pinMark
         case .doctorCritical:
             nil
         case .testFailed:
@@ -425,6 +474,7 @@ private extension ProjectAttentionItem {
 private extension ProjectAttentionKind {
     var symbol: String {
         switch self {
+        case .expiringMarks: "clock"
         case .doctorCritical: "exclamationmark.shield.fill"
         case .testFailed: "xmark.octagon"
         case .sessionError: "exclamationmark.triangle"
@@ -441,27 +491,20 @@ private extension ProjectAttentionKind {
         case .sessionError, .dirty: FizzTheme.statusWarning
         case .behind: Color.secondary
         case .unpushed: Color.secondary
-        case .cleanup: Color.secondary
-        }
-    }
-
-    var destinationTitle: String {
-        switch self {
-        case .doctorCritical, .testFailed: "运行"
-        case .sessionError, .cleanup: "进度"
-        case .dirty, .behind, .unpushed: "版本"
+        case .cleanup, .expiringMarks: Color.secondary
         }
     }
 
     var shortTitle: String {
         switch self {
-        case .doctorCritical: "体检阻塞"
-        case .testFailed: "测试失败"
-        case .sessionError: "对话报错"
-        case .dirty: "未提交"
-        case .behind: "落后远端"
-        case .unpushed: "未推送"
-        case .cleanup: "可清理"
+        case .expiringMarks: FizzL10n.text("标记到期", "Expiring marks")
+        case .doctorCritical: FizzL10n.text("体检阻塞", "Doctor issues")
+        case .testFailed: FizzL10n.text("测试失败", "Tests failed")
+        case .sessionError: FizzL10n.text("对话报错", "Conversation errors")
+        case .dirty: FizzL10n.text("未提交", "Uncommitted")
+        case .behind: FizzL10n.text("落后远端", "Behind remote")
+        case .unpushed: FizzL10n.text("未推送", "Unpushed")
+        case .cleanup: FizzL10n.text("可清理", "Reclaimable")
         }
     }
 }

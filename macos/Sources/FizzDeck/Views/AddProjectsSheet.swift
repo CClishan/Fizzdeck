@@ -40,7 +40,7 @@ struct AddProjectsSheet: View {
 
             GlassEffectContainer(spacing: FizzSpacing.panel) {
                 VStack(spacing: 0) {
-                    FizzSheetHeader(title: "添加项目", onClose: close)
+                    FizzSheetHeader(title: FizzL10n.text("添加项目", "Add projects"), onClose: close)
                         .padding(.horizontal, FizzSpacing.page)
                         .padding(.vertical, FizzSpacing.panel)
 
@@ -102,7 +102,7 @@ struct AddProjectsSheet: View {
     private var folderPane: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("已加入的文件夹")
+                Text(FizzL10n.text("已加入的文件夹", "Added folders"))
                     .font(FizzTypography.sectionTitle)
                     .accessibilityAddTraits(.isHeader)
 
@@ -133,7 +133,7 @@ struct AddProjectsSheet: View {
             Divider()
 
             HStack(spacing: FizzSpacing.row) {
-                Text("文件夹层级")
+                Text(FizzL10n.text("文件夹层级", "Scan depth"))
                     .font(FizzTypography.body)
 
                 Spacer()
@@ -142,19 +142,19 @@ struct AddProjectsSheet: View {
                     .font(FizzTypography.mono)
                     .foregroundStyle(.secondary)
 
-                Stepper("文件夹层级", value: $depth, in: 1...10)
+                Stepper(FizzL10n.text("文件夹层级", "Scan depth"), value: $depth, in: 1...10)
                     .labelsHidden()
                     .controlSize(.small)
                     .disabled(isAdding)
 
-                FizzIconButton(title: "恢复默认层级", symbol: "arrow.uturn.backward", height: .compact) {
+                FizzIconButton(title: FizzL10n.text("恢复默认层级", "Reset scan depth"), symbol: "arrow.uturn.backward", height: .compact) {
                     depth = 3
                 }
                 .disabled(depth == 3)
             }
             .padding(.horizontal, FizzSpacing.panel)
             .padding(.vertical, FizzSpacing.row)
-            .help("扫描层级越深，查找范围越大")
+            .help(FizzL10n.text("扫描层级越深，查找范围越大", "A deeper scan checks more subfolders."))
         }
     }
 
@@ -162,7 +162,7 @@ struct AddProjectsSheet: View {
         VStack(spacing: FizzSpacing.row) {
             FizzIcon(.lg, symbol: "folder.badge.plus")
                 .foregroundStyle(.tertiary)
-            Text("还没有加入文件夹")
+            Text(FizzL10n.text("还没有加入文件夹", "No folders added yet"))
                 .font(FizzTypography.body(.medium))
                 .foregroundStyle(.secondary)
         }
@@ -204,7 +204,7 @@ struct AddProjectsSheet: View {
             .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("打开 \(displayName(for: path))")
+        .accessibilityLabel(FizzL10n.text("打开 \(displayName(for: path))", "Open \(displayName(for: path))"))
     }
 
     @ViewBuilder
@@ -217,9 +217,9 @@ struct AddProjectsSheet: View {
             }
         } else {
             ContentUnavailableView(
-                "选择要扫描的文件夹",
+                FizzL10n.text("选择要扫描的文件夹", "Choose a folder to scan"),
                 systemImage: "folder.badge.plus",
-                description: Text("选择父文件夹后，按 .git、package.json、CLAUDE.md 等特征找出项目。")
+                description: Text(FizzL10n.text("选择父文件夹后，按 .git、package.json、CLAUDE.md 等特征找出项目。", "FizzDeck looks for projects inside the folder using markers such as .git, package.json, and CLAUDE.md."))
             )
         }
     }
@@ -244,12 +244,12 @@ struct AddProjectsSheet: View {
             if isLoading {
                 ProgressView().controlSize(.small)
             } else {
-                Text("发现 \(candidates.count) 个")
+                Text(FizzL10n.text("发现 \(candidates.count) 个", "\(candidates.count) found"))
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
 
-            FizzActionButton(title: "更换文件夹…", symbol: "folder.badge.plus", height: .compact, action: chooseFolder)
+            FizzActionButton(title: FizzL10n.text("更换文件夹…", "Change folder…"), symbol: "folder.badge.plus", height: .compact, action: chooseFolder)
                 .disabled(isAdding)
         }
         .padding(.horizontal, FizzSpacing.panel)
@@ -262,16 +262,16 @@ struct AddProjectsSheet: View {
             VStack(spacing: FizzSpacing.row) {
                 ProgressView()
                     .controlSize(.small)
-                Text("正在查找项目…")
+                Text(FizzL10n.text("正在查找项目…", "Looking for projects…"))
                     .font(FizzTypography.body)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if candidates.isEmpty {
             ContentUnavailableView(
-                "没有发现项目",
+                FizzL10n.text("没有发现项目", "No projects found"),
                 systemImage: "folder.badge.questionmark",
-                description: Text("没有匹配到项目特征。可以调整左侧层级，或只添加当前文件夹。")
+                description: Text(FizzL10n.text("没有匹配到项目特征。可以调整左侧层级，或只添加当前文件夹。", "No project markers found. Increase the scan depth or add this folder on its own."))
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -297,7 +297,7 @@ struct AddProjectsSheet: View {
                 .frame(width: 22)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+                FlowLayout(spacing: 6) {
                     Text(candidate.name)
                         .font(FizzTypography.cardTitle)
 
@@ -330,14 +330,14 @@ struct AddProjectsSheet: View {
 
             if managed {
                 Label {
-                    Text("已加入")
+                    Text(FizzL10n.text("已加入", "Added"))
                 } icon: {
                     FizzIcon(.sm, symbol: "checkmark.circle.fill")
                 }
                     .font(FizzTypography.caption(.medium))
                     .foregroundStyle(.secondary)
             } else {
-                Toggle("选择 \(candidate.name)", isOn: selectionBinding(candidate.path))
+                Toggle(FizzL10n.text("选择 \(candidate.name)", "Select \(candidate.name)"), isOn: selectionBinding(candidate.path))
                     .toggleStyle(.checkbox)
                     .labelsHidden()
                     .frame(width: FizzControlHeight.compact.rawValue, height: FizzControlHeight.compact.rawValue)
@@ -364,27 +364,27 @@ struct AddProjectsSheet: View {
                     ProgressView().controlSize(.small)
                 }
 
-                Text("已选 \(selected.count) 个")
+                Text(FizzL10n.text("已选 \(selected.count) 个", "\(selected.count) selected"))
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
 
                 if !isLoading && hasAvailableCandidates {
-                    FizzMenuButton(title: "批量选择", height: .standard) {
-                        Button("全选") {
+                    FizzMenuButton(title: FizzL10n.text("批量选择", "Select projects"), height: .standard) {
+                        Button(FizzL10n.text("全选", "Select all")) {
                             selected = ProjectDiscovery.defaultSelection(projects: candidates, excluding: managedPaths)
                         }
-                        Button("清空") { selected.removeAll() }
+                        Button(FizzL10n.text("清空", "Clear selection")) { selected.removeAll() }
                     }
                 }
             }
 
             Spacer(minLength: FizzSpacing.row)
 
-            FizzActionButton(title: "取消", role: .cancel, action: close)
+            FizzActionButton(title: FizzL10n.text("取消", "Cancel"), role: .cancel, action: close)
                 .keyboardShortcut(.cancelAction)
 
             if let folder, !isLoading, candidates.isEmpty {
-                FizzActionButton(title: isAdding ? "正在添加…" : "只添加当前文件夹", prominence: .primary) {
+                FizzActionButton(title: isAdding ? FizzL10n.text("正在添加…", "Adding…") : FizzL10n.text("只添加当前文件夹", "Add this folder only"), prominence: .primary) {
                     Task { await add(paths: [folder.path]) }
                 }
                 .disabled(isAdding)
@@ -395,14 +395,14 @@ struct AddProjectsSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(selected.isEmpty || isLoading || isAdding)
             } else {
-                FizzActionButton(title: "添加文件夹…", symbol: "plus", prominence: .primary, action: chooseFolder)
+                FizzActionButton(title: FizzL10n.text("添加文件夹…", "Add folder…"), symbol: "plus", prominence: .primary, action: chooseFolder)
             }
         }
     }
 
     private var addSelectedTitle: String {
-        if isAdding { return "正在添加…" }
-        return selected.isEmpty ? "添加项目" : "添加 \(selected.count) 个项目"
+        if isAdding { return FizzL10n.text("正在添加…", "Adding…") }
+        return selected.isEmpty ? FizzL10n.text("添加项目", "Add projects") : FizzL10n.text("添加 \(selected.count) 个项目", "Add \(SessionSummaryText.englishCount(selected.count, "project"))")
     }
 
     private func displayName(for path: String) -> String {

@@ -7,7 +7,7 @@ export const COPY = {
     meta: {
       title: 'FizzDeck — 记得住、回得去、跑得起。',
       description:
-        '给 AI 项目的原生 Mac 工作台。接上进度、退回改坏、本机跑起。实机截图来自 FizzDeck v0.9.0（Build 23）。',
+        '给 AI 项目的原生 Mac 工作台。接上进度、退回改坏、本机跑起。v0.9.3（Build 26）支持中英文界面。中文实拍来自 v0.9.0（Build 23）。',
     },
     nav: {
       skip: '跳到主要内容',
@@ -25,14 +25,14 @@ export const COPY = {
       rest: '给 AI 项目的原生 Mac 工作台。',
       primaryCta: '下载 macOS 公开版',
       secondaryCta: 'GitHub 源码',
-      note: 'Apple Silicon · macOS 26+ · 实机截图：v0.9.0（Build 23）',
-      stageCaption: 'FizzDeck v0.9.0（Build 23）工作台实机截图',
-      heroAlt: 'Studio Display 上的 FizzDeck v0.9.0（Build 23）浅色工作台，显示器旁是 Mac Studio。',
+      note: 'v0.9.3（Build 26） · Apple Silicon · macOS 26+',
+      stageCaption: 'FizzDeck v0.9.0（Build 23）中文工作台实拍',
+      heroAlt: 'Studio Display 上的 FizzDeck v0.9.0（Build 23）中文浅色工作台，显示器旁是 Mac Studio。',
     },
     showcase: {
       lead: '让 AI 项目不再失控。',
       rest: '接上进度、退回改坏、本机跑起。',
-      hint: 'FizzDeck v0.9.0（Build 23）实机截图',
+      hint: 'FizzDeck v0.9.0（Build 23）中文实机截图',
       tiles: [
         {
           id: 'workbench',
@@ -230,7 +230,7 @@ export const COPY = {
     meta: {
       title: 'FizzDeck — Remember, rewind, and run.',
       description:
-        'A native Mac workbench for AI-built projects. Resume context, undo mistakes, and run locally. Native screenshots: FizzDeck v0.9.0 (Build 23).',
+        'A native Mac workbench for AI-built projects. Resume context, undo mistakes, and run locally. English app screenshots: FizzDeck v0.9.3 (Build 26).',
     },
     nav: {
       skip: 'Skip to content',
@@ -248,30 +248,30 @@ export const COPY = {
       rest: 'A native Mac workbench for AI-built projects.',
       primaryCta: 'Download for Mac',
       secondaryCta: 'View on GitHub',
-      note: 'Screenshots: v0.9.0 (Build 23) · Apple Silicon · macOS 26+',
-      stageCaption: 'FizzDeck v0.9.0 (Build 23) native workbench screenshot',
-      heroAlt: 'The light FizzDeck v0.9.0 (Build 23) workbench on a Studio Display beside a Mac Studio.',
+      note: 'v0.9.3 (Build 26) · Apple Silicon · macOS 26+',
+      stageCaption: 'FizzDeck v0.9.3 (Build 26) English Workbench, captured on macOS',
+      heroAlt: 'The light English Workbench in FizzDeck v0.9.3 (Build 26) on a Studio Display beside a Mac Studio.',
     },
     showcase: {
       lead: 'Stay in control of AI projects.',
       rest: 'Resume context, undo mistakes, and run locally.',
-      hint: 'FizzDeck v0.9.0 (Build 23) native screenshots',
+      hint: 'FizzDeck v0.9.3 (Build 26) English app screenshots',
       tiles: [
         {
           id: 'workbench',
-          alt: 'Progress tab showing conversations and the four project tabs',
+          alt: 'English Progress tab showing conversations and the four project tabs',
           lead: 'Remember.',
-          rest: 'A cross-project conversation timeline, Chinese search, and ⌘K keep the last AI request in reach.',
+          rest: 'A cross-project timeline, English & Chinese search, and ⌘K keep your last AI request in reach.',
         },
         {
           id: 'git',
-          alt: 'Version tab showing the current branch and changed files',
+          alt: 'English Version tab showing the current branch and changed files',
           lead: 'Rewind.',
           rest: 'A quiet mark before each conversation; inspect changes, restore files, then save a real version.',
         },
         {
           id: 'services',
-          alt: 'Doctor listing missing dependencies and the local environment',
+          alt: 'English Doctor view listing missing dependencies and the local environment',
           lead: 'Run.',
           rest: 'Doctor watches dependencies, ports, secrets, and version protection before errors pile up.',
         },
@@ -298,8 +298,8 @@ export const COPY = {
         },
         {
           icon: 'terminal',
-          lead: 'Chinese search + ⌘K.',
-          rest: 'A local FTS5 index covers conversations across projects, with short-query fallback and direct jumps.',
+          lead: 'English & Chinese search + ⌘K.',
+          rest: 'Find conversations across projects with local FTS5, even for short queries.',
         },
         {
           icon: 'shield',

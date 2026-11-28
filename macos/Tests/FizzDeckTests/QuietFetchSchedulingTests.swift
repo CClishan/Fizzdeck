@@ -84,8 +84,9 @@ final class QuietFetchSchedulingTests: XCTestCase {
         try await until { store.projects.filter { $0.behind == 2 }.count == focused.count }
         let firstPass = await transfers.paths
         XCTAssertEqual(firstPass.count, 10); XCTAssertEqual(Set(firstPass), focused)
+        let expectedTitle = FizzL10n.isEnglish ? "Remote ahead by 2 commits" : "云端领先 2 个提交"
         for path in focused {
-            XCTAssertEqual(store.doctorReports[path]?.issues.first { $0.kind == .cloudBehind }?.title, "云端领先 2 个提交")
+            XCTAssertEqual(store.doctorReports[path]?.issues.first { $0.kind == .cloudBehind }?.title, expectedTitle)
         }
 
         now = start.addingTimeInterval(86_399)

@@ -13,7 +13,7 @@ struct DeveloperPortList: View {
     var managedChanged: (Bool) -> Void = { _ in }
 
     @State private var rows: [DeveloperListener] = []
-    @State private var scanError: String?
+    @State private var scanError: DoctorListenerFailure?
     @State private var refreshing = true
     @State private var revision = 0
     @State private var pending: DeveloperListener?
@@ -39,7 +39,7 @@ struct DeveloperPortList: View {
                         Spacer(minLength: 4)
                         refreshButton
                         if rows.isEmpty, !refreshing, scanError == nil {
-                            FizzActionButton(title: "启动", height: .compact) {
+                            FizzActionButton(title: FizzL10n.text("启动", "Start"), height: .compact) {
                                 Task { await actions.launch(project, store: store); revision += 1 }
                             }
                             .disabled(actions.isBusy(project.path))
@@ -48,7 +48,7 @@ struct DeveloperPortList: View {
                     listenerRows
                 }
             } else {
-                Panel(title: "开发监听端口", symbol: "network") {
+                Panel(title: FizzL10n.text("开发监听端口", "Development ports"), symbol: "network") {
                     VStack(alignment: .leading, spacing: FizzSpacing.row) {
                         scanStatus
                         listenerRows
@@ -69,18 +69,18 @@ struct DeveloperPortList: View {
                 managedChanged(result.contains { $0.owner?.path == project?.path && $0.owner != nil })
             } catch {
                 guard !Task.isCancelled else { return }
-                rows = []; scanError = error.localizedDescription; managedChanged(false)
+                rows = []; scanError = DoctorListenerFailure(error); managedChanged(false)
             }
             refreshing = false
         }
         .alert(item: $pending) { row in
             Alert(
-                title: Text("停止 :\(row.conflict.port) 的这个进程？"),
-                message: Text("\(row.label)\n\(row.process.details)\n确认后仅发送 SIGTERM。"),
-                primaryButton: .cancel(Text("取消")),
-                secondaryButton: .destructive(Text("确认停止")) {
+                title: Text(FizzL10n.text("停止 :\(row.conflict.port) 的这个进程？", "Stop this process on port \(row.conflict.port)?")),
+                message: Text(FizzL10n.text("\(row.label)\n\(row.process.details)\n确认后仅发送 SIGTERM。", "\(row.label)\n\(row.process.details)\nThis sends SIGTERM only.")),
+                primaryButton: .cancel(Text(FizzL10n.text("取消", "Cancel"))),
+                secondaryButton: .destructive(Text(FizzL10n.text("确认停止", "Stop process"))) {
                     if let owner = row.owner, !isRegistered(owner) {
-                        show(.refused("项目已变化，请刷新后重新确认"))
+                        show(.refused(FizzL10n.text("项目已变化，请刷新后重新确认", "The project has changed. Refresh and confirm again.")))
                         revision += 1
                         return
                     }
@@ -99,22 +99,22 @@ struct DeveloperPortList: View {
     @ViewBuilder
     private var scanStatus: some View {
         if let scanError {
-            Text(scanError)
+            Text(scanError.message)
                 .font(FizzTypography.caption)
                 .fizzStatus(FizzTheme.statusWarning)
         } else if refreshing {
             ProgressView()
                 .controlSize(.mini)
-                .accessibilityLabel("核对监听进程")
+                .accessibilityLabel(FizzL10n.text("核对监听进程", "Checking listening processes"))
         } else if rows.isEmpty {
-            Text(project == nil ? "未发现可见的开发端口监听" : "未发现监听")
+            Text(project == nil ? FizzL10n.text("未发现可见的开发端口监听", "No visible processes are listening on development ports.") : FizzL10n.text("未发现监听", "No listeners found"))
                 .font(FizzTypography.caption)
                 .foregroundStyle(.secondary)
         }
     }
 
     private var refreshButton: some View {
-        FizzIconButton(title: "刷新监听端口", symbol: "arrow.clockwise", height: .compact) {
+        FizzIconButton(title: FizzL10n.text("刷新监听端口", "Refresh listening ports"), symbol: "arrow.clockwise", height: .compact) {
             revision += 1
         }
         .disabled(refreshing || stopping)
@@ -139,7 +139,7 @@ struct DeveloperPortList: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: ":\(row.conflict.port) · \(row.label)")
                     .font(FizzTypography.body(.medium))
-                Text(verbatim: "PID \(row.process.pid) · UID \(row.process.uid.map(String.init) ?? "未知")")
+                Text(verbatim: FizzL10n.text("PID \(row.process.pid) · UID \(row.process.uid.map(String.init) ?? "未知")", "PID \(row.process.pid) · UID \(row.process.uid.map(String.init) ?? "unknown")"))
                 Text(verbatim: row.process.displayCommand)
                     .lineLimit(2)
                     .help(row.process.displayCommand)
@@ -151,13 +151,13 @@ struct DeveloperPortList: View {
 
             HStack(spacing: 6) {
                 if let owner = row.owner, row.conflict.occupants.count == 1, !row.process.previewHosts.isEmpty {
-                    FizzActionButton(title: "预览", height: .compact) {
+                    FizzActionButton(title: FizzL10n.text("预览", "Preview"), height: .compact) {
                         Task {
                             guard isRegistered(owner),
                                   let url = await PortConflictService.previewURL(
                                       port: row.conflict.port, occupant: row.process, project: owner
                                   ), isRegistered(owner) else {
-                                show(.refused("监听进程已变化，无法打开受管预览"))
+                                show(.refused(FizzL10n.text("监听进程已变化，无法打开受管预览", "The listener has changed. The managed preview could not be opened.")))
                                 revision += 1
                                 return
                             }
@@ -165,7 +165,7 @@ struct DeveloperPortList: View {
                         }
                     }
                 }
-                FizzActionButton(title: "停止…", height: .compact, role: .destructive) { pending = row }
+                FizzActionButton(title: FizzL10n.text("停止…", "Stop…"), height: .compact, role: .destructive) { pending = row }
                     .disabled(!row.process.canStop)
             }
             .fixedSize(horizontal: true, vertical: false)

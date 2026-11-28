@@ -1,7 +1,7 @@
 import XCTest
 @testable import FizzDeck
 
-final class FizzCopyTests: XCTestCase {
+final class FizzCopyTests: ChineseInterfaceTestCase {
     private var suiteName = ""
     private var defaults: UserDefaults!
 

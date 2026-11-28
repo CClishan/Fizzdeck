@@ -3,7 +3,7 @@ import SwiftUI
 import XCTest
 @testable import FizzDeck
 
-final class FizzDesignSystemTests: XCTestCase {
+final class FizzDesignSystemTests: ChineseInterfaceTestCase {
     func testRadiusTokensMatchLayoutScale() {
         XCTAssertEqual(FizzRadius.frame, 16)
         XCTAssertEqual(FizzRadius.panel, 16)

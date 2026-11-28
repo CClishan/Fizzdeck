@@ -6,12 +6,53 @@ enum LightweightIssueKind: String, Codable, Sendable, Hashable {
     case unignoredEnvFile
 }
 
-struct LightweightProjectIssue: Identifiable, Equatable, Sendable {
-    let kind: LightweightIssueKind
-    let title: String
-    let detail: String
+// Cache the evidence; presentation can change while the project is still open.
+enum LightweightProjectIssue: Identifiable, Equatable, Sendable {
+    case missingDependencies(CopyMode)
+    case staleDependencies(manifest: String, CopyMode)
+    case missingIgnoreRule(file: String)
+    case unignoredEnv(file: String, CopyMode)
+
+    var kind: LightweightIssueKind {
+        switch self {
+        case .missingDependencies: .missingDependencies
+        case .staleDependencies: .staleDependencies
+        case .missingIgnoreRule, .unignoredEnv: .unignoredEnvFile
+        }
+    }
 
     var id: String { kind.rawValue }
+    var title: String { title(for: nil) }
+
+    func title(for mode: CopyMode?) -> String {
+        switch self {
+        case .missingDependencies(let scannedMode):
+            FizzCopy.missingDependencies(mode ?? scannedMode).text
+        case .staleDependencies(_, let scannedMode):
+            (mode ?? scannedMode) == .plain
+                ? FizzL10n.text("AI 可能加了新零件，需要重新安装依赖", "The project may need new components. Reinstall its dependencies.")
+                : FizzL10n.text("依赖清单已更新，建议重新安装", "Dependency manifest updated; reinstall dependencies.")
+        case .missingIgnoreRule(let name):
+            FizzL10n.text("\(name) 没有仓库忽略规则", "No repository ignore rule covers \(name)")
+        case .unignoredEnv(let name, let scannedMode):
+            (mode ?? scannedMode) == .plain
+                ? FizzL10n.text("密钥文件 \(name) 可能会被上传", "Secret file \(name) could be uploaded")
+                : FizzL10n.text("\(name) 未被 .gitignore 忽略", "\(name) is not ignored by Git")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .missingDependencies:
+            FizzL10n.text("检测到 package.json，但还没有安装依赖", "Found package.json, but dependencies haven’t been installed.")
+        case .staleDependencies(let name, _):
+            FizzL10n.text("\(name) 比 node_modules 更新", "\(name) is newer than node_modules")
+        case .missingIgnoreRule:
+            FizzL10n.text("建议加入 .gitignore，避免配置随代码上传", "Add it to .gitignore to keep configuration out of uploads.")
+        case .unignoredEnv:
+            FizzL10n.text("建议加入 .gitignore，避免 API Key 泄露", "Add it to .gitignore to avoid exposing API keys.")
+        }
+    }
 }
 
 enum LightweightProjectCheckService {
@@ -65,8 +106,7 @@ enum LightweightProjectCheckService {
             }
             return !ignored
         }) {
-            issues.append(LightweightProjectIssue(kind: .unignoredEnvFile,
-                title: "\(name) 没有仓库忽略规则", detail: "建议加入 .gitignore，避免配置随代码上传"))
+            issues.append(.missingIgnoreRule(file: name))
         }
         return issues
     }
@@ -109,11 +149,7 @@ enum LightweightProjectCheckService {
 
         let nodeModules = directory.appendingPathComponent("node_modules", isDirectory: true)
         guard FileTools.isDirectory(nodeModules) else {
-            return LightweightProjectIssue(
-                kind: .missingDependencies,
-                title: FizzCopy.missingDependencies(copyMode).text,
-                detail: "检测到 package.json，但还没有安装依赖"
-            )
+            return .missingDependencies(copyMode)
         }
 
         let modulesStampCandidates = [
@@ -128,11 +164,7 @@ enum LightweightProjectCheckService {
             let fileURL = directory.appendingPathComponent(name)
             guard let modified = FileTools.modificationDate(fileURL) else { continue }
             if modified.timeIntervalSince(installedDate) > 5.0 {
-                return LightweightProjectIssue(
-                    kind: .staleDependencies,
-                    title: copyMode == .plain ? "AI 可能加了新零件，需要重新安装依赖" : "依赖清单已更新，建议重新安装",
-                    detail: "\(name) 比 node_modules 更新"
-                )
+                return .staleDependencies(manifest: name, copyMode)
             }
         }
 
@@ -156,11 +188,7 @@ enum LightweightProjectCheckService {
                 timeout: 5
             )
             if result?.succeeded != true {
-                return LightweightProjectIssue(
-                    kind: .unignoredEnvFile,
-                    title: copyMode == .plain ? "密钥文件 \(name) 可能会被上传" : "\(name) 未被 .gitignore 忽略",
-                    detail: "建议加入 .gitignore，避免 API Key 泄露"
-                )
+                return .unignoredEnv(file: name, copyMode)
             }
         }
 

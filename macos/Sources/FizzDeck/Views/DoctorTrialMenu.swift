@@ -6,7 +6,7 @@ struct DoctorTrialMenu: View {
 
     var body: some View {
         let run = ProjectTrialService.shared.runs[project.path]
-        FizzActionButton(title: run.map { "\($0.choice.kind.rawValue) · \($0.summary)" } ?? "试跑一下", height: .compact) {
+        FizzActionButton(title: run.map { "\($0.choice.kind.rawValue) · \($0.summary)" } ?? FizzL10n.text("试跑一下", "Trial run"), height: .compact) {
             open = true
         }
         .popover(isPresented: $open) {
@@ -21,7 +21,7 @@ struct DoctorTrialMenu: View {
 struct ProjectTrialPanel: View {
     let project: RepoProject
     var body: some View {
-        Panel(title: "项目试跑", symbol: "checkmark.shield") {
+        Panel(title: FizzL10n.text("项目试跑", "Project trial run"), symbol: "checkmark.shield") {
             TrialControls(project: project).id(project.path)
         }
     }
@@ -39,7 +39,7 @@ private struct TrialControls: View {
             let run = trials.runs[project.path]
             if let choices {
                 if choices.isEmpty {
-                    Text("未识别到 build、typecheck 或 test 命令")
+                    Text(FizzL10n.text("未识别到 build、typecheck 或 test 命令", "No build, typecheck or test command found."))
                         .font(FizzTypography.body)
                         .foregroundStyle(.secondary)
                 }
@@ -49,7 +49,7 @@ private struct TrialControls: View {
                             .font(FizzTypography.mono)
                             .textSelection(.enabled)
                         Spacer(minLength: 0)
-                        FizzActionButton(title: "试跑 \(choice.kind.rawValue)", height: .compact) {
+                        FizzActionButton(title: FizzL10n.text("试跑 \(choice.kind.rawValue)", "Run \(choice.kind.rawValue)"), height: .compact) {
                             trials.start(choice, for: project, store: store)
                         }
                         .fixedSize(horizontal: true, vertical: false)
@@ -58,7 +58,7 @@ private struct TrialControls: View {
                     }
                 }
             } else {
-                ProgressView().controlSize(.small).accessibilityLabel("识别试跑命令")
+                ProgressView().controlSize(.small).accessibilityLabel(FizzL10n.text("识别试跑命令", "Finding trial commands"))
             }
             if let run {
                 Divider()
@@ -66,10 +66,10 @@ private struct TrialControls: View {
                     Text("\(run.choice.kind.rawValue) · \(run.summary)")
                         .font(FizzTypography.body(.medium))
                     Spacer()
-                    FizzActionButton(title: "完整日志", height: .compact) { SystemActions.open(run.logURL.path) }
+                    FizzActionButton(title: FizzL10n.text("完整日志", "Full log"), height: .compact) { SystemActions.open(run.logURL.path) }
                         .disabled(!FileTools.exists(run.logURL))
                     if run.status == .running {
-                        FizzActionButton(title: "停止", height: .compact) { trials.stop(project.path) }
+                        FizzActionButton(title: FizzL10n.text("停止", "Stop"), height: .compact) { trials.stop(project.path) }
                             .disabled(run.stopRequested)
                     }
                 }
@@ -91,7 +91,7 @@ private struct TrialLog: View {
 
     var body: some View {
         ScrollView {
-            Text(verbatim: text.isEmpty ? "等待日志输出…" : text)
+            Text(verbatim: text.isEmpty ? FizzL10n.text("等待日志输出…", "Waiting for log output…") : text)
                 .font(FizzTypography.monoSmall).textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(8)
         }

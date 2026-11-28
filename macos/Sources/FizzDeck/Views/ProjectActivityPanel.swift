@@ -7,7 +7,7 @@ struct ProjectActivityPanel: View {
 
     var body: some View {
         let now = Date()
-        let gitStatus = readingGit || project.gitLoadState != .ready ? "读取中…" : (project.branch == nil ? "未开启版本保护" : "暂无数据")
+        let gitStatus = readingGit || project.gitLoadState != .ready ? FizzL10n.text("读取中…", "Loading…") : (project.branch == nil ? FizzL10n.text("未开启版本保护", "Version protection off") : FizzL10n.text("暂无数据", "No data"))
         ProjectActivityChart(history: ProjectActivityDay.series(sessions: project.sessions.recentSessions, commits: counts, days: 30, now: now),
                              sessionsReady: project.sessionLoadState == .ready, gitStatus: counts == nil ? gitStatus : nil)
             .task(id: [project.path, project.lastCommit?.hash ?? "", project.branch ?? "", WorkbenchMetrics.dayKey(now)]) {
@@ -37,29 +37,29 @@ private struct ProjectActivityChart: View {
         let cost = series.reduce(into: SessionCostTotal()) { $0.add($1.cost) }
         let commitTotal = series.compactMap(\.commits).reduce(0, +)
 
-        Panel(title: "项目活动", symbol: "chart.bar.xaxis") {
+        Panel(title: FizzL10n.text("项目活动", "Project activity"), symbol: "chart.bar.xaxis") {
             VStack(alignment: .leading, spacing: FizzSpacing.row) {
-                rowTitle("AI 估算费用", value: sessionsReady ? cost.description : "读取中…")
-                    .help("会话费用归入最后活动的本地日期；空心菱形表示有未计价的会话。")
+                rowTitle(FizzL10n.text("AI 估算费用", "Estimated AI cost"), value: sessionsReady ? cost.description : FizzL10n.text("读取中…", "Loading…"))
+                    .help(FizzL10n.text("会话费用归入最后活动的本地日期；空心菱形表示有未计价的会话。", "Session costs use the local date of last activity. A hollow diamond marks a day with unpriced sessions."))
                 bars(series, costRow: true)
-                rowTitle("提交", value: gitStatus ?? "\(commitTotal) 次")
+                rowTitle(FizzL10n.text("提交", "Commits"), value: gitStatus ?? FizzL10n.text("\(commitTotal) 次", "\(commitTotal)"))
                 bars(series, costRow: false)
                 if let first = series.first, let last = series.last {
                     HStack {
-                        Text(first.date, format: .dateTime.month().day())
+                        Text(first.date, format: .dateTime.month().day().locale(FizzL10n.locale))
                         Spacer()
-                        if cost.unpriced > 0 { Label("有未计价会话", systemImage: "diamond") }
+                        if cost.unpriced > 0 { Label(FizzL10n.text("有未计价会话", "Includes unpriced sessions"), systemImage: "diamond") }
                         Spacer()
-                        Text(last.date, format: .dateTime.month().day())
+                        Text(last.date, format: .dateTime.month().day().locale(FizzL10n.locale))
                     }
                     .font(FizzTypography.micro)
                     .foregroundStyle(.secondary)
                 }
             }
         } accessory: {
-            Picker("活动范围", selection: $days) {
-                Text("14 天").tag(14)
-                Text("30 天").tag(30)
+            Picker(FizzL10n.text("活动范围", "Activity range"), selection: $days) {
+                Text(FizzL10n.text("14 天", "14 days")).tag(14)
+                Text(FizzL10n.text("30 天", "30 days")).tag(30)
             }
             .labelsHidden()
             .pickerStyle(.segmented)
@@ -84,8 +84,9 @@ private struct ProjectActivityChart: View {
         return HStack(alignment: .bottom, spacing: 3) {
             ForEach(series) { day in
                 let value = costRow ? day.cost.amount : day.commits.map(Double.init)
+                let date = day.date.formatted(.dateTime.year().month(.abbreviated).day().locale(FizzL10n.locale))
                 let unknown = costRow && day.cost.unpriced > 0
-                let detail = costRow ? day.cost.description : (day.commits.map { "\($0) 次提交" } ?? "暂无提交数据")
+                let detail = costRow ? day.cost.description : (day.commits.map { FizzL10n.text("\($0) 次提交", "\($0) \($0 == 1 ? "commit" : "commits")") } ?? FizzL10n.text("暂无提交数据", "No commit data"))
                 VStack(spacing: 1) {
                     if unknown {
                         Rectangle()
@@ -99,9 +100,9 @@ private struct ProjectActivityChart: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .contentShape(Rectangle())
-                .help("\(day.date.formatted(date: .abbreviated, time: .omitted)) · \(detail)")
+                .help("\(date) · \(detail)")
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(day.date.formatted(date: .abbreviated, time: .omitted))，\(detail)")
+                .accessibilityLabel(FizzL10n.text("\(date)，\(detail)", "\(date), \(detail)"))
             }
         }
         .frame(height: 35)

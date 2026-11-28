@@ -94,13 +94,13 @@ struct SidebarView: View {
                     .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
             }
             .buttonStyle(.plain)
-            .help("搜索项目和动作（⌘K）")
-            .accessibilityLabel("搜索")
+            .help(FizzL10n.text("搜索项目和动作（⌘K）", "Search projects and actions (⌘K)"))
+            .accessibilityLabel(FizzL10n.text("搜索", "Search"))
 
             VStack(spacing: 2) {
                 SidebarRailButton(
                     symbol: "house",
-                    label: "工作台",
+                    label: FizzL10n.text("工作台", "Workbench"),
                     selected: store.destination.isDashboard,
                     showsDot: runningCount > 0,
                     selectionNamespace: selectionNamespace
@@ -120,7 +120,7 @@ struct SidebarView: View {
 
                 SidebarRailButton(
                     symbol: "square.grid.2x2",
-                    label: "项目库",
+                    label: FizzL10n.text("项目库", "Library"),
                     selected: store.destination.isLibrary,
                     showsDot: false,
                     selectionNamespace: selectionNamespace
@@ -130,7 +130,7 @@ struct SidebarView: View {
 
                 SidebarRailButton(
                     symbol: "stethoscope",
-                    label: store.focusedDoctorIssueCount > 0 ? "体检（\(store.focusedDoctorIssueCount) 个问题）" : "体检",
+                    label: store.focusedDoctorIssueCount > 0 ? FizzL10n.text("体检（\(store.focusedDoctorIssueCount) 个问题）", "Doctor (\(SessionSummaryText.englishCount(store.focusedDoctorIssueCount, "issue")))") : FizzL10n.text("体检", "Doctor"),
                     selected: store.destination.isCleanup,
                     showsDot: store.focusedDoctorIssueCount > 0,
                     selectionNamespace: selectionNamespace
@@ -199,7 +199,7 @@ struct SidebarView: View {
                 FizzIcon(.sm, symbol: "magnifyingglass")
                     .foregroundStyle(sidebarLabelInk)
 
-                Text("搜索")
+                Text(FizzL10n.text("搜索", "Search"))
                     .font(FizzTypography.font(12))
                     .foregroundStyle(sidebarLabelInk)
 
@@ -222,16 +222,16 @@ struct SidebarView: View {
             .contentShape(RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
-        .help("搜索项目和动作（⌘K）")
-        .accessibilityLabel("搜索")
+        .help(FizzL10n.text("搜索项目和动作（⌘K）", "Search projects and actions (⌘K)"))
+        .accessibilityLabel(FizzL10n.text("搜索", "Search"))
     }
 
     private var globalLinks: some View {
         VStack(spacing: 1) {
             SidebarSignalRow(
                 symbol: "house",
-                title: "工作台",
-                detail: runningCount > 0 ? "\(runningCount) 运行中" : nil,
+                title: FizzL10n.text("工作台", "Workbench"),
+                detail: runningCount > 0 ? FizzL10n.text("\(runningCount) 运行中", "\(runningCount) running") : nil,
                 selected: store.destination.isDashboard,
                 selectionNamespace: selectionNamespace
             ) {
@@ -241,7 +241,7 @@ struct SidebarView: View {
             SidebarSignalRow(
                 symbol: "bubble.left.and.bubble.right",
                 title: FizzCopy.conversationsNavTitle,
-                detail: store.activeAIProjectPaths.isEmpty ? nil : "\(store.activeAIProjectPaths.count) 进行中",
+                detail: store.activeAIProjectPaths.isEmpty ? nil : FizzL10n.text("\(store.activeAIProjectPaths.count) 进行中", "\(store.activeAIProjectPaths.count) active"),
                 selected: store.destination.isConversations,
                 selectionNamespace: selectionNamespace
             ) {
@@ -250,7 +250,7 @@ struct SidebarView: View {
 
             SidebarSignalRow(
                 symbol: "square.grid.2x2",
-                title: "项目库",
+                title: FizzL10n.text("项目库", "Library"),
                 detail: "\(store.projects.count)",
                 selected: store.destination.isLibrary,
                 selectionNamespace: selectionNamespace
@@ -260,10 +260,10 @@ struct SidebarView: View {
 
             SidebarSignalRow(
                 symbol: "stethoscope",
-                title: "体检",
+                title: FizzL10n.text("体检", "Doctor"),
                 detail: store.focusedDoctorIssueCount > 0
                     ? "\(store.focusedDoctorIssueCount)"
-                    : (cleanupBytes > 0 ? Format.bytes(cleanupBytes) : "良好"),
+                    : (cleanupBytes > 0 ? Format.bytes(cleanupBytes) : FizzL10n.text("良好", "Healthy")),
                 selected: store.destination.isCleanup,
                 selectionNamespace: selectionNamespace
             ) {
@@ -305,7 +305,7 @@ struct SidebarView: View {
             }
 
             if !autoEntries.isEmpty {
-                Text("7 天内活跃（自动）")
+                Text(FizzL10n.text("7 天内活跃（自动）", "Active in the last 7 days (auto)"))
                     .font(FizzTypography.micro(.regular))
                     .foregroundStyle(sidebarDetailInk)
                     .padding(.leading, 9)
@@ -321,7 +321,7 @@ struct SidebarView: View {
                 Button {
                     store.openLibrary()
                 } label: {
-                    Text("还有 \(partition.overflowActiveCount) 个活跃项目")
+                    Text(FizzL10n.text("还有 \(partition.overflowActiveCount) 个活跃项目", "\(partition.overflowActiveCount) more active \(partition.overflowActiveCount == 1 ? "project" : "projects")"))
                         .font(FizzTypography.monoSmall)
                         .foregroundStyle(sidebarLabelInk)
                         .padding(.horizontal, 9)
@@ -331,7 +331,7 @@ struct SidebarView: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(sectionTitle)项目")
+        .accessibilityLabel(FizzL10n.text("\(sectionTitle)项目", "\(sectionTitle) projects"))
     }
 
     private func focusRow(_ project: RepoProject) -> some View {
@@ -349,7 +349,7 @@ struct SidebarView: View {
 
     private var runningSection: some View {
         VStack(alignment: .leading, spacing: 1) {
-            SidebarSectionHeader(title: "正在运行") {
+            SidebarSectionHeader(title: FizzL10n.text("正在运行", "Running")) {
                 RunningPulseDot()
             }
 
@@ -373,6 +373,7 @@ struct SidebarView: View {
 
     private func groupSection(_ group: SidebarGroup) -> some View {
         let isCollapsed = collapsedGroups.contains(group.name)
+        let title = ProjectGrouping.title(for: group.name)
 
         return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 2) {
@@ -384,7 +385,7 @@ struct SidebarView: View {
                             .fill(ProjectGrouping.color(for: group.name).opacity(0.66))
                             .frame(width: 5, height: 5)
 
-                        Text(group.name)
+                        Text(title)
                             .font(FizzTypography.mono(.medium))
                             .foregroundStyle(sidebarLabelInk)
                             .lineLimit(1)
@@ -396,8 +397,8 @@ struct SidebarView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("在项目库中筛选「\(group.name)」")
-                .accessibilityLabel("筛选 \(group.name) 分组")
+                .help(FizzL10n.text("在项目库中筛选「\(title)」", "Filter Library by “\(title)”"))
+                .accessibilityLabel(FizzL10n.text("筛选 \(title) 分组", "Filter by group: \(title)"))
 
                 Button {
                     toggleGroup(group.name)
@@ -409,8 +410,8 @@ struct SidebarView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(group.name) 分组")
-                .accessibilityValue(isCollapsed ? "已折叠" : "已展开")
+                .accessibilityLabel(FizzL10n.text("\(title) 分组", "\(title) group"))
+                .accessibilityValue(isCollapsed ? FizzL10n.text("已折叠", "Collapsed") : FizzL10n.text("已展开", "Expanded"))
 
                 Button {
                     Task { await store.addRoot() }
@@ -421,8 +422,8 @@ struct SidebarView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("添加项目目录")
-                .accessibilityLabel("添加项目目录")
+                .help(FizzL10n.text("添加项目目录", "Add project folder"))
+                .accessibilityLabel(FizzL10n.text("添加项目目录", "Add project folder"))
             }
 
             if !isCollapsed {
@@ -458,25 +459,25 @@ struct SidebarView: View {
     @ViewBuilder
     private func projectMenu(_ project: RepoProject) -> some View {
         Button(project.starred
-            ? (copyMode == .plain ? "取消关注" : "取消星标")
-            : (copyMode == .plain ? "加入关注" : "设为星标")
+            ? (copyMode == .plain ? FizzL10n.text("取消关注", "Unfollow") : FizzL10n.text("取消星标", "Unstar"))
+            : (copyMode == .plain ? FizzL10n.text("加入关注", "Follow") : FizzL10n.text("设为星标", "Star"))
         ) {
             store.toggleStar(project)
         }
 
-        Button("复制接力卡") {
+        Button(FizzL10n.text("复制接力卡", "Copy Handoff card")) {
             let result = HandoffCardBuilder.build(project: project, copyMode: copyMode)
             SystemActions.copy(result.markdown)
             ToastCenter.shared.show(
-                "接力卡已复制",
+                FizzL10n.text("接力卡已复制", "Handoff card copied"),
                 symbol: "doc.on.clipboard.fill",
                 tint: Color.secondary,
-                subtitle: "\(result.characterCount) 字"
+                subtitle: FizzL10n.text("\(result.characterCount) 字", SessionSummaryText.englishCount(result.characterCount, "character"))
             )
         }
 
-        Menu("标签颜色") {
-            Button("无标签") { store.setColor(nil, for: project) }
+        Menu(FizzL10n.text("标签颜色", "Tag color")) {
+            Button(FizzL10n.text("无标签", "No tag")) { store.setColor(nil, for: project) }
             ForEach(TagColor.allCases) { color in
                 Button(color.label) { store.setColor(color, for: project) }
             }
@@ -487,7 +488,7 @@ struct SidebarView: View {
         ProjectQuickActions(project: project)
         Divider()
 
-        Button("从看板移除") {
+        Button(FizzL10n.text("从看板移除", "Remove from board")) {
             Task { await store.removeFromBoard(project) }
         }
     }
@@ -498,7 +499,7 @@ struct SidebarView: View {
                 HStack(spacing: 5) {
                     Text(Format.bytes(disk.free))
                         .font(FizzTypography.font(9.5, weight: .medium))
-                    Text("可用")
+                    Text(FizzL10n.text("可用", "free"))
                         .foregroundStyle(sidebarDetailInk)
 
                     Spacer(minLength: 8)
@@ -517,7 +518,7 @@ struct SidebarView: View {
                 .font(FizzTypography.font(9.5))
                 .padding(.horizontal, 8)
                 .frame(height: 20)
-                .help(store.scannedAt.map { "\(Format.relative($0))更新" } ?? "尚未扫描")
+                .help(store.scannedAt.map { FizzL10n.text("\(Format.relative($0))更新", "Updated \(Format.relative($0))") } ?? FizzL10n.text("尚未扫描", "Not scanned yet"))
             }
 
             SidebarSettingsRow()
@@ -749,10 +750,10 @@ private struct SidebarProjectRow: View {
         switch statusDot {
         case .aiWorking:
             RunningPulseDot()
-                .help("AI 正在干活")
+                .help(FizzL10n.text("AI 正在干活", "AI is working"))
         case .broken:
             FizzStatusDot(tint: FizzTheme.statusDanger)
-                .help("跑不起来或上次对话报错")
+                .help(FizzL10n.text("跑不起来或上次对话报错", "Run failed or the last conversation ended with an error"))
         case .unsaved:
             FizzStatusDot(tint: FizzTheme.statusWarning)
                 .help(FizzCopy.uncommittedChanges(mode: copyMode).text)
@@ -865,7 +866,7 @@ private struct SidebarSettingsRow: View {
                 FizzIcon(.sm, symbol: "gearshape")
                     .frame(width: 16)
 
-                Text("设置")
+                Text(FizzL10n.text("设置", "Settings"))
                     .font(FizzTypography.body)
 
                 Spacer(minLength: 0)
@@ -887,8 +888,8 @@ private struct SidebarSettingsRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("打开设置（⌘,）")
-        .accessibilityLabel("设置")
+        .help(FizzL10n.text("打开设置（⌘,）", "Open Settings (⌘,)"))
+        .accessibilityLabel(FizzL10n.text("设置", "Settings"))
     }
 }
 
@@ -910,8 +911,8 @@ private struct SidebarRailSettingsButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("打开设置（⌘,）")
-        .accessibilityLabel("设置")
+        .help(FizzL10n.text("打开设置（⌘,）", "Open Settings (⌘,)"))
+        .accessibilityLabel(FizzL10n.text("设置", "Settings"))
     }
 }
 

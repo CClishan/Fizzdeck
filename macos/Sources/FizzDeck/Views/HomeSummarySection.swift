@@ -25,32 +25,32 @@ struct HomeSummarySection: View {
         Grid(horizontalSpacing: 12, verticalSpacing: 12) {
             GridRow {
                 GlassStatCard(
-                    title: "项目",
+                    title: FizzL10n.text("项目", "Projects"),
                     value: "\(stats.projectCount)",
                     detail: filterTitle,
                     symbol: "square.stack.3d.up",
                     tint: .secondary
                 )
                 GlassStatCard(
-                    title: "正在运行",
+                    title: FizzL10n.text("正在运行", "Running"),
                     value: "\(stats.runningCount)",
-                    detail: stats.runningCount == 0 ? "没有运行中的服务" : "端口已就绪",
+                    detail: stats.runningCount == 0 ? FizzL10n.text("没有运行中的服务", "No running services") : FizzL10n.text("端口已就绪", "Ports ready"),
                     symbol: "play.circle",
                     tint: .secondary
                 )
             }
             GridRow {
                 GlassStatCard(
-                    title: "磁盘占用",
+                    title: FizzL10n.text("磁盘占用", "Disk usage"),
                     value: Format.bytes(stats.totalBytes),
-                    detail: "已扫描 \(stats.projectCount) 个项目",
+                    detail: FizzL10n.text("已扫描 \(stats.projectCount) 个项目", "\(SessionSummaryText.englishCount(stats.projectCount, "project")) scanned"),
                     symbol: "internaldrive",
                     tint: .secondary
                 )
                 GlassStatCard(
-                    title: "可清理",
+                    title: FizzL10n.text("可清理", "Reclaimable"),
                     value: Format.bytes(stats.cleanupBytes),
-                    detail: "\(stats.cleanupItemCount) 个目录",
+                    detail: FizzL10n.text("\(stats.cleanupItemCount) 个目录", SessionSummaryText.englishCount(stats.cleanupItemCount, "folder")),
                     symbol: "trash.slash",
                     tint: .secondary
                 )
@@ -62,28 +62,28 @@ struct HomeSummarySection: View {
     private var summary: some View {
         HStack(spacing: 0) {
             HomeSummaryMetric(
-                title: "项目",
+                title: FizzL10n.text("项目", "Projects"),
                 value: "\(stats.projectCount)",
                 symbol: "square.stack.3d.up",
                 tint: .secondary
             )
             summaryDivider
             HomeSummaryMetric(
-                title: "正在运行",
+                title: FizzL10n.text("正在运行", "Running"),
                 value: "\(stats.runningCount)",
                 symbol: "play.circle",
                 tint: .secondary
             )
             summaryDivider
             HomeSummaryMetric(
-                title: "磁盘占用",
+                title: FizzL10n.text("磁盘占用", "Disk usage"),
                 value: Format.bytes(stats.totalBytes),
                 symbol: "internaldrive",
                 tint: .secondary
             )
             summaryDivider
             HomeSummaryMetric(
-                title: "可清理",
+                title: FizzL10n.text("可清理", "Reclaimable"),
                 value: Format.bytes(stats.cleanupBytes),
                 symbol: "trash.slash",
                 tint: .secondary

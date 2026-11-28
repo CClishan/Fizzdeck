@@ -10,8 +10,9 @@ struct CommandPaletteView: View {
 
     @State private var query = ""
     @State private var selection = 0
+    @State private var editorChoices: (path: String, editors: [ProjectEditor])?
     @State private var returnMonitor: Any?
-    @State private var sessionSearchResults: [SessionSearchResult] = []
+    @State private var sessionSearchResults: [WorkbenchSearchHit] = []
     @Namespace private var selectionNamespace
     @FocusState private var searchFocused: Bool
 
@@ -27,26 +28,26 @@ struct CommandPaletteView: View {
             var groups: [PaletteGroup] = []
 
             if !recent.isEmpty {
-                groups.append(PaletteGroup(id: "recent", title: "最近", entries: recent))
+                groups.append(PaletteGroup(id: "recent", title: FizzL10n.text("最近", "Recent"), entries: recent))
             }
 
             let visibleActions = actions.filter { !recentIDs.contains($0.id) }
             if !visibleActions.isEmpty {
-                groups.append(PaletteGroup(id: "actions", title: "快捷操作", entries: visibleActions))
+                groups.append(PaletteGroup(id: "actions", title: FizzL10n.text("快捷操作", "Quick actions"), entries: visibleActions))
             }
 
             let visibleProjects = Array(
                 projects.filter { !recentIDs.contains($0.id) }.prefix(8)
             )
             if !visibleProjects.isEmpty {
-                groups.append(PaletteGroup(id: "projects", title: "项目", entries: visibleProjects))
+                groups.append(PaletteGroup(id: "projects", title: FizzL10n.text("项目", "Projects"), entries: visibleProjects))
             }
 
             let remainingCommands = commands.filter { !recentIDs.contains($0.id) }
             let visibleCommands = remainingCommands.filter(\.pinned)
                 + remainingCommands.filter { !$0.pinned }
             if !visibleCommands.isEmpty {
-                groups.append(PaletteGroup(id: "commands", title: "命令", entries: visibleCommands))
+                groups.append(PaletteGroup(id: "commands", title: FizzL10n.text("命令", "Commands"), entries: visibleCommands))
             }
 
             return groups
@@ -56,22 +57,22 @@ struct CommandPaletteView: View {
 
         let matchedActions = sortedMatches(actions, query: trimmed)
         if !matchedActions.isEmpty {
-            groups.append(PaletteGroup(id: "actions", title: "快捷操作", entries: matchedActions))
+            groups.append(PaletteGroup(id: "actions", title: FizzL10n.text("快捷操作", "Quick actions"), entries: matchedActions))
         }
 
         let matchedProjects = Array(sortedMatches(projects, query: trimmed).prefix(20))
         if !matchedProjects.isEmpty {
-            groups.append(PaletteGroup(id: "projects", title: "项目", entries: matchedProjects))
+            groups.append(PaletteGroup(id: "projects", title: FizzL10n.text("项目", "Projects"), entries: matchedProjects))
         }
 
         let matchedSessions = sessionEntries
         if !matchedSessions.isEmpty {
-            groups.append(PaletteGroup(id: "sessions", title: "对话", entries: matchedSessions))
+            groups.append(PaletteGroup(id: "sessions", title: FizzL10n.text("对话", "Conversations"), entries: matchedSessions))
         }
 
         let matchedCommands = sortedMatches(commands, query: trimmed)
         if !matchedCommands.isEmpty {
-            groups.append(PaletteGroup(id: "commands", title: "命令", entries: matchedCommands))
+            groups.append(PaletteGroup(id: "commands", title: FizzL10n.text("命令", "Commands"), entries: matchedCommands))
         }
 
         return groups
@@ -92,21 +93,21 @@ struct CommandPaletteView: View {
         result.append(
             PaletteEntry(
                 id: "action.handoff.\(project.path)",
-                group: "快捷操作",
-                title: "复制接力卡",
+                group: FizzL10n.text("快捷操作", "Quick actions"),
+                title: FizzL10n.text("复制接力卡", "Copy Handoff card"),
                 subtitle: project.displayName,
                 symbol: "doc.on.clipboard",
                 tint: Color.secondary,
                 shortcut: nil,
-                keywords: "接力卡 handoff copy 交接 \(project.displayName)"
+                keywords: "复制接力卡 copy handoff card 交接 \(project.displayName)"
             ) {
                 let card = HandoffCardBuilder.build(project: project, copyMode: copyMode)
                 SystemActions.copy(card.markdown)
                 ToastCenter.shared.show(
-                    "接力卡已复制",
+                    FizzL10n.text("接力卡已复制", "Handoff card copied"),
                     symbol: "doc.on.clipboard.fill",
                     tint: Color.secondary,
-                    subtitle: "\(card.characterCount) 字"
+                    subtitle: FizzL10n.text("\(card.characterCount) 字", SessionSummaryText.englishCount(card.characterCount, "character"))
                 )
             }
         )
@@ -115,13 +116,13 @@ struct CommandPaletteView: View {
             result.append(
                 PaletteEntry(
                     id: "action.continue.\(project.path)",
-                    group: "快捷操作",
-                    title: "接着做",
+                    group: FizzL10n.text("快捷操作", "Quick actions"),
+                    title: FizzL10n.text("接着做", "Continue work"),
                     subtitle: "\(project.displayName) · \(HomeDashboardModel.toolTitle(resumable.tool))",
                     symbol: "play.fill",
                     tint: .secondary,
                     shortcut: nil,
-                    keywords: "接着做 继续 continue resume \(project.displayName)"
+                    keywords: "接着做 继续 continue work resume \(project.displayName)"
                 ) {
                     Task {
                         let res = await SessionResumeService.resume(session: resumable, projectPath: project.path)
@@ -131,7 +132,7 @@ struct CommandPaletteView: View {
                                 res.message,
                                 symbol: "exclamationmark.triangle.fill",
                                 tint: FizzTheme.statusWarning,
-                                subtitle: res.fallbackCommand != nil ? "已复制命令到剪贴板" : nil
+                                subtitle: res.fallbackCommand != nil ? FizzL10n.text("已复制命令到剪贴板", "Command copied to the clipboard") : nil
                             )
                         }
                     }
@@ -143,13 +144,13 @@ struct CommandPaletteView: View {
             result.append(
                 PaletteEntry(
                     id: "action.diff.\(project.path)",
-                    group: "快捷操作",
-                    title: "看改了什么",
+                    group: FizzL10n.text("快捷操作", "Quick actions"),
+                    title: FizzL10n.text("看改了什么", "See what changed"),
                     subtitle: project.displayName,
                     symbol: "doc.text.magnifyingglass",
                     tint: Color.secondary,
                     shortcut: nil,
-                    keywords: "看改了什么 diff 还原 对比 标记 \(project.displayName)"
+                    keywords: "看改了什么 see what changed changes diff restore compare mark 还原 对比 标记 \(project.displayName)"
                 ) {
                     store.openProjectDiff(project: project, markID: latestMark.id)
                 }
@@ -160,13 +161,13 @@ struct CommandPaletteView: View {
             result.append(
                 PaletteEntry(
                     id: "action.saveVersion.\(project.path)",
-                    group: "快捷操作",
-                    title: "存个版本",
-                    subtitle: "\(project.displayName) · \(project.dirtyCount) 个未保存改动",
+                    group: FizzL10n.text("快捷操作", "Quick actions"),
+                    title: FizzCopy.commitAction(copyMode).text,
+                    subtitle: FizzL10n.text("\(project.displayName) · \(project.dirtyCount) 个未保存改动", "\(project.displayName) · \(project.dirtyCount) unsaved \(project.dirtyCount == 1 ? "change" : "changes")"),
                     symbol: "bookmark.circle",
                     tint: Color.secondary,
                     shortcut: nil,
-                    keywords: "存个版本 提交 commit save \(project.displayName)"
+                    keywords: "存个版本 提交 commit save version \(project.displayName)"
                 ) {
                     store.openProjectSaveVersion(project: project)
                 }
@@ -176,13 +177,13 @@ struct CommandPaletteView: View {
         result.append(
             PaletteEntry(
                 id: "action.terminal.\(project.path)",
-                group: "快捷操作",
-                title: "在终端中打开",
+                group: FizzL10n.text("快捷操作", "Quick actions"),
+                title: FizzL10n.text("在终端中打开", "Open in Terminal"),
                 subtitle: project.displayName,
                 symbol: "terminal",
                 tint: .secondary,
                 shortcut: nil,
-                keywords: "终端 terminal iterm ghostty warp shell 命令行"
+                keywords: "在终端中打开 open in terminal iterm ghostty warp shell 命令行"
             ) {
                 SystemActions.openTerminal(project.path)
             }
@@ -191,29 +192,30 @@ struct CommandPaletteView: View {
         result.append(
             PaletteEntry(
                 id: "action.finder.\(project.path)",
-                group: "快捷操作",
-                title: "在 Finder 中显示",
+                group: FizzL10n.text("快捷操作", "Quick actions"),
+                title: FizzL10n.text("在 Finder 中显示", "Show in Finder"),
                 subtitle: project.displayName,
                 symbol: "folder",
                 tint: Color.secondary,
                 shortcut: nil,
-                keywords: "目录 文件"
+                keywords: "在 Finder 中显示 目录 文件 show in finder reveal file folder"
             ) {
                 SystemActions.reveal(project.path)
             }
         )
 
-        for editor in ProjectEditor.available(for: project.path) {
+        let editors = editorChoices?.path == project.path ? editorChoices?.editors ?? [] : []
+        for editor in editors {
             result.append(
                 PaletteEntry(
                     id: "action.editor.\(editor.rawValue).\(project.path)",
-                    group: "快捷操作",
-                    title: "用 \(editor.title) 打开",
+                    group: FizzL10n.text("快捷操作", "Quick actions"),
+                    title: FizzL10n.text("用 \(editor.title) 打开", "Open in \(editor.title)"),
                     subtitle: project.displayName,
                     symbol: "chevron.left.forwardslash.chevron.right",
                     tint: Color.secondary,
                     shortcut: nil,
-                    keywords: "编辑器 IDE \(editor.title.lowercased())"
+                    keywords: "用 打开 编辑器 open in editor IDE \(editor.title.lowercased())"
                 ) {
                     SystemActions.open(project.path, in: editor)
                 }
@@ -225,13 +227,13 @@ struct CommandPaletteView: View {
             result.append(
                 PaletteEntry(
                     id: "action.server.\(project.path)",
-                    group: "快捷操作",
-                    title: isRunning ? "停止开发服务…" : "启动开发服务",
+                    group: FizzL10n.text("快捷操作", "Quick actions"),
+                    title: isRunning ? FizzL10n.text("停止开发服务…", "Stop dev server…") : FizzL10n.text("启动开发服务", "Start dev server"),
                     subtitle: "\(project.displayName) · \(run.command)",
                     symbol: isRunning ? "stop.fill" : "play.fill",
                     tint: .secondary,
                     shortcut: nil,
-                    keywords: "服务 端口 启动 停止 dev server"
+                    keywords: "启动开发服务 停止开发服务 端口 start stop dev server port"
                 ) {
                     Task {
                         if isRunning {
@@ -248,13 +250,13 @@ struct CommandPaletteView: View {
             result.append(
                 PaletteEntry(
                     id: "action.test.\(project.path)",
-                    group: "快捷操作",
-                    title: "运行测试",
+                    group: FizzL10n.text("快捷操作", "Quick actions"),
+                    title: FizzL10n.text("运行测试", "Run tests"),
                     subtitle: project.displayName,
                     symbol: "checkmark.shield",
                     tint: Color.secondary,
                     shortcut: nil,
-                    keywords: "test 检查 check"
+                    keywords: "运行测试 run tests 检查 check"
                 ) {
                     actions.runTests(project, store: store)
                 }
@@ -264,18 +266,18 @@ struct CommandPaletteView: View {
         if let tool = project.sessions.lastTool,
            let id = project.sessions.lastSessionID,
            let session = project.sessions.recentSessions.first(where: { $0.tool == tool && $0.id == id }) {
-            let toolLabel = DetectedTool(rawValue: tool)?.title ?? tool.capitalized
+            let toolLabel = HomeDashboardModel.toolTitle(tool)
             if DetectedTool(rawValue: tool)?.supportsResume == true {
                 result.append(
                     PaletteEntry(
                         id: "action.continue.\(project.path)",
-                        group: "快捷操作",
-                        title: "继续最近会话",
+                        group: FizzL10n.text("快捷操作", "Quick actions"),
+                        title: FizzL10n.text("继续最近会话", "Resume latest session"),
                         subtitle: "\(project.displayName) · \(toolLabel)",
                         symbol: "play.fill",
                         tint: Color.secondary,
                         shortcut: nil,
-                        keywords: "继续 会话 resume codex claude"
+                        keywords: "继续最近会话 resume latest session codex claude"
                     ) {
                         Task {
                             _ = await SessionResumeService.resume(session: session, projectPath: project.path)
@@ -287,13 +289,13 @@ struct CommandPaletteView: View {
                 result.append(
                     PaletteEntry(
                         id: "action.resume.\(project.path)",
-                        group: "快捷操作",
-                        title: "复制 AI 恢复命令",
+                        group: FizzL10n.text("快捷操作", "Quick actions"),
+                        title: FizzL10n.text("复制 AI 恢复命令", "Copy resume command"),
                         subtitle: "\(project.displayName) · \(toolLabel)",
                         symbol: "doc.on.doc",
                         tint: Color.secondary,
                         shortcut: nil,
-                        keywords: "复制 命令 会话 resume codex claude"
+                        keywords: "复制 AI 恢复命令 会话 copy resume command codex claude"
                     ) {
                         SystemActions.copy(command)
                     }
@@ -306,13 +308,13 @@ struct CommandPaletteView: View {
                 result.append(
                     PaletteEntry(
                         id: "action.remote.open.\(project.path)",
-                        group: "快捷操作",
-                        title: "在浏览器中打开远程仓库",
+                        group: FizzL10n.text("快捷操作", "Quick actions"),
+                        title: FizzL10n.text("在浏览器中打开远程仓库", "Open remote repository in browser"),
                         subtitle: remote.raw,
                         symbol: "arrow.up.right.square",
                         tint: Color.secondary,
                         shortcut: nil,
-                        keywords: "远程 remote origin 仓库 browser \(url.absoluteString)"
+                        keywords: "在浏览器中打开远程仓库 open remote repository in browser origin \(url.absoluteString)"
                     ) {
                         SystemActions.openURL(url.absoluteString)
                     }
@@ -322,13 +324,13 @@ struct CommandPaletteView: View {
             result.append(
                 PaletteEntry(
                     id: "action.remote.copy.\(project.path)",
-                    group: "快捷操作",
-                    title: "复制远程地址",
+                    group: FizzL10n.text("快捷操作", "Quick actions"),
+                    title: FizzL10n.text("复制远程地址", "Copy remote URL"),
                     subtitle: remote.raw,
                     symbol: "link",
                     tint: Color.secondary,
                     shortcut: nil,
-                    keywords: "远程 remote origin 地址 url"
+                    keywords: "复制远程地址 copy remote url origin"
                 ) {
                     SystemActions.copy(remote.raw)
                 }
@@ -337,13 +339,13 @@ struct CommandPaletteView: View {
             result.append(
                 PaletteEntry(
                     id: "action.remote.missing.\(project.path)",
-                    group: "快捷操作",
-                    title: "没有远程仓库",
-                    subtitle: "在 Git 中设置 origin 后可打开",
+                    group: FizzL10n.text("快捷操作", "Quick actions"),
+                    title: FizzL10n.text("没有远程仓库", "No remote repository"),
+                    subtitle: FizzL10n.text("在 Git 中设置 origin 后可打开", "Set an origin remote in Git to open it here."),
                     symbol: "link.badge.plus",
                     tint: .secondary,
                     shortcut: nil,
-                    keywords: "远程 remote origin 未配置",
+                    keywords: "没有远程仓库 未配置 no remote repository origin missing unconfigured",
                     isEnabled: false
                 ) {}
             )
@@ -357,12 +359,12 @@ struct CommandPaletteView: View {
             let subtitle = [
                 PathTools.displayPath(project.path),
                 project.branch,
-                project.group,
+                project.groupTitle,
             ].compactMap { $0 }.joined(separator: " · ")
 
             return PaletteEntry(
                 id: "project.\(project.path)",
-                group: "项目",
+                group: FizzL10n.text("项目", "Projects"),
                 title: project.displayName,
                 subtitle: subtitle,
                 symbol: "folder.fill",
@@ -379,51 +381,51 @@ struct CommandPaletteView: View {
         var result: [PaletteEntry] = [
             PaletteEntry(
                 id: "command.home",
-                group: "命令",
-                title: "打开总览",
-                subtitle: "项目总览",
+                group: FizzL10n.text("命令", "Commands"),
+                title: FizzL10n.text("打开总览", "Open Workbench"),
+                subtitle: FizzL10n.text("项目总览", "Project overview"),
                 symbol: "square.grid.2x2",
                 tint: Color.secondary,
                 shortcut: "⌘0",
-                keywords: "首页 home dashboard",
+                keywords: "首页 打开总览 工作台 open workbench home dashboard overview",
                 pinned: true
             ) {
                 store.selectedPath = RepositoryStore.homeSelection
             },
             PaletteEntry(
                 id: "command.rescan",
-                group: "命令",
-                title: "重新扫描项目",
-                subtitle: "更新 Git、体积和运行状态",
+                group: FizzL10n.text("命令", "Commands"),
+                title: FizzL10n.text("重新扫描项目", "Rescan projects"),
+                subtitle: FizzL10n.text("更新 Git、体积和运行状态", "Refresh Git status, project sizes, and running services"),
                 symbol: "arrow.clockwise",
                 tint: Color.secondary,
                 shortcut: "⌘R",
-                keywords: "刷新 refresh scan",
+                keywords: "重新扫描项目 刷新 rescan projects refresh scan",
                 pinned: true
             ) {
                 Task { await store.scan() }
             },
             PaletteEntry(
                 id: "command.conversations",
-                group: "命令",
-                title: "打开对话",
-                subtitle: "跨项目 AI 对话时间线",
+                group: FizzL10n.text("命令", "Commands"),
+                title: FizzL10n.text("打开对话", "Open Conversations"),
+                subtitle: FizzL10n.text("跨项目 AI 对话时间线", "AI conversations across projects"),
                 symbol: "bubble.left.and.bubble.right",
                 tint: Color.secondary,
                 shortcut: nil,
-                keywords: "对话 会话 conversations sessions"
+                keywords: "打开对话 会话 open conversations sessions"
             ) {
                 store.openConversations()
             },
             PaletteEntry(
                 id: "command.add",
-                group: "命令",
-                title: "管理项目文件夹",
-                subtitle: "查看文件夹或扫描新的父目录",
+                group: FizzL10n.text("命令", "Commands"),
+                title: FizzL10n.text("管理项目文件夹", "Manage project folders"),
+                subtitle: FizzL10n.text("查看文件夹或扫描新的父目录", "View folders or scan a new parent folder"),
                 symbol: "plus",
                 tint: .secondary,
                 shortcut: nil,
-                keywords: "新增 导入 folder 文件夹"
+                keywords: "管理项目文件夹 新增 导入 manage project folders add import"
             ) {
                 Task { await store.addRoot() }
             }
@@ -431,18 +433,18 @@ struct CommandPaletteView: View {
 
         if let project = store.selectedProject {
             let starTitle = copyMode == .plain
-                ? (project.starred ? "取消关注当前项目" : "关注当前项目")
-                : (project.starred ? "取消当前项目星标" : "收藏当前项目")
+                ? (project.starred ? FizzL10n.text("取消关注当前项目", "Unfollow this project") : FizzL10n.text("关注当前项目", "Follow this project"))
+                : (project.starred ? FizzL10n.text("取消当前项目星标", "Unstar this project") : FizzL10n.text("收藏当前项目", "Star this project"))
             result.append(
                 PaletteEntry(
                     id: "command.star.\(project.path)",
-                    group: "命令",
+                    group: FizzL10n.text("命令", "Commands"),
                     title: starTitle,
                     subtitle: project.displayName,
                     symbol: project.starred ? "star.slash" : "star",
                     tint: Color.secondary,
                     shortcut: nil,
-                    keywords: "星标 收藏 关注 star focus"
+                    keywords: "取消关注当前项目 关注当前项目 取消当前项目星标 收藏当前项目 star unstar follow unfollow project focus"
                 ) {
                     store.toggleStar(project)
                 }
@@ -455,21 +457,21 @@ struct CommandPaletteView: View {
             result.append(
                 PaletteEntry(
                     id: "command.handoff.\(project.path)",
-                    group: "命令",
-                    title: "复制接力卡 · \(project.displayName)",
+                    group: FizzL10n.text("命令", "Commands"),
+                    title: FizzL10n.text("复制接力卡 · \(project.displayName)", "Copy Handoff card · \(project.displayName)"),
                     subtitle: PathTools.displayPath(project.path),
                     symbol: "doc.on.clipboard",
                     tint: Color.secondary,
                     shortcut: nil,
-                    keywords: "接力卡 handoff copy \(project.displayName)"
+                    keywords: "复制接力卡 copy handoff card \(project.displayName)"
                 ) {
                     let card = HandoffCardBuilder.build(project: project, copyMode: copyMode)
                     SystemActions.copy(card.markdown)
                     ToastCenter.shared.show(
-                        "接力卡已复制",
+                        FizzL10n.text("接力卡已复制", "Handoff card copied"),
                         symbol: "doc.on.clipboard.fill",
                         tint: Color.secondary,
-                        subtitle: "\(project.displayName) · \(card.characterCount) 字"
+                        subtitle: FizzL10n.text("\(project.displayName) · \(card.characterCount) 字", "\(project.displayName) · \(SessionSummaryText.englishCount(card.characterCount, "character"))")
                     )
                 }
             )
@@ -477,13 +479,13 @@ struct CommandPaletteView: View {
                 result.append(
                     PaletteEntry(
                         id: "command.continue.\(project.path)",
-                        group: "命令",
-                        title: "接着做 · \(project.displayName)",
+                        group: FizzL10n.text("命令", "Commands"),
+                        title: FizzL10n.text("接着做 · \(project.displayName)", "Continue work · \(project.displayName)"),
                         subtitle: HomeDashboardModel.toolTitle(resumable.tool),
                         symbol: "play.fill",
                         tint: .secondary,
                         shortcut: nil,
-                        keywords: "接着做 继续 continue resume \(project.displayName)"
+                        keywords: "接着做 继续 continue work resume \(project.displayName)"
                     ) {
                         Task {
                             let res = await SessionResumeService.resume(session: resumable, projectPath: project.path)
@@ -493,7 +495,7 @@ struct CommandPaletteView: View {
                                     res.message,
                                     symbol: "exclamationmark.triangle.fill",
                                     tint: FizzTheme.statusWarning,
-                                    subtitle: res.fallbackCommand != nil ? "已复制命令到剪贴板" : nil
+                                    subtitle: res.fallbackCommand != nil ? FizzL10n.text("已复制命令到剪贴板", "Command copied to the clipboard") : nil
                                 )
                             }
                         }
@@ -595,6 +597,11 @@ struct CommandPaletteView: View {
             return .handled
         }
         .onExitCommand(perform: dismiss)
+        .task(id: store.selectedProject?.path) {
+            guard let path = store.selectedProject?.path else { editorChoices = nil; return }
+            let editors = await Task.detached(priority: .utility) { ProjectEditor.available(for: path) }.value
+            if !Task.isCancelled { editorChoices = (path, editors) }
+        }
         .task {
             await store.loadRemotes(for: store.projects)
         }
@@ -606,12 +613,15 @@ struct CommandPaletteView: View {
             }
             try? await Task.sleep(for: .milliseconds(90))
             guard !Task.isCancelled else { return }
-            sessionSearchResults = await store.searchSessions(query: trimmed, limit: 8)
+            let hits = await store.searchSessions(query: trimmed, limit: 8)
+            guard !Task.isCancelled else { return }
+            sessionSearchResults = WorkbenchSearchHit.make(hits, query: trimmed)
         }
     }
 
     private var sessionEntries: [PaletteEntry] {
-        sessionSearchResults.compactMap { result in
+        sessionSearchResults.compactMap { hit in
+            let result = hit.result
             guard let project = store.projects.first(where: { $0.path == result.projectPath }) else {
                 return nil
             }
@@ -621,13 +631,13 @@ struct CommandPaletteView: View {
                 toolTitle,
                 Format.relative(result.modified),
             ]
-            if let snippet = result.matchedSnippet, !snippet.isEmpty {
+            if let snippet = hit.snippet, !snippet.isEmpty {
                 subtitleParts.append(snippet)
             }
             return PaletteEntry(
                 id: "session.\(result.id)",
-                group: "对话",
-                title: "「\(result.primaryIntent)」",
+                group: FizzL10n.text("对话", "Conversations"),
+                title: FizzL10n.text("「\(hit.title)」", "“\(hit.title)”"),
                 subtitle: subtitleParts.joined(separator: " · "),
                 symbol: result.endedWithError ? "exclamationmark.triangle" : "bubble.left.and.bubble.right",
                 tint: result.endedWithError ? FizzTheme.statusWarning : Color.secondary,
@@ -645,7 +655,7 @@ struct CommandPaletteView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
-            TextField("搜索项目、对话、分支或快捷操作", text: $query)
+            TextField(FizzL10n.text("搜索项目、对话、分支或快捷操作", "Search projects, conversations, branches, or actions"), text: $query)
                 .textFieldStyle(.plain)
                 .font(FizzTypography.sectionTitle(.regular))
                 .focused($searchFocused)
@@ -654,7 +664,7 @@ struct CommandPaletteView: View {
                 }
 
             if !query.isEmpty {
-                FizzIconButton(title: "清除搜索", symbol: "xmark.circle.fill", height: .compact) {
+                FizzIconButton(title: FizzL10n.text("清除搜索", "Clear search"), symbol: "xmark.circle.fill", height: .compact) {
                     query = ""
                     searchFocused = true
                 }
@@ -667,7 +677,7 @@ struct CommandPaletteView: View {
                 .padding(.vertical, 3)
                 .background(FizzTheme.mutedFill, in: RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
 
-            FizzIconButton(title: "关闭命令面板", symbol: "xmark", height: .compact, action: dismiss)
+            FizzIconButton(title: FizzL10n.text("关闭命令面板", "Close command palette"), symbol: "xmark", height: .compact, action: dismiss)
         }
         .padding(.horizontal, FizzSpacing.page)
         .frame(height: 52)
@@ -709,9 +719,9 @@ struct CommandPaletteView: View {
         VStack(spacing: FizzSpacing.row) {
             FizzIcon(.lg, symbol: "magnifyingglass")
                 .foregroundStyle(.tertiary)
-            Text("没有匹配结果")
+            Text(FizzL10n.text("没有匹配结果", "No matches"))
                 .font(FizzTypography.body(.medium))
-            Text("试试项目名、路径、分支、远程或动作")
+            Text(FizzL10n.text("试试项目名、路径、分支、远程或动作", "Try a project name, path, branch, remote, or action."))
                 .font(FizzTypography.caption)
                 .foregroundStyle(.secondary)
         }
@@ -722,13 +732,13 @@ struct CommandPaletteView: View {
     private func footer(canExecute: Bool) -> some View {
         FizzSheetFooter {
             HStack(spacing: FizzSpacing.grid) {
-                hint("↑↓", "选择")
-                hint("↵", "执行")
-                hint("esc", "关闭")
+                hint("↑↓", FizzL10n.text("选择", "Select"))
+                hint("↵", FizzL10n.text("执行", "Run"))
+                hint("esc", FizzL10n.text("关闭", "Close"))
             }
             Spacer(minLength: 0)
 
-            FizzActionButton(title: "执行所选", prominence: .primary, action: runSelected)
+            FizzActionButton(title: FizzL10n.text("执行所选", "Run selected"), prominence: .primary, action: runSelected)
                 .disabled(!canExecute)
         }
         .padding(.horizontal, FizzSpacing.page)
@@ -823,7 +833,7 @@ struct CommandPaletteView: View {
 
         for id in store.recentActionIDs {
             guard let entry = byID[id], entry.isEnabled, seen.insert(entry.id).inserted else { continue }
-            result.append(entry.inGroup("最近"))
+            result.append(entry.inGroup(FizzL10n.text("最近", "Recent")))
             if result.count == 3 { break }
         }
 
@@ -832,7 +842,7 @@ struct CommandPaletteView: View {
                   entry.isEnabled,
                   seen.insert(entry.id).inserted
             else { continue }
-            result.append(entry.inGroup("最近"))
+            result.append(entry.inGroup(FizzL10n.text("最近", "Recent")))
             if result.count == 5 { break }
         }
 
@@ -854,7 +864,7 @@ struct CommandPaletteView: View {
     }
 
     private func projectKeywords(_ project: RepoProject) -> String {
-        let stacks = project.stacks.flatMap(\.items).joined(separator: " ")
+        let stacks = project.stacks.flatMap { $0.items + $0.displayItems }.joined(separator: " ")
         let remote = store.cachedRemote(for: project.path)
         return [
             project.displayName,
@@ -1016,7 +1026,7 @@ private enum PaletteMatcher {
     private static func normalized(_ value: String) -> String {
         value.folding(
             options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
-            locale: .current
+            locale: FizzL10n.locale
         )
     }
 }

@@ -11,7 +11,7 @@ struct HomeHeaderView: View {
     let facets: HomeFacets
     let availableGroups: [String]
     let availableTools: [String]
-    var availableFrameworks: [String] = []
+    var availableFrameworks: [HomeDashboardModel.FrameworkChoice] = []
     var selectedFramework: String? = nil
     let selectionMode: Bool
     let groupCount: (String) -> Int
@@ -35,7 +35,7 @@ struct HomeHeaderView: View {
                 title: title,
                 subtitle: detail,
                 primaryAction: FizzActionButton(
-                    title: selectionMode ? "完成选择" : "批量选择",
+                    title: selectionMode ? FizzL10n.text("完成选择", "Done") : FizzL10n.text("批量选择", "Select projects"),
                     symbol: selectionMode ? "checkmark" : "checklist",
                     action: onToggleSelection
                 )
@@ -71,7 +71,7 @@ struct HomeHeaderView: View {
                 .accessibilityLabel(item.title)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("布局")
+        .accessibilityLabel(FizzL10n.text("布局", "Layout"))
     }
 
     private var coverPreviewToggle: some View {
@@ -81,22 +81,26 @@ struct HomeHeaderView: View {
                 set: { _ in onToggleCoverPreview() }
             )
         ) {
-            Text("封面")
+            Text(FizzL10n.text("封面", "Covers"))
                 .font(FizzTypography.caption)
                 .foregroundStyle(.secondary)
         }
         .toggleStyle(.switch)
         .controlSize(.small)
         .fixedSize(horizontal: true, vertical: false)
-        .help(showsCoverPreview ? "隐藏封面预览" : "显示封面预览")
-        .accessibilityLabel("显示封面预览")
-        .accessibilityValue(showsCoverPreview ? "开启" : "关闭")
+        .help(showsCoverPreview ? FizzL10n.text("隐藏封面预览", "Hide cover previews") : FizzL10n.text("显示封面预览", "Show cover previews"))
+        .accessibilityLabel(FizzL10n.text("显示封面预览", "Show cover previews"))
+        .accessibilityValue(showsCoverPreview ? FizzL10n.text("开启", "On") : FizzL10n.text("关闭", "Off"))
         .fizzKeyboardAction(action: onToggleCoverPreview)
     }
 
+    private var selectedFrameworkTitle: String? {
+        selectedFramework.map { key in availableFrameworks.first { $0.id == key }?.title ?? key }
+    }
+
     private var filterMenu: some View {
-        FizzMenuButton(title: "排序与筛选", symbol: "line.3.horizontal.decrease") {
-            Section("排序") {
+        FizzMenuButton(title: FizzL10n.text("排序与筛选", "Sort and filter"), symbol: "line.3.horizontal.decrease") {
+            Section(FizzL10n.text("排序", "Sort by")) {
                 ForEach(HomeSort.allCases) { item in
                     Button {
                         onSelectSort(item)
@@ -111,7 +115,7 @@ struct HomeHeaderView: View {
                     onSetGroup(nil)
                 } label: {
                     Label(
-                        "全部分组",
+                        FizzL10n.text("全部分组", "All groups"),
                         systemImage: facets.group == nil ? "checkmark" : "square.grid.2x2"
                     )
                 }
@@ -123,14 +127,14 @@ struct HomeHeaderView: View {
                         onSetGroup(group)
                     } label: {
                         Label(
-                            "\(group) · \(groupCount(group))",
+                            "\(ProjectGrouping.title(for: group)) · \(groupCount(group))",
                             systemImage: facets.group == group ? "checkmark" : "circle.fill"
                         )
                     }
                 }
             } label: {
                 Label(
-                    facets.group.map { "分组 · \($0)" } ?? "分组",
+                    facets.group.map { ProjectGrouping.title(for: $0) }.map { FizzL10n.text("分组 · \($0)", "Group · \($0)") } ?? FizzL10n.text("分组", "Group"),
                     systemImage: "square.grid.2x2"
                 )
             }
@@ -140,7 +144,7 @@ struct HomeHeaderView: View {
                 Button {
                     onSetColor(nil)
                 } label: {
-                    Label("全部颜色", systemImage: facets.color == nil ? "checkmark" : "circle")
+                    Label(FizzL10n.text("全部颜色", "All colors"), systemImage: facets.color == nil ? "checkmark" : "circle")
                 }
 
                 Divider()
@@ -157,7 +161,7 @@ struct HomeHeaderView: View {
                 }
             } label: {
                 Label(
-                    facets.color.map { "颜色 · \($0.label)" } ?? "颜色",
+                    facets.color.map { FizzL10n.text("颜色 · \($0.label)", "Color · \($0.label)") } ?? FizzL10n.text("颜色", "Color"),
                     systemImage: "paintpalette"
                 )
             }
@@ -166,7 +170,7 @@ struct HomeHeaderView: View {
                 Button {
                     onSetTool(nil)
                 } label: {
-                    Label("全部工具", systemImage: facets.tool == nil ? "checkmark" : "sparkles")
+                    Label(FizzL10n.text("全部工具", "All tools"), systemImage: facets.tool == nil ? "checkmark" : "sparkles")
                 }
 
                 Divider()
@@ -183,7 +187,7 @@ struct HomeHeaderView: View {
                 }
             } label: {
                 Label(
-                    facets.tool.map { "AI · \(HomeDashboardModel.toolTitle($0))" } ?? "AI 工具",
+                    facets.tool.map { "AI · \(HomeDashboardModel.toolTitle($0))" } ?? FizzL10n.text("AI 工具", "AI tools"),
                     systemImage: "sparkles"
                 )
             }
@@ -195,26 +199,26 @@ struct HomeHeaderView: View {
                         onSetFramework(nil)
                     } label: {
                         Label(
-                            "全部框架",
+                            FizzL10n.text("全部框架", "All frameworks"),
                             systemImage: selectedFramework == nil ? "checkmark" : "chevron.left.forwardslash.chevron.right"
                         )
                     }
 
                     Divider()
 
-                    ForEach(availableFrameworks, id: \.self) { framework in
+                    ForEach(availableFrameworks) { framework in
                         Button {
-                            onSetFramework(framework)
+                            onSetFramework(framework.id)
                         } label: {
                             Label(
-                                "\(framework) · \(frameworkCount(framework))",
-                                systemImage: selectedFramework == framework ? "checkmark" : "tag"
+                                "\(framework.title) · \(frameworkCount(framework.id))",
+                                systemImage: selectedFramework == framework.id ? "checkmark" : "tag"
                             )
                         }
                     }
                 } label: {
                     Label(
-                        selectedFramework.map { "框架 · \($0)" } ?? "框架",
+                        selectedFrameworkTitle.map { FizzL10n.text("框架 · \($0)", "Framework · \($0)") } ?? FizzL10n.text("框架", "Framework"),
                         systemImage: "chevron.left.forwardslash.chevron.right"
                     )
                 }
@@ -225,17 +229,17 @@ struct HomeHeaderView: View {
                 Button(role: .destructive) {
                     onClearFacets()
                 } label: {
-                    Label("清除筛选", systemImage: "xmark.circle")
+                    Label(FizzL10n.text("清除筛选", "Clear filters"), systemImage: "xmark.circle")
                 }
             }
         }
     }
 
     private var activeFilterChips: some View {
-        HStack(spacing: FizzSpacing.row) {
+        FlowLayout(spacing: FizzSpacing.row) {
             if let group = facets.group {
                 ActiveFilterChip(
-                    text: group,
+                    text: ProjectGrouping.title(for: group),
                     tint: ProjectGrouping.color(for: group)
                 ) {
                     onSetGroup(nil)
@@ -251,16 +255,16 @@ struct HomeHeaderView: View {
                     onSetTool(nil)
                 }
             }
-            if let selectedFramework {
-                ActiveFilterChip(text: selectedFramework, tint: Color.secondary) {
+            if let selectedFrameworkTitle {
+                ActiveFilterChip(text: selectedFrameworkTitle, tint: Color.secondary) {
                     onSetFramework(nil)
                 }
             }
 
-            FizzActionButton(title: "清除", height: .compact, action: onClearFacets)
+            FizzActionButton(title: FizzL10n.text("清除", "Clear"), height: .compact, action: onClearFacets)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("活动筛选")
+        .accessibilityLabel(FizzL10n.text("活动筛选", "Active filters"))
     }
 }
 
@@ -294,7 +298,7 @@ private struct ActiveFilterChip: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("移除 \(text) 筛选")
-        .accessibilityLabel("移除 \(text) 筛选")
+        .help(FizzL10n.text("移除 \(text) 筛选", "Remove \(text) filter"))
+        .accessibilityLabel(FizzL10n.text("移除 \(text) 筛选", "Remove \(text) filter"))
     }
 }

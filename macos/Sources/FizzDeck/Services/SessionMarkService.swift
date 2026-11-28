@@ -18,7 +18,21 @@ struct SessionMark: Identifiable, Codable, Sendable, Hashable {
     let changedFilesAtMark: [String]
     var pinned: Bool = false
     var label: String? = nil
+    var expiryReminderDismissed: Bool?
     var isProtectionBaseline: Bool { label == SessionMarkService.baselineLabel && sessionID == nil }
+
+    // System labels on disk also identify baseline and automatic checkpoints. Only localize for display.
+    var displayLabel: String {
+        switch label {
+        case SessionMarkService.baselineLabel where isProtectionBaseline:
+            FizzL10n.text(SessionMarkService.baselineLabel, "Version protection baseline")
+        case SessionMarkService.conversationStartLabel, nil:
+            FizzL10n.text(SessionMarkService.conversationStartLabel, "Before the session")
+        case SessionMarkService.preRestoreLabel:
+            FizzL10n.text(SessionMarkService.preRestoreLabel, "Backup before restore")
+        case let label?: label
+        }
+    }
 
     init(
         id: String = UUID().uuidString,
@@ -84,6 +98,7 @@ enum MarkPreferences {
 
 enum MarkStore {
     private static let maxUnpinnedPerProject = 60
+    private static let writeLock = NSLock()
 
     static func load(from file: URL = AppPaths.marksFile) -> [SessionMark] {
         (try? read(from: file)) ?? []
@@ -99,7 +114,7 @@ enum MarkStore {
     }
 
     static func save(_ marks: [SessionMark], to file: URL = AppPaths.marksFile) {
-        try? write(marks, to: file)
+        writeLock.withLock { try? write(marks, to: file) }
     }
 
     private static func write(_ marks: [SessionMark], to file: URL) throws {
@@ -124,15 +139,38 @@ enum MarkStore {
 
     @discardableResult
     static func upsertChecked(_ mark: SessionMark, in file: URL) throws -> [SessionMark] {
-        var all = try read(from: file)
-        if let existing = all.firstIndex(where: { $0.id == mark.id }) {
-            all[existing] = mark
-        } else {
-            all.append(mark)
+        try edit(file) { all in
+            if let existing = all.firstIndex(where: { $0.id == mark.id }) {
+                all[existing] = mark
+            } else {
+                all.append(mark)
+            }
+            all = prune(all)
         }
-        let pruned = prune(all)
-        try write(pruned, to: file)
-        return pruned
+    }
+
+    static func setPinned(_ pinned: Bool, id: String, in file: URL) throws -> [SessionMark] {
+        try edit(file) { all in
+            guard let index = all.firstIndex(where: { $0.id == id }) else { throw CocoaError(.fileNoSuchFile) }
+            all[index].pinned = pinned
+            if !pinned { all = prune(all) }
+        }
+    }
+
+    static func dismissExpiryReminders(_ ids: Set<String>, in file: URL) throws -> [SessionMark] {
+        try edit(file) { all in
+            for index in all.indices where ids.contains(all[index].id) { all[index].expiryReminderDismissed = true }
+        }
+    }
+
+    // A restore backup can be collected off the main actor while a reminder is being handled.
+    private static func edit(_ file: URL, _ change: (inout [SessionMark]) throws -> Void) throws -> [SessionMark] {
+        try writeLock.withLock {
+            var all = try read(from: file)
+            try change(&all)
+            try write(all, to: file)
+            return all
+        }
     }
 
     private static func prune(_ marks: [SessionMark]) -> [SessionMark] {
@@ -181,6 +219,8 @@ struct MarkRestoreResult: Sendable, Equatable {
 
 enum SessionMarkService {
     static let baselineLabel = "开启版本保护时的基线"
+    static let conversationStartLabel = "对话开始前的样子"
+    static let preRestoreLabel = "还原前自动备份"
     static let maxFileBytes: Int64 = 5 * 1024 * 1024
     static let maxTrackedCount = 5_000
     private static let maxDirtyFilesStored = 50
@@ -418,7 +458,7 @@ enum SessionMarkService {
                 deletions: 0,
                 truncated: false,
                 binary: false,
-                note: "标记已过期，无法读取对比内容。"
+                note: FizzL10n.text("标记已过期，无法读取对比内容。", "This checkpoint has expired. Its diff is no longer available.")
             )
         }
 
@@ -439,7 +479,7 @@ enum SessionMarkService {
                     deletions: 0,
                     truncated: false,
                     binary: false,
-                    note: "无法生成文件对比。"
+                    note: FizzL10n.text("无法生成文件对比。", "Couldn’t generate a diff for this file.")
                 )
             }
 
@@ -463,12 +503,12 @@ enum SessionMarkService {
                     deletions: 0,
                     truncated: false,
                     binary: true,
-                    note: "二进制文件仅显示状态，不展开内容。"
+                    note: FizzL10n.text("二进制文件仅显示状态，不展开内容。", "Only the status is available for binary files.")
                 )
             }
 
             let parsed = GitService.parseUnifiedDiff(raw)
-            let sectionTitle = change.status == .deleted ? "标记时的内容（后来被删除）" : "与标记时的对比"
+            let sectionTitle = change.status == .deleted ? FizzL10n.text("标记时的内容（后来被删除）", "Contents at checkpoint (since deleted)") : FizzL10n.text("与标记时的对比", "Changes since checkpoint")
             return GitFileDiff(
                 path: change.path,
                 sections: [GitDiffSection(id: "mark-diff", title: sectionTitle, lines: parsed.lines)],
@@ -494,7 +534,7 @@ enum SessionMarkService {
         else {
             return MarkRestoreResult(
                 succeeded: false,
-                message: "这个对话标记已过期（超过 14 天被 Git 清理），无法还原",
+                message: FizzL10n.text("这个对话标记已过期（超过 14 天被 Git 清理），无法还原", "This session checkpoint has expired. Git removed it after 14 days, so it can’t be restored."),
                 restoredCount: 0,
                 trashedCount: 0,
                 preRestoreMark: nil
@@ -506,7 +546,7 @@ enum SessionMarkService {
         guard !uniqueRestore.isEmpty || !uniqueTrash.isEmpty else {
             return MarkRestoreResult(
                 succeeded: false,
-                message: "没有选择要还原的文件",
+                message: FizzL10n.text("没有选择要还原的文件", "Select at least one file to restore."),
                 restoredCount: 0,
                 trashedCount: 0,
                 preRestoreMark: nil
@@ -515,25 +555,25 @@ enum SessionMarkService {
 
         let backupMark = await createMark(
             for: directory,
-            label: "还原前自动备份",
+            label: preRestoreLabel,
             allowGitSnapshot: true,
             tmpDir: tmpDir
         )
         if FileTools.exists(directory.appendingPathComponent(ProtectionFiles.marker)) {
             guard let backupSHA = backupMark.snapshotSHA,
                   let tree = await Shell.run("git", ["ls-tree", "-rz", "--name-only", backupSHA], cwd: directory), tree.succeeded else {
-                return MarkRestoreResult(succeeded: false, message: "无法核对还原前的备份，未修改文件。", restoredCount: 0, trashedCount: 0, preRestoreMark: nil)
+                return MarkRestoreResult(succeeded: false, message: FizzL10n.text("无法核对还原前的备份，未修改文件。", "Couldn’t verify the backup. No files were changed."), restoredCount: 0, trashedCount: 0, preRestoreMark: nil)
             }
             let captured = Set(tree.text.split(separator: "\0").map(String.init))
             for path in uniqueRestore + uniqueTrash {
                 let file = directory.appendingPathComponent(path)
                 if (try? FileTools.manager.attributesOfItem(atPath: file.path)) != nil, !captured.contains(path) {
-                    return MarkRestoreResult(succeeded: false, message: "所选文件已变化，无法安全备份。请重新查看差异。", restoredCount: 0, trashedCount: 0, preRestoreMark: nil)
+                    return MarkRestoreResult(succeeded: false, message: FizzL10n.text("所选文件已变化，无法安全备份。请重新查看差异。", "The selected files changed and couldn’t be backed up safely. Review the diff again."), restoredCount: 0, trashedCount: 0, preRestoreMark: nil)
                 }
             }
         }
         guard backupMark.kind == .gitSnapshot, (try? MarkStore.upsertChecked(backupMark, in: marksFile)) != nil else {
-            return MarkRestoreResult(succeeded: false, message: "无法保存还原前的备份，未修改文件。", restoredCount: 0,
+            return MarkRestoreResult(succeeded: false, message: FizzL10n.text("无法保存还原前的备份，未修改文件。", "Couldn’t save a backup before restoring. No files were changed."), restoredCount: 0,
                                      trashedCount: 0, preRestoreMark: nil)
         }
 
@@ -549,7 +589,7 @@ enum SessionMarkService {
             ), restoreResult.succeeded else {
                 return MarkRestoreResult(
                     succeeded: false,
-                    message: "还原文件失败，请检查文件是否被其他程序占用",
+                    message: FizzL10n.text("还原文件失败，请检查文件是否被其他程序占用", "Couldn’t restore the files. Check whether another app is using them."),
                     restoredCount: 0,
                     trashedCount: 0,
                     preRestoreMark: backupMark
@@ -572,7 +612,7 @@ enum SessionMarkService {
                 } catch {
                     return MarkRestoreResult(
                         succeeded: false,
-                        message: "部分新建文件移入废纸篓失败：\(relPath)",
+                        message: FizzL10n.text("部分新建文件移入废纸篓失败：\(relPath)", "Couldn’t move a new file to the Trash: \(relPath)"),
                         restoredCount: restoredCount,
                         trashedCount: trashedCount,
                         preRestoreMark: backupMark
@@ -583,11 +623,11 @@ enum SessionMarkService {
 
         let summary: String
         if restoredCount > 0 && trashedCount > 0 {
-            summary = "已还原 \(restoredCount) 个文件，并将 \(trashedCount) 个新建文件移入废纸篓"
+            summary = FizzL10n.text("已还原 \(restoredCount) 个文件，并将 \(trashedCount) 个新建文件移入废纸篓", "Restored \(SessionSummaryText.englishCount(restoredCount, "file")) and moved \(SessionSummaryText.englishCount(trashedCount, "new file")) to the Trash.")
         } else if restoredCount > 0 {
-            summary = "已还原 \(restoredCount) 个文件"
+            summary = FizzL10n.text("已还原 \(restoredCount) 个文件", "Restored \(SessionSummaryText.englishCount(restoredCount, "file")).")
         } else {
-            summary = "已将 \(trashedCount) 个新建文件移入废纸篓"
+            summary = FizzL10n.text("已将 \(trashedCount) 个新建文件移入废纸篓", "Moved \(SessionSummaryText.englishCount(trashedCount, "new file")) to the Trash.")
         }
 
         return MarkRestoreResult(

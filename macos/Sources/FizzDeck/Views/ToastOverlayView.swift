@@ -183,8 +183,8 @@ private struct ToastCardView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("关闭提示")
-                .accessibilityLabel("关闭提示")
+                .help(FizzL10n.text("关闭提示", "Dismiss notification"))
+                .accessibilityLabel(FizzL10n.text("关闭提示", "Dismiss notification"))
                 .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
         }

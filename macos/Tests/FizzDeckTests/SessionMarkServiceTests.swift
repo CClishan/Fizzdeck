@@ -2,6 +2,19 @@ import XCTest
 @testable import FizzDeck
 
 final class SessionMarkServiceTests: XCTestCase {
+    func testLocalizedCheckpointLabelKeepsStoredBaselineAndCustomNotes() throws {
+        let baseline = SessionMark(projectPath: "/fixture", kind: .gitSnapshot, label: SessionMarkService.baselineLabel)
+        var custom = baseline
+        custom.label = "保留自定义说明"
+        let original = try JSONEncoder().encode(baseline)
+        try FizzL10n.$languageOverride.withValue(.english) {
+            let decoded = try JSONDecoder().decode(SessionMark.self, from: original)
+            XCTAssertTrue(decoded.isProtectionBaseline)
+            XCTAssertEqual(decoded.displayLabel, "Version protection baseline")
+            XCTAssertEqual(decoded.label, "开启版本保护时的基线")
+            XCTAssertEqual(custom.displayLabel, "保留自定义说明")
+        }
+    }
     private func makeTempDir(prefix: String) throws -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)

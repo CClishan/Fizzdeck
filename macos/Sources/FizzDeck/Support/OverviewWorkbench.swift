@@ -1,6 +1,14 @@
 import CoreGraphics
 import Foundation
 
+extension SessionMark {
+    static let manualCheckpointLabel = "手动记录点"
+
+    var projectCheckpointTitle: String {
+        label == Self.manualCheckpointLabel ? FizzL10n.text(Self.manualCheckpointLabel, "Manual checkpoint") : displayLabel
+    }
+}
+
 struct WorkbenchDay: Equatable, Sendable {
     let key: String
     let count: Int
@@ -97,9 +105,7 @@ enum WorkbenchMetrics {
             rounded = (rounded / 1_000 * 10).rounded() / 10
             index += 1
         }
-        let text = rounded == rounded.rounded()
-            ? String(format: "%.0f", rounded)
-            : String(format: "%.1f", rounded)
+        let text = rounded.formatted(.number.grouping(.never).precision(.fractionLength(0...1)).locale(FizzL10n.locale))
         return ByteParts(value: text, unit: units[max(0, index)])
     }
 }

@@ -15,14 +15,14 @@ struct ContinueWorkSection: View {
                     }
                 }
             } else {
-                Text("暂无可继续的对话")
+                Text(FizzL10n.text("暂无可继续的对话", "No conversations to resume"))
                     .font(FizzTypography.body)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, FizzSpacing.row)
             }
         } accessory: {
             if !items.isEmpty {
-                Text("\(items.count) 项")
+                Text(FizzL10n.text("\(items.count) 项", SessionSummaryText.englishCount(items.count, "item")))
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -42,13 +42,13 @@ private struct ContinueWorkRow: View {
 
     private var summary: String {
         let cleaned = SessionSummaryText.clean(item.summary)
-        return cleaned.isEmpty ? "\(item.toolTitle) 会话" : cleaned
+        return cleaned.isEmpty ? FizzL10n.text("\(item.toolTitle) 会话", "\(item.toolTitle) session") : cleaned
     }
 
     private var metadataLine: String {
         var parts = [Format.relative(item.modified)]
-        if item.touchedFileCount > 0 { parts.append("改了 \(item.touchedFileCount) 个文件") }
-        if let minutes = item.durationMinutes, minutes > 0 { parts.append("\(minutes) 分钟") }
+        if item.touchedFileCount > 0 { parts.append(FizzL10n.text("改了 \(item.touchedFileCount) 个文件", "\(SessionSummaryText.englishCount(item.touchedFileCount, "file")) changed")) }
+        if let minutes = item.durationMinutes, minutes > 0 { parts.append(FizzL10n.text("\(minutes) 分钟", "\(minutes) min")) }
         if let cost = Format.cost(item.session.costUSD, estimated: item.session.costIsEstimate ?? false) {
             parts.append(cost)
         }
@@ -59,28 +59,30 @@ private struct ContinueWorkRow: View {
         if featured {
             VStack(alignment: .leading, spacing: FizzSpacing.row) {
                 projectLink
-                if copyMode == .plain {
-                    let aiSummary = SummaryEngine.shared.cachedOrRuleBasedSessionSummary(
-                        for: item.session, projectName: item.project.displayName, copyMode: copyMode
-                    )
-                    if aiSummary.isAIGenerated {
-                        Text("✦ \(aiSummary.headline)")
-                            .font(FizzTypography.caption)
-                            .foregroundStyle(Color.secondary)
-                            .lineLimit(1)
-                    }
+                if copyMode == .plain, let summary = SummaryEngine.shared.sessionSummaries[item.session.stableID],
+                   summary.isAIGenerated, summary.fingerprint == SummaryCacheStore.sessionFingerprint(for: item.session) {
+                    Text("✦ \(summary.headline)")
+                        .font(FizzTypography.caption)
+                        .foregroundStyle(Color.secondary)
+                        .lineLimit(1)
                 }
                 Text(metadataLine)
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                HStack(spacing: FizzSpacing.row) {
-                    Spacer(minLength: 0)
+                    .fixedSize(horizontal: false, vertical: true)
+                FlowLayout(spacing: FizzSpacing.row) {
                     HandoffCopyButton(project: item.project, compact: true)
                     SessionContinueButton(project: item.project, style: .prominent)
                 }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .fizzSubcard()
+            .task(id: copyMode == .plain ? item.session : nil) {
+                guard copyMode == .plain else { return }
+                _ = SummaryEngine.shared.cachedOrRuleBasedSessionSummary(
+                    for: item.session, projectName: item.project.displayName, copyMode: copyMode
+                )
+            }
         } else {
             HStack(spacing: FizzSpacing.row) {
                 projectLink
@@ -103,7 +105,7 @@ private struct ContinueWorkRow: View {
                         if item.endedWithError {
                             FizzIcon(.xs, symbol: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.secondary)
-                                .accessibilityLabel("报错结束")
+                                .accessibilityLabel(FizzL10n.text("报错结束", "Failed"))
                         }
                         if featured { HomeToolBadge(tool: item.session.tool, compact: true) }
                     }
@@ -118,6 +120,6 @@ private struct ContinueWorkRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("查看 \(item.project.displayName) 的进度")
+        .help(FizzL10n.text("查看 \(item.project.displayName) 的进度", "View Progress for \(item.project.displayName)"))
     }
 }

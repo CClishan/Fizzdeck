@@ -6,18 +6,20 @@ struct MenuBarLabel: View {
     let actions: ProjectActions
 
     @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
-    @State private var now = Date()
+    private static let initialDate = Date()
+    @State private var asOf = MenuBarLabel.initialDate
 
-    private var attentionCount: Int {
+    private func attentionCount(at now: Date) -> Int {
         let focusedPaths = copyMode == .plain
-            ? ProjectFocusPolicy.partition(projects: store.projects).focusedPaths
+            ? ProjectFocusPolicy.partition(projects: store.projects, now: now).focusedPaths
             : nil
         let items = ProjectAttentionQueue
             .items(
                 projects: store.projects,
                 testRuns: actions.testRuns,
                 focusedPaths: focusedPaths,
-                copyMode: copyMode
+                copyMode: copyMode,
+                doctorReports: store.doctorReports
             )
             .filter { item in
                 if copyMode == .plain && !item.kind.isCritical {
@@ -29,41 +31,49 @@ struct MenuBarLabel: View {
                     at: now
                 )
             }
-        let reports = store.doctorReports.filter { path, _ in
-            guard let project = store.projects.first(where: { $0.path == path }) else {
-                return false
-            }
-            return !store.isAttentionSuppressed(
-                for: project,
-                kind: .doctorCritical,
-                at: now
-            )
+        return MenuBarAttentionSummary.count(items: items)
+    }
+
+    static func nextExpiry(in projects: [RepoProject], mode: CopyMode, after asOf: Date,
+                           preference: (RepoProject, ProjectAttentionKind) -> AttentionPreference?) -> Date? {
+        var next: Date?
+        func consider(_ date: Date?) {
+            guard let date, date > asOf else { return }
+            next = min(next ?? date, date)
         }
-        return MenuBarAttentionSummary.count(
-            items: items,
-            doctorReports: reports,
-            focusedPaths: focusedPaths
-        )
+        for project in projects {
+            if mode == .plain, let expiry = ProjectFocusPolicy.autoFocusExpiry(for: project) {
+                consider(expiry.addingTimeInterval(1)) // Focus includes the cutoff itself.
+            }
+            for kind in ProjectAttentionKind.allCases where mode == .pro || kind.isCritical {
+                if let rule = preference(project, kind), !rule.muted {
+                    consider(rule.snoozedUntil)
+                }
+            }
+        }
+        return next
     }
 
     var body: some View {
+        let count = attentionCount(at: asOf)
+        let deadline = Self.nextExpiry(in: store.projects, mode: copyMode, after: asOf, preference: store.attentionPreference)
+        let feedback = MenuBarHandoff.shared.feedback.current
+        let description = MenuBarHandoff.shared.feedbackTitle ?? FizzL10n.text("待处理 \(count) 项", "\(count) pending")
+        // Status-item layout snapshots this view: keep its shape and image size stable.
         HStack(spacing: 4) {
-            FizzIcon(.sm, symbol: attentionCount > 0 ? "exclamationmark.circle.fill" : "checkmark.circle")
-            Text("\(attentionCount)")
-                .font(FizzTypography.caption(.semibold))
+            FizzIcon(.sm, symbol: feedback?.symbol ?? (count > 0 ? "exclamationmark.circle.fill" : "checkmark.circle"))
+            Text("\(count)").font(FizzTypography.caption(.semibold))
         }
         .foregroundStyle(.primary)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("FizzDeck，待处理 \(attentionCount) 项")
-        .task {
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: .seconds(60))
-                } catch {
-                    return
-                }
-                now = Date()
-            }
+        .accessibilityLabel(FizzL10n.text("FizzDeck，\(description)", "FizzDeck, \(description)"))
+        .help(description)
+        .task(id: deadline) {
+            guard let deadline else { return }
+            do { try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow))) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            asOf = max(deadline, Date())
         }
     }
 }
@@ -75,15 +85,8 @@ struct MenuBarMenu: View {
     @Environment(\.openWindow) private var openWindow
     @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
 
-    private var recentProjects: [RepoProject] {
-        Array(store.projects.prefix(6))
-    }
-
-    private var attentionItems: [ProjectAttentionItem] {
+    private func attentionCount(focusedPaths: Set<String>?) -> Int {
         let now = Date()
-        let focusedPaths = copyMode == .plain
-            ? ProjectFocusPolicy.partition(projects: store.projects).focusedPaths
-            : nil
         return ProjectAttentionQueue
             .items(
                 projects: store.projects,
@@ -92,7 +95,7 @@ struct MenuBarMenu: View {
                 copyMode: copyMode,
                 doctorReports: store.doctorReports
             )
-            .filter {
+            .count {
                 !store.isAttentionSuppressed(
                     for: $0.project,
                     kind: $0.kind,
@@ -101,78 +104,59 @@ struct MenuBarMenu: View {
             }
     }
 
-    private var activeAIProjects: [RepoProject] {
-        store.projects
-            .filter { store.activeAIProjectPaths.contains($0.path) }
-            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
-    }
-
     private var runningProjects: [RepoProject] {
         store.projects
             .filter { $0.port == .running }
             .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
     }
 
-    private var recentSessions: [MenuBarSession] {
-        var seen = Set<String>()
-        return store.projects
-            .flatMap { project in
-                project.sessions.recentSessions.compactMap { session -> MenuBarSession? in
-                    guard session.kind == .conversation,
-                          session.resumeCommand != nil,
-                          DetectedTool(rawValue: session.tool)?.supportsResume == true,
-                          seen.insert(session.stableID).inserted
-                    else { return nil }
-                    return MenuBarSession(project: project, session: session)
-                }
-            }
-            .sorted { $0.session.modified > $1.session.modified }
-            .prefix(5)
-            .map { $0 }
-    }
-
     var body: some View {
+        let partition = ProjectFocusPolicy.partition(projects: store.projects)
+        let focused = MenuBarRemoteProject.top(in: partition, activeAIPaths: store.activeAIProjectPaths)
+        let count = attentionCount(focusedPaths: copyMode == .plain ? partition.focusedPaths : nil)
+        let running = runningProjects
         Group {
-            Button("打开总览") {
-                show(nil)
+            if let title = MenuBarHandoff.shared.feedbackTitle {
+                Text(title)
             }
-            Button("重新扫描") {
-                Task { await store.scan() }
-            }
-            .disabled(store.phase == .scanning)
-
-            if !activeAIProjects.isEmpty {
-                Divider()
-                Section("AI 正在干活") {
-                    ForEach(activeAIProjects) { project in
-                        Button("AI 正在 \(project.displayName) 里干活") {
-                            store.openProject(project, tab: .progress)
-                            presentMainWindow()
-                        }
-                    }
+            Section(FizzL10n.text("关注项目", "Followed projects")) {
+                if focused.isEmpty {
+                    Text(FizzL10n.text("暂无关注项目", "No followed projects"))
                 }
+                ForEach(focused) { item in projectMenu(item) }
             }
 
-            if !attentionItems.isEmpty {
+            Divider()
+            Button(FizzL10n.text("打开总览", "Open Workbench")) {
+                store.openDashboard()
+                presentMainWindow()
+            }
+            Button(FizzL10n.text("查看全部体检", "Open Doctor")) {
+                store.openCleanup()
+                presentMainWindow()
+            }
+
+            if count > 0 {
                 Divider()
                 Section(FizzCopy.attentionTitle(copyMode)) {
-                    Button("查看 \(attentionItems.count) 项\(FizzCopy.attentionTitle(copyMode))") {
-                        show(nil)
+                    Button(FizzL10n.text("查看 \(count) 项\(FizzCopy.attentionTitle(copyMode))", "\(FizzCopy.attentionTitle(copyMode)): \(count)")) {
+                        store.openDashboard()
+                        presentMainWindow()
                     }
                 }
             }
 
-            if !runningProjects.isEmpty {
+            if !running.isEmpty {
                 Divider()
-                Section("正在运行的服务") {
-                    ForEach(runningProjects) { project in
+                Section(FizzL10n.text("正在运行的服务", "Running services")) {
+                    ForEach(running) { project in
                         if let port = project.run?.port, port > 0 {
                             MenuBarServiceRow {
                                 SystemActions.openURL("http://127.0.0.1:\(port)")
                             } content: {
                                 HStack(spacing: 8) {
                                     RunningPulseDot()
-                                    Text("打开 \(project.displayName) 预览")
+                                    Text(FizzL10n.text("打开 \(project.displayName) 预览", "Preview \(project.displayName)"))
                                         .lineLimit(1)
                                     Spacer(minLength: 12)
                                     Text(":\(port)")
@@ -188,7 +172,7 @@ struct MenuBarMenu: View {
                                 FizzIcon(.xs, symbol: "stop.fill")
                                     .foregroundStyle(.secondary)
                                     .frame(width: 9)
-                                Text("停止 \(project.displayName)…")
+                                Text(FizzL10n.text("停止 \(project.displayName)…", "Stop \(project.displayName)…"))
                                     .lineLimit(1)
                                 Spacer(minLength: 12)
                             }
@@ -197,71 +181,62 @@ struct MenuBarMenu: View {
                 }
             }
 
-            if !recentSessions.isEmpty {
-                Divider()
-                Section("最近可继续的会话") {
-                    ForEach(recentSessions) { item in
-                        Button {
-                            resume(item)
-                        } label: {
-                            Text(
-                                "\(item.project.displayName) · "
-                                    + "\(DetectedTool(rawValue: item.session.tool)?.title ?? item.session.tool)"
-                                    + " · \(Format.relative(item.session.modified))"
-                            )
-                        }
-                    }
-                }
-            }
-
-            if !recentProjects.isEmpty {
-                Divider()
-                Section("最近项目") {
-                    ForEach(recentProjects) { project in
-                        Menu(project.displayName) {
-                            Button("打开项目") {
-                                show(project)
-                            }
-                            if let mark = MenuBarSnapshotMarkPolicy.latestCandidate(
-                                in: store.marks(for: project.path)
-                            ) {
-                                Button("看最近一次对话改了什么") {
-                                    openRecentMark(mark, for: project)
-                                }
-                            }
-                            Button("复制接力卡") {
-                                let result = HandoffCardBuilder.build(project: project, copyMode: copyMode)
-                                SystemActions.copy(result.markdown)
-                                ToastCenter.shared.show(
-                                    "接力卡已复制",
-                                    symbol: "doc.on.clipboard.fill",
-                                    tint: Color.secondary,
-                                    subtitle: "\(project.displayName) · \(result.characterCount) 字"
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
             Divider()
-            Button("退出 FizzDeck") {
+            Button(FizzL10n.text("退出 FizzDeck", "Quit FizzDeck")) {
                 NSApp.terminate(nil)
             }
         }
     }
 
-    private func resume(_ item: MenuBarSession) {
+    private func projectMenu(_ item: MenuBarRemoteProject) -> some View {
+        let project = item.project
+        return Menu(item.title) {
+            if let session = item.resumableSession {
+                Button(FizzL10n.text("继续最近会话 · \(HomeDashboardModel.toolTitle(session.tool))", "Resume latest session · \(HomeDashboardModel.toolTitle(session.tool))")) {
+                    resume(session, for: project)
+                }
+            } else {
+                Text(FizzL10n.text("暂无可恢复会话", "No session to resume"))
+            }
+            Button(FizzL10n.text("复制接力卡", "Copy Handoff card")) {
+                MenuBarHandoff.shared.copy(project, copyMode: copyMode, actions: actions)
+            }
+            Menu(FizzL10n.text("其他接力卡", "Other Handoff cards")) {
+                ForEach([HandoffCardScenario.fixError, .notes], id: \.self) { scenario in
+                    Button(scenario.title) {
+                        MenuBarHandoff.shared.copy(project, scenario: scenario, copyMode: copyMode, actions: actions)
+                    }
+                }
+            }
+            Divider()
+            Button(FizzL10n.text("打开项目", "Open project")) {
+                store.openProject(project)
+                presentMainWindow()
+            }
+            Button(FizzL10n.text("查看体检", "View Doctor")) {
+                store.openProject(project, tab: .run)
+                presentMainWindow()
+            }
+            if let mark = MenuBarSnapshotMarkPolicy.latestCandidate(in: store.marks(for: project.path)) {
+                Button(FizzL10n.text("看最近一次对话改了什么", "See what changed in the last conversation")) {
+                    openRecentMark(mark, for: project)
+                }
+            }
+        }
+    }
+
+    private func resume(_ session: SessionRecord, for project: RepoProject) {
         Task {
             let result = await SessionResumeService.resume(
-                session: item.session,
-                projectPath: item.project.path
+                session: session,
+                projectPath: project.path,
+                preferredTarget: .cli
             )
             if !result.success {
                 await LocalNotifications.send(
-                    title: "会话恢复失败",
-                    body: "\(item.project.displayName) · \(result.message)",
-                    projectPath: item.project.path,
+                    title: FizzL10n.text("会话恢复失败", "Couldn’t resume session"),
+                    body: SecretRedactor.redact("\(project.displayName) · \(result.message)").text,
+                    projectPath: project.path,
                     tab: .progress
                 )
             }
@@ -276,27 +251,16 @@ struct MenuBarMenu: View {
             )
             guard isAvailable else {
                 ToastCenter.shared.show(
-                    "这次对话的改动已经找不到了",
+                    FizzL10n.text("这次对话的改动已经找不到了", "Changes from this conversation are no longer available"),
                     symbol: "exclamationmark.triangle.fill",
                     tint: FizzTheme.statusWarning,
-                    subtitle: "标记可能已被 Git 清理，可以打开进度页看当时的记录"
+                    subtitle: FizzL10n.text("标记可能已被 Git 清理，可以打开进度页看当时的记录", "Git may have removed the snapshot. Open Progress to view the record.")
                 )
                 return
             }
             store.openProjectDiff(project: project, markID: mark.id)
             presentMainWindow()
         }
-    }
-
-    private func show(_ project: RepoProject?) {
-        store.isCommandPalettePresented = false
-        if let project {
-            store.openProject(project)
-        } else {
-            store.selectedPath = RepositoryStore.homeSelection
-            store.requestedTab = nil
-        }
-        presentMainWindow()
     }
 
     private func presentMainWindow() {
@@ -312,11 +276,70 @@ struct MenuBarMenu: View {
     }
 }
 
-private struct MenuBarSession: Identifiable {
+struct MenuBarRemoteProject: Identifiable {
     let project: RepoProject
-    let session: SessionRecord
+    let isAIActive: Bool
+    private let lastConversationAt: Date?
 
-    var id: String { "\(project.path):\(session.stableID)" }
+    var id: String { project.path }
+    var title: String {
+        let suffix = isAIActive ? FizzL10n.text(" · AI 活跃", " · AI active") : ""
+        let name = SecretRedactor.redact(project.displayName).text
+        let limit = 30 - suffix.count
+        return (name.count > limit ? String(name.prefix(limit - 1)) + "…" : name) + suffix
+    }
+
+    var resumableSession: SessionRecord? {
+        project.sessions.recentSessions.lazy.filter {
+            DetectedTool(rawValue: $0.tool)?.supportsResume == true && $0.resumeCommand != nil
+        }.min {
+            $0.modified == $1.modified ? $0.stableID < $1.stableID : $0.modified > $1.modified
+        }
+    }
+
+    static func top(in partition: FocusPartition, activeAIPaths: Set<String>) -> [Self] {
+        let ranked = partition.focused.map { entry in
+            let project = entry.project
+            let latest = project.sessions.recentSessions.lazy.filter { $0.kind == .conversation }.map(\.modified).max()
+            return Self(project: project, isAIActive: activeAIPaths.contains(project.path), lastConversationAt: latest)
+        }.sorted { lhs, rhs in
+            if lhs.isAIActive != rhs.isAIActive { return lhs.isAIActive }
+            if lhs.lastConversationAt != rhs.lastConversationAt {
+                guard let left = lhs.lastConversationAt else { return false }
+                guard let right = rhs.lastConversationAt else { return true }
+                return left > right
+            }
+            let order = lhs.project.displayName.localizedStandardCompare(rhs.project.displayName)
+            return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
+        }
+        return Array(ranked.prefix(3))
+    }
+}
+
+@MainActor
+final class MenuBarHandoff {
+    static let shared = MenuBarHandoff()
+    let feedback = ToastCenter()
+    private var lastCopySucceeded = false
+
+    private var copyTitle: String {
+        lastCopySucceeded ? FizzL10n.text("接力卡已复制", "Handoff card copied") : FizzL10n.text("复制失败", "Copy failed")
+    }
+
+    var feedbackTitle: String? { feedback.current == nil ? nil : copyTitle }
+
+    func copy(
+        _ project: RepoProject, scenario: HandoffCardScenario = .resume, copyMode: CopyMode, actions: ProjectActions,
+        write: (String) -> Bool = SystemActions.writeClipboard
+    ) {
+        let failure = scenario == .fixError ? HandoffCardBuilder.managedFailure(for: project, actions: actions) : nil
+        let card = HandoffCardBuilder.build(project: project, scenario: scenario, copyMode: copyMode, localFailure: failure)
+        let copied = write(card.markdown)
+        lastCopySucceeded = copied
+        feedback.dismiss()
+        feedback.show(copyTitle,
+                      symbol: copied ? "doc.on.clipboard.fill" : "xmark.circle", duration: 3)
+    }
 }
 
 private struct MenuBarServiceRow<Content: View>: View {

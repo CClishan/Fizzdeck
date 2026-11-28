@@ -10,9 +10,9 @@ enum ResumeTarget: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .auto: "自动"
-        case .cli: "仅 CLI"
-        case .desktop: "仅 Codex Desktop"
+        case .auto: FizzL10n.text("自动", "Automatic")
+        case .cli: FizzL10n.text("仅 CLI", "CLI Only")
+        case .desktop: FizzL10n.text("仅 Codex Desktop", "Codex Desktop Only")
         }
     }
 }
@@ -49,6 +49,10 @@ enum RuntimeAvailability: Equatable, Sendable {
 struct ToolResumeCapability: Equatable, Sendable {
     let cli: RuntimeAvailability
     let desktopAvailable: Bool
+
+    func shouldUseDesktop(for target: ResumeTarget) -> Bool {
+        target == .desktop || (target == .auto && !cli.isAvailable && desktopAvailable)
+    }
 }
 
 struct SessionResumeResult: Equatable, Sendable {
@@ -109,7 +113,7 @@ enum SessionResumeService {
         else {
             return SessionResumeResult(
                 success: false,
-                message: "暂不支持直接恢复 \(session.tool) 会话。",
+                message: FizzL10n.text("暂不支持直接恢复 \(session.tool) 会话。", "Direct resume is not available for \(session.tool) sessions."),
                 fallbackCommand: fallback,
                 needsAutomationPermission: false
             )
@@ -139,7 +143,7 @@ enum SessionResumeService {
                 guard let terminal = focusTarget else {
                     return SessionResumeResult(
                         success: true,
-                        message: "会话正在终端（\(tty)）运行中，请切换至对应窗口",
+                        message: FizzL10n.text("会话正在终端（\(tty)）运行中，请切换至对应窗口", "This session is running in \(tty). Switch to its terminal window."),
                         fallbackCommand: nil,
                         needsAutomationPermission: false
                     )
@@ -153,7 +157,7 @@ enum SessionResumeService {
             let pids = liveProcesses.map { String($0.pid) }.joined(separator: ", ")
             return SessionResumeResult(
                 success: true,
-                message: "会话进程已在运行（PID \(pids)）",
+                message: FizzL10n.text("会话进程已在运行（PID \(pids)）", "Session process is already running (PID \(pids))"),
                 fallbackCommand: nil,
                 needsAutomationPermission: false
             )
@@ -164,32 +168,20 @@ enum SessionResumeService {
 
         switch session.tool {
         case "codex":
-            if target == .desktop {
+            if capability.shouldUseDesktop(for: target) {
                 return await openCodexDesktop(sessionID: session.id, fallback: fallback)
-            }
-            if target == .cli {
-                guard capability.cli.isAvailable else {
-                    return unavailableResult(toolTitle: "Codex CLI", availability: capability.cli, fallback: fallback)
-                }
-                return await launchInTerminal(session: session, cwd: cwd, command: resumeCmd, fallback: fallback)
             }
             if capability.cli.isAvailable {
                 return await launchInTerminal(session: session, cwd: cwd, command: resumeCmd, fallback: fallback)
             }
-            if capability.desktopAvailable {
-                return await openCodexDesktop(sessionID: session.id, fallback: fallback)
-            }
-            return unavailableResult(toolTitle: "Codex", availability: capability.cli, fallback: fallback)
+            return unavailableResult(toolTitle: target == .cli ? "Codex CLI" : "Codex", availability: capability.cli, fallback: fallback)
 
         case "claude":
-            if target == .desktop {
+            if capability.shouldUseDesktop(for: target) {
                 return await activateClaudeDesktop(available: capability.desktopAvailable, fallback: fallback)
             }
             if capability.cli.isAvailable {
                 return await launchInTerminal(session: session, cwd: cwd, command: resumeCmd, fallback: fallback)
-            }
-            if capability.desktopAvailable {
-                return await activateClaudeDesktop(available: true, fallback: fallback)
             }
             return unavailableResult(toolTitle: "Claude Code CLI", availability: capability.cli, fallback: fallback)
 
@@ -197,7 +189,7 @@ enum SessionResumeService {
             if target == .desktop {
                 return SessionResumeResult(
                     success: false,
-                    message: "Grok 暂不支持桌面端直达，可使用 CLI 或复制恢复命令。",
+                    message: FizzL10n.text("Grok 暂不支持桌面端直达，可使用 CLI 或复制恢复命令。", "Grok doesn’t support desktop links. Use the CLI or copy the resume command."),
                     fallbackCommand: fallback,
                     needsAutomationPermission: false
                 )
@@ -211,7 +203,7 @@ enum SessionResumeService {
             if target == .desktop {
                 return SessionResumeResult(
                     success: false,
-                    message: "Gemini CLI 暂不支持桌面端直达，可使用 CLI 或复制恢复命令。",
+                    message: FizzL10n.text("Gemini CLI 暂不支持桌面端直达，可使用 CLI 或复制恢复命令。", "Gemini CLI doesn’t support desktop links. Use the CLI or copy the resume command."),
                     fallbackCommand: fallback,
                     needsAutomationPermission: false
                 )
@@ -224,7 +216,7 @@ enum SessionResumeService {
         default:
             return SessionResumeResult(
                 success: false,
-                message: "暂不支持直接恢复 \(session.tool) 会话。",
+                message: FizzL10n.text("暂不支持直接恢复 \(session.tool) 会话。", "Direct resume is not available for \(session.tool) sessions."),
                 fallbackCommand: fallback,
                 needsAutomationPermission: false
             )
@@ -279,11 +271,11 @@ enum SessionResumeService {
         let detail: String
         switch availability {
         case .available:
-            detail = "\(toolTitle) 可用"
+            detail = FizzL10n.text("\(toolTitle) 可用", "\(toolTitle) is available")
         case let .broken(reason):
-            detail = "\(toolTitle) 启动异常：\(reason)"
+            detail = FizzL10n.text("\(toolTitle) 启动异常：\(reason)", "Couldn’t start \(toolTitle): \(reason)")
         case .missing:
-            detail = "未检测到 \(toolTitle)，请先安装或复制命令在终端运行。"
+            detail = FizzL10n.text("未检测到 \(toolTitle)，请先安装或复制命令在终端运行。", "\(toolTitle) wasn’t found. Install it or copy the command to your terminal.")
         }
         return SessionResumeResult(
             success: false,
@@ -300,7 +292,7 @@ enum SessionResumeService {
         guard let url = URL(string: "codex://threads/\(sessionID)") else {
             return SessionResumeResult(
                 success: false,
-                message: "无效的 Codex 会话链接。",
+                message: FizzL10n.text("无效的 Codex 会话链接。", "Invalid Codex session link."),
                 fallbackCommand: fallback,
                 needsAutomationPermission: false
             )
@@ -311,14 +303,14 @@ enum SessionResumeService {
         if opened {
             return SessionResumeResult(
                 success: true,
-                message: "已在 Codex Desktop 打开会话",
+                message: FizzL10n.text("已在 Codex Desktop 打开会话", "Opened the session in Codex Desktop"),
                 fallbackCommand: nil,
                 needsAutomationPermission: false
             )
         }
         return SessionResumeResult(
             success: false,
-            message: "无法唤醒 Codex Desktop（codex://），可复制命令在终端运行。",
+            message: FizzL10n.text("无法唤醒 Codex Desktop（codex://），可复制命令在终端运行。", "Couldn’t open Codex Desktop (codex://). Copy the command to your terminal."),
             fallbackCommand: fallback,
             needsAutomationPermission: false
         )
@@ -331,7 +323,7 @@ enum SessionResumeService {
         guard available else {
             return SessionResumeResult(
                 success: false,
-                message: "未安装 Claude Desktop，且 Claude CLI 不可用。",
+                message: FizzL10n.text("未安装 Claude Desktop，且 Claude CLI 不可用。", "Neither Claude Desktop nor the Claude CLI is available."),
                 fallbackCommand: fallback,
                 needsAutomationPermission: false
             )
@@ -345,7 +337,7 @@ enum SessionResumeService {
         guard let appURL else {
             return SessionResumeResult(
                 success: false,
-                message: "未找到 Claude.app。",
+                message: FizzL10n.text("未找到 Claude.app。", "Claude.app wasn’t found."),
                 fallbackCommand: fallback,
                 needsAutomationPermission: false
             )
@@ -355,7 +347,7 @@ enum SessionResumeService {
         _ = try? await NSWorkspace.shared.openApplication(at: appURL, configuration: configuration)
         return SessionResumeResult(
             success: true,
-            message: "已激活 Claude Desktop（桌面端暂不支持按会话 ID 直达，如需精确定位可复制命令）",
+            message: FizzL10n.text("已激活 Claude Desktop（桌面端暂不支持按会话 ID 直达，如需精确定位可复制命令）", "Opened Claude Desktop. To resume this exact session, copy its command."),
             fallbackCommand: fallback,
             needsAutomationPermission: false
         )

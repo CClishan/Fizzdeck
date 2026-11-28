@@ -11,7 +11,8 @@ enum ProjectKind: String, CaseIterable, Codable, Identifiable, Hashable, Sendabl
 
     var id: String { rawValue }
 
-    var title: String {
+    // Built-in group IDs were persisted as Chinese titles before Build 26.
+    var groupKey: String {
         switch self {
         case .web: "网页"
         case .macApp: "Mac 应用"
@@ -20,6 +21,19 @@ enum ProjectKind: String, CaseIterable, Codable, Identifiable, Hashable, Sendabl
         case .game: "游戏"
         case .cli: "命令行脚本"
         case .other: "其他"
+        }
+    }
+
+    var title: String {
+        guard FizzL10n.isEnglish else { return groupKey }
+        switch self {
+        case .web: return "Web"
+        case .macApp: return "Mac Apps"
+        case .miniProgram: return "Mini Apps"
+        case .flutter: return "Flutter"
+        case .game: return "Games"
+        case .cli: return "CLI Tools"
+        case .other: return "Other"
         }
     }
 

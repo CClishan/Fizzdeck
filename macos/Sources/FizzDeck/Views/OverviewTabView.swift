@@ -10,7 +10,7 @@ enum ArtworkFilePicker {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.canCreateDirectories = false
-        panel.prompt = "设为项目截图"
+        panel.prompt = FizzL10n.text("设为项目截图", "Use as project screenshot")
         return panel.runModal() == .OK ? panel.url : nil
     }
 }
@@ -56,7 +56,7 @@ struct OverviewTabView: View {
         if let message = project.sessions.lastUserMessage {
             return message
         }
-        return "还没有可识别的活动"
+        return FizzL10n.text("还没有可识别的活动", "No activity found yet")
     }
 
     private var logAvailabilityKey: String {
@@ -111,11 +111,11 @@ struct OverviewTabView: View {
             spacing: FizzSpacing.grid
         ) {
             WorkbenchMetricCard(
-                title: "本周提交",
+                title: FizzL10n.text("本周提交", "Commits this week"),
                 symbol: "arrow.triangle.branch",
                 tint: FizzTheme.statusSuccess,
                 value: project.gitLoadState == .ready ? "\(weekTotal)" : "",
-                unit: "次",
+                unit: FizzL10n.text("次", "\(weekTotal == 1 ? "commit" : "commits")"),
                 bars: project.gitLoadState == .ready
                     ? WorkbenchMetrics.normalized(weekValues)
                     : [],
@@ -123,26 +123,26 @@ struct OverviewTabView: View {
                     ? WorkbenchMetrics.emphasisIndex(weekValues)
                     : nil,
                 detail: project.gitLoadState == .ready
-                    ? (project.branch ?? "无 Git 分支")
-                    : "正在读取 Git",
+                    ? (project.branch ?? FizzL10n.text("无 Git 分支", "No Git branch"))
+                    : FizzL10n.text("正在读取 Git", "Reading Git info…"),
                 valuePlaceholder: project.gitLoadState != .ready
             )
 
             diskCard
 
             WorkbenchMetricCard(
-                title: "AI 会话",
+                title: FizzL10n.text("AI 会话", "AI sessions"),
                 symbol: "bubble.left.and.bubble.right",
                 tint: Color.secondary,
                 value: "\(project.sessions.sessionCount)",
-                unit: "会话",
+                unit: FizzL10n.text("会话", "\(project.sessions.sessionCount == 1 ? "session" : "sessions")"),
                 bars: WorkbenchMetrics.normalized(sessionValues),
                 emphasis: WorkbenchMetrics.emphasisIndex(sessionValues),
                 detail: aiDetail
             )
 
             WorkbenchMetricCard(
-                title: "最近活动",
+                title: FizzL10n.text("最近活动", "Recent activity"),
                 symbol: "clock",
                 tint: Color.secondary,
                 value: Format.relative(project.recent),
@@ -156,15 +156,15 @@ struct OverviewTabView: View {
         let parts = WorkbenchMetrics.splitBytes(project.size.totalBytes)
         let detail: String
         if !ready {
-            detail = "正在后台统计"
+            detail = FizzL10n.text("正在后台统计", "Calculating in the background…")
         } else if project.cleanup.items.isEmpty {
-            detail = "没有命中清理规则"
+            detail = FizzL10n.text("没有命中清理规则", "No matching folders to clean up")
         } else {
-            detail = "可清理 \(Format.bytes(project.cleanup.reusableBytes)) · \(project.cleanup.items.count) 个目录"
+            detail = FizzL10n.text("可清理 \(Format.bytes(project.cleanup.reusableBytes)) · \(project.cleanup.items.count) 个目录", "\(Format.bytes(project.cleanup.reusableBytes)) reclaimable · \(project.cleanup.items.count) \(project.cleanup.items.count == 1 ? "folder" : "folders")")
         }
 
         return WorkbenchMetricCard(
-            title: "磁盘占用",
+            title: FizzL10n.text("磁盘占用", "Disk usage"),
             symbol: "internaldrive",
             tint: Color.secondary,
             value: ready ? parts.value : "",
@@ -189,7 +189,7 @@ struct OverviewTabView: View {
         ) {
             parts.append(cost)
         }
-        return parts.isEmpty ? "还没有会话" : parts.joined(separator: " · ")
+        return parts.isEmpty ? FizzL10n.text("还没有会话", "No sessions yet") : parts.joined(separator: " · ")
     }
 
     private var activityEntries: [ActivityEntry] {
@@ -199,7 +199,7 @@ struct OverviewTabView: View {
                 id: "commit-\(commit.hash)",
                 date: date,
                 title: commit.subject,
-                detail: "\(commit.hash.prefix(7)) · 提交",
+                detail: FizzL10n.text("\(commit.hash.prefix(7)) · 提交", "\(commit.hash.prefix(7)) · Commit"),
                 symbol: "arrow.triangle.branch",
                 tint: FizzTheme.statusSuccess
             ))
@@ -208,7 +208,7 @@ struct OverviewTabView: View {
             entries.append(ActivityEntry(
                 id: "session-\(session.stableID)",
                 date: session.modified,
-                title: session.lastUser ?? "\(DetectedTool(rawValue: session.tool)?.title ?? session.tool) 会话",
+                title: session.lastUser ?? FizzL10n.text("\(DetectedTool(rawValue: session.tool)?.title ?? session.tool) 会话", "\(DetectedTool(rawValue: session.tool)?.title ?? session.tool) session"),
                 detail: DetectedTool(rawValue: session.tool)?.title ?? session.tool,
                 symbol: DetectedTool(rawValue: session.tool)?.symbol ?? "bubble.left.and.bubble.right",
                 tint: .secondary
@@ -218,7 +218,7 @@ struct OverviewTabView: View {
     }
 
     private var activityPanel: some View {
-        Panel(title: "最近活动", symbol: "clock.arrow.circlepath") {
+        Panel(title: FizzL10n.text("最近活动", "Recent activity"), symbol: "clock.arrow.circlepath") {
             VStack(spacing: 0) {
                 ForEach(Array(activityEntries.enumerated()), id: \.element.id) { index, entry in
                     HStack(alignment: .top, spacing: 10) {
@@ -291,7 +291,7 @@ struct OverviewTabView: View {
     }
 
     private func projectSummaryPanel(width: CGFloat) -> some View {
-        Panel(title: "项目", symbol: "text.quote") {
+        Panel(title: FizzL10n.text("项目", "Project"), symbol: "text.quote") {
             switch OverviewLayoutPolicy.summaryLayout(
                 width: width,
                 hasArtwork: true
@@ -346,17 +346,17 @@ struct OverviewTabView: View {
             onPickImage: {
                 if let url = ArtworkFilePicker.pickImageURL(),
                    store.setCustomArtwork(from: url, for: project) {
-                    ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: Color.secondary)
+                    ToastCenter.shared.show(FizzL10n.text("已更新项目封面", "Updated project cover"), symbol: "photo.badge.checkmark", tint: Color.secondary)
                 }
             },
             onDropImage: { url in
                 if store.setCustomArtwork(from: url, for: project) {
-                    ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: Color.secondary)
+                    ToastCenter.shared.show(FizzL10n.text("已更新项目封面", "Updated project cover"), symbol: "photo.badge.checkmark", tint: Color.secondary)
                 }
             },
             onResetCustom: {
                 store.clearCustomArtwork(for: project)
-                ToastCenter.shared.show("已恢复自动识别封面", symbol: "arrow.uturn.backward.circle.fill", tint: .secondary)
+                ToastCenter.shared.show(FizzL10n.text("已恢复自动识别封面", "Restored automatic cover"), symbol: "arrow.uturn.backward.circle.fill", tint: .secondary)
             }
         )
     }
@@ -376,7 +376,7 @@ struct OverviewTabView: View {
     private var projectIntro: some View {
         VStack(alignment: .leading, spacing: 7) {
             if project.intro.text.isEmpty {
-                Text("还没有项目简介")
+                Text(FizzL10n.text("还没有项目简介", "No project description yet"))
                     .font(FizzTypography.font(12))
                     .foregroundStyle(.secondary)
             } else {
@@ -396,19 +396,19 @@ struct OverviewTabView: View {
     private var projectStack: some View {
         Group {
             if project.stacks.isEmpty {
-                Text("未识别技术栈")
+                Text(FizzL10n.text("未识别技术栈", "No technology stack found"))
                     .font(FizzTypography.font(12))
                     .foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(project.stacks) { group in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(group.label)
+                            Text(group.displayTitle)
                                 .font(FizzTypography.micro(.regular))
                                 .foregroundStyle(.secondary)
                                 .frame(width: 54, alignment: .leading)
                             FlowLayout(spacing: 5) {
-                                ForEach(group.items, id: \.self) { item in
+                                ForEach(group.displayItems, id: \.self) { item in
                                     TagChip(text: item)
                                 }
                             }
@@ -424,11 +424,11 @@ struct OverviewTabView: View {
             HStack(spacing: 6) {
                 FizzIcon(.sm, symbol: "note.text")
                     .foregroundStyle(.secondary)
-                Text("备注")
+                Text(FizzL10n.text("备注", "Notes"))
                     .font(FizzTypography.font(12, weight: .semibold))
             }
 
-            TextField("给这个项目留一句话", text: $noteDraft)
+            TextField(FizzL10n.text("给这个项目留一句话", "Add a note about this project"), text: $noteDraft)
                 .textFieldStyle(.plain)
                 .font(FizzTypography.font(12))
                 .onSubmit(saveNote)
@@ -440,7 +440,7 @@ struct OverviewTabView: View {
             Button {
                 saveNote()
             } label: {
-                Label("保存", systemImage: "checkmark")
+                Label(FizzL10n.text("保存", "Save"), systemImage: "checkmark")
             }
             .buttonStyle(.glass)
             .controlSize(.small)
@@ -599,7 +599,7 @@ private struct ArtworkThumbnail: View {
                         VStack(spacing: 5) {
                             FizzIcon(.lg, symbol: "photo.badge.plus")
                                 .foregroundStyle(.secondary)
-                            Text("上传项目截图")
+                            Text(FizzL10n.text("上传项目截图", "Upload project screenshot"))
                                 .font(FizzTypography.monoSmall(.medium))
                                 .foregroundStyle(.secondary)
                         }
@@ -611,7 +611,7 @@ private struct ArtworkThumbnail: View {
                             VStack(spacing: 4) {
                                 FizzIcon(.md, symbol: "photo.badge.plus")
                                     .foregroundStyle(Color.secondary)
-                                Text("松开以替换封面")
+                                Text(FizzL10n.text("松开以替换封面", "Drop to replace the cover"))
                                     .font(FizzTypography.monoSmall(.semibold))
                                     .foregroundStyle(.primary)
                             }
@@ -634,20 +634,20 @@ private struct ArtworkThumbnail: View {
                 }
             }
             .buttonStyle(.plain)
-            .help(path == nil ? "点击或拖拽上传项目截图" : "点击查看大图，可右键或悬停替换")
-            .accessibilityLabel(path == nil ? "上传项目截图" : "打开项目封面图")
+            .help(path == nil ? FizzL10n.text("点击或拖拽上传项目截图", "Click or drag a project screenshot here") : FizzL10n.text("点击查看大图，可右键或悬停替换", "Click to enlarge. Hover or right-click to replace."))
+            .accessibilityLabel(path == nil ? FizzL10n.text("上传项目截图", "Upload project screenshot") : FizzL10n.text("打开项目封面图", "Open project cover image"))
 
             if path != nil && hovering {
                 Button {
                     onPickImage()
                 } label: {
-                    Label("替换", systemImage: "photo.badge.plus")
+                    Label(FizzL10n.text("替换", "Replace"), systemImage: "photo.badge.plus")
                         .font(FizzTypography.micro(.semibold))
                 }
                 .buttonStyle(.glass)
                 .controlSize(.small)
                 .padding(6)
-                .help("替换项目截图")
+                .help(FizzL10n.text("替换项目截图", "Replace project screenshot"))
             }
         }
         .onHover { hovering = $0 }
@@ -676,13 +676,13 @@ private struct ArtworkThumbnail: View {
             Button {
                 onPickImage()
             } label: {
-                Label(path == nil ? "上传项目截图…" : "替换项目截图…", systemImage: "photo.badge.plus")
+                Label(path == nil ? FizzL10n.text("上传项目截图…", "Upload project screenshot…") : FizzL10n.text("替换项目截图…", "Replace project screenshot…"), systemImage: "photo.badge.plus")
             }
             if let path {
                 Button {
                     SystemActions.open(path)
                 } label: {
-                    Label("预览大图", systemImage: "arrow.up.left.and.arrow.down.right")
+                    Label(FizzL10n.text("预览大图", "View full size"), systemImage: "arrow.up.left.and.arrow.down.right")
                 }
             }
             if project.customArtwork != nil {
@@ -690,7 +690,7 @@ private struct ArtworkThumbnail: View {
                 Button {
                     onResetCustom()
                 } label: {
-                    Label("恢复自动识别截图", systemImage: "arrow.uturn.backward")
+                    Label(FizzL10n.text("恢复自动识别截图", "Restore automatic screenshot"), systemImage: "arrow.uturn.backward")
                 }
             }
         }

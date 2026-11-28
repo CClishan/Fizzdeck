@@ -93,7 +93,7 @@ struct CommitHeatmapCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(copyMode == .plain ? FizzCopy.heatmapTitle(.plain) : "提交热力图")
+                    Text(copyMode == .plain ? FizzCopy.heatmapTitle(.plain) : FizzL10n.text("提交热力图", "Commit heatmap"))
                         .font(FizzTypography.cardTitle)
                         .foregroundStyle(.primary)
 
@@ -104,8 +104,8 @@ struct CommitHeatmapCard: View {
                             .foregroundStyle(.primary)
 
                         Text(copyMode == .plain
-                            ? "次活动 · 连续 \(data.currentStreak) 天"
-                            : "次 · 连续 \(data.currentStreak) 天")
+                            ? FizzL10n.text("次活动 · 连续 \(data.currentStreak) 天", "\(data.totalCommits == 1 ? "activity" : "activities") · \(data.currentStreak)-day streak")
+                            : FizzL10n.text("次 · 连续 \(data.currentStreak) 天", "\(data.totalCommits == 1 ? "commit" : "commits") · \(data.currentStreak)-day streak"))
                             .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
                             .contentTransition(.numericText())
@@ -173,7 +173,18 @@ struct CommitHeatmapCard: View {
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.quick), value: hoveredCell?.id)
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: hoveredColumn)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("提交热力图，\(range.title)共 \(data.totalCommits) 次本人提交，当前连续 \(data.currentStreak) 天，最长连续 \(data.longestStreak) 天")
+        .accessibilityLabel(accessibilitySummary(data))
+    }
+
+    private func accessibilitySummary(_ data: HeatmapSummary) -> String {
+        let title = copyMode == .plain ? FizzCopy.heatmapTitle(.plain) : FizzL10n.text("提交热力图", "Commit heatmap")
+        let total = copyMode == .plain
+            ? FizzL10n.text("\(data.totalCommits) 次活动", "Activities: \(data.totalCommits)")
+            : FizzL10n.text("\(data.totalCommits) 次本人提交", "Your commits: \(data.totalCommits)")
+        return FizzL10n.text(
+            "\(title)，\(range.title)共 \(total)，当前连续 \(data.currentStreak) 天，最长连续 \(data.longestStreak) 天",
+            "\(title), \(range.title). \(total). Current streak: \(data.currentStreak) \(data.currentStreak == 1 ? "day" : "days"); longest: \(data.longestStreak) \(data.longestStreak == 1 ? "day" : "days")."
+        )
     }
 
     private var rangePicker: some View {
@@ -271,11 +282,11 @@ struct CommitHeatmapCard: View {
                     .truncationMode(.tail)
             } else {
                 Text(copyMode == .plain
-                    ? "最长连续 \(summary.longestStreak) 天 · 点击查看对话"
-                    : "最长连续 \(summary.longestStreak) 天 · 点击有提交的日期筛选项目")
+                    ? FizzL10n.text("最长连续 \(summary.longestStreak) 天 · 点击查看对话", "Longest streak: \(summary.longestStreak) d · Select a day to see conversations")
+                    : FizzL10n.text("最长连续 \(summary.longestStreak) 天 · 点击有提交的日期筛选项目", "Longest streak: \(summary.longestStreak) d · Select a commit date to filter projects"))
                     .font(FizzTypography.monoSmall)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(FizzL10n.isEnglish ? 2 : 1)
             }
 
             Spacer(minLength: 8)
@@ -292,15 +303,15 @@ struct CommitHeatmapCard: View {
 
     private func hoverLabel(for cell: HeatmapDayCell) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_Hans")
-        formatter.dateFormat = "M 月 d 日"
+        formatter.locale = FizzL10n.locale
+        formatter.dateFormat = FizzL10n.text("M 月 d 日", "MMM d")
         let dateText = formatter.string(from: cell.date)
         if cell.count == 0 {
-            return "\(dateText) · \(copyMode == .plain ? "无对话活动" : "无提交")"
+            return FizzL10n.text("\(dateText) · \(copyMode == .plain ? "无对话活动" : "无提交")", "\(dateText) · \(copyMode == .plain ? "No conversations" : "No commits")")
         }
-        let breakdown = cell.projects.prefix(3).map { "\($0.name) \($0.count)" }.joined(separator: "、")
+        let breakdown = cell.projects.prefix(3).map { "\($0.name) \($0.count)" }.joined(separator: FizzL10n.text("、", ", "))
         return breakdown.isEmpty
-            ? "\(dateText) · \(cell.count) 次"
-            : "\(dateText) · \(cell.count) 次 · \(breakdown)"
+            ? FizzL10n.text("\(dateText) · \(cell.count) 次", "\(dateText) · \(copyMode == .plain ? "Activities" : "Commits"): \(cell.count)")
+            : FizzL10n.text("\(dateText) · \(cell.count) 次 · \(breakdown)", "\(dateText) · \(copyMode == .plain ? "Activities" : "Commits"): \(cell.count) · \(breakdown)")
     }
 }

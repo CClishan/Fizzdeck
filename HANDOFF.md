@@ -1,6 +1,38 @@
 # FizzDeck 交接文档
 
-更新：2026-11-28。原生产品仓库 `CClishan/Fizzdeck`，官网仓库 `CClishan/koroo-blog`。请先区分本地构建、官网部署和 GitHub Latest。
+更新：2026-11-29。原生产品仓库 `CClishan/Fizzdeck`，官网仓库 `CClishan/koroo-blog`。请先区分本地构建、官网部署和 GitHub Latest。
+
+## v0.9.3 / Build 26 · 已确认发布
+
+[审核索引](output/release-v0.9.3/REVIEW.md) · [中英文 App 与官网原图包](output/release-v0.9.3/FizzDeck-v0.9.3-Build26-review.zip) · [本轮文件清单](output/release-v0.9.3/git-files.txt) · [发行说明](docs/releases/v0.9.3.md)。Build 24–26 合并随 v0.9.3 分发。审核后修正复盘趋势的英文日期和表头，官网两处搜索文案统一为 `English & Chinese search`。
+
+- **原生语言。** 设置 → 通用支持跟随系统、简体中文和 English。界面与 `Plain English` / `Git Terms` 分开选择。实点选择 English 后，已打开的设置和工作台即时更新；再次启动同一隔离 Bundle ID，没有传入语言参数，仍为英文。[重启记录](output/release-v0.9.3/native/language-restart.json)。保留用户数据、CLI 和扫描键；窗口、后台操作、菜单和导出使用当前界面语言。四个 [Obel Mono 字重](output/release-v0.9.3/native/font-proof.json)均来自当前包。
+- **实际界面。** [1000pt 浅色工作台](output/release-v0.9.3/native/1000-light-en-workbench-checked.png)与 [1320pt 暗色 Git 页](output/release-v0.9.3/native/1320-dark-en-pro-version-checked.png)均取自前台。窄窗首次复核发现周复盘挤掉主标题，改成空间不够时独占下一行；缩短项目库搜索提示，完整搜索范围保留在悬停说明里。十列表格保留原生横向滚动，两种宽度按真实列标题测量。重新核对工作台、详情四页签、库、表头、设置、⌘K、接力与分享。菜单、匿名复盘和项目战报均为英文。四张真实分享 PNG 均为 1280 × 800，[每次复制后立即还原原剪贴板](output/release-v0.9.3/native/clipboard.log)。
+- **本地官网候选。** 英文页的 Workbench、Progress、Version、Doctor 来自 Build 26 的隔离前台窗口；中文页继续用已发布的 Build 23 中文照片并标明来源。静态 HTML 只预载显示器机身，避免英文页重复下载中文屏幕图。独立网页目录构建并导出 HTML + 13 个资源。Chrome 1440/390px × 两种语言共 20 组主副标题均两行；零溢出、零控制台错误。英文首屏两图 127,946 字节，中文 114,922 字节。[浏览器记录](output/release-v0.9.3/web-final/verification.json)。
+- **验证。** [全新严格并发构建](output/release-v0.9.3/strict-final-clean.log)零警告、零错误；[全量 XCTest](output/release-v0.9.3/swift-test.log) 与 [英语偏好复验](output/release-v0.9.3/en-host-test.log)均为 **410/410、无跳过**。千项目万会话检索 P95 为 0.58ms；千行表格 180 帧 / 3.01 秒（59.8 FPS）。[独立原样二进制](output/release-v0.9.3/native/stock-binary-smoke.json)实读 0.9.3/26，运行文件与组装文件 SHA-256 相同。
+- **隔离。** GUI 在业务代码运行前进入内核沙箱，测试使用独立且已核实的 Foundation home。三个受保护根只从父目录读取根元数据。安装包、封存 Wave 086 均零事件且根元数据不变。17 项快照中 16 项一致，真实 `.repodeck` 根目录时间变动，两个验收时段合计记录 24 条 FSEvents 通知；事件不提供写入 PID。没有打开、读取、回写真实配置文件。验收进程均已退出。[隔离记录](output/release-v0.9.3/isolation-verification.json)。
+- **验收踩坑。** 不要把翻译后的占位词写成真实进程名或 SQLite 会话标题，否则已显示结果切语言时会固化旧文案；保留原始空值，到展示时翻译。锁屏不能证明前台外观，千行测试也曾拿到零帧；正式官网四图和上述完整测试均在桌面解锁后重取。浏览器复验在切换语言后等待新图解码再刷新，仍检查所有网络失败。
+
+- **发布复核。** 在中文 macOS 上实拍英文复盘，横轴依次为 `Nov 23`、`Nov 25`、`Nov 27`、`Nov 29`；`Agent time` 列实测 94pt，标题完整。[复盘原图](output/release-v0.9.3/publish/recap-en-zh-host.png)。Chrome 复验两处搜索文案在 390/1440px 的段落高度与改前相同。英文 XCTest 的独立子进程曾因硬编码中文断言失败，现依实际界面语言校验同一个云端领先数。
+
+## v0.9.2 / Build 25 · 本地审核通过，未单独发布
+
+[审核索引与实拍](output/release-v0.9.2/REVIEW.md) · [发行说明](docs/releases/v0.9.2.md) · [相对 Build 24 的差异](output/release-v0.9.2/review.patch)。起步时核对了已审核 Build 24 的 12 个文件指纹。本轮未提交、发布或更改官网；公开版仍为 v0.9.0 / Build 23。该工作树已通过审核，作为 Build 26 的基线。
+
+- 菜单栏最多列三个关注项目，AI 正在工作者优先，再看最近真实对话。可直接在终端继续最近可恢复的会话、打开项目、查看该项目体检，或一键复制默认接力卡；「其他接力卡」有报错和交接说明两种。只使用已有索引和内存状态；标签在已知期限到达时才唤醒。[实测](output/release-v0.9.2/native/copy-verification.json)：主窗口最小化时复制三种卡均有状态栏反馈，分别遮盖 2、1、1 处测试凭据；五个隔离项目的 20 个工作文件和 Git 引用未变。
+- 进度时间线在未固定的快照过期前 1–4 天显示天数，可就地固定。工作台按关注项目汇总仍可回退的重要标记，忽略只作用于本批标记 ID。[重启复验](output/release-v0.9.2/native/mark-verification.json)：固定状态及对应 Git 引用保留，已忽略的标记不再提醒，同项目新标记仍提醒且可直接固定。相对时间与紧凑数量统一为 `16 分钟前`、`25 万 tokens`。
+- [严格并发构建](output/release-v0.9.2/strict-build.log)零警告、零错误；[395 项测试](output/release-v0.9.2/swift-test.log)全部通过、无跳过。万会话检索 P95 0.66ms，千行表格 59.9 FPS。独立[原样二进制冒烟](output/release-v0.9.2/native/stock-binary-smoke.json)实读 `0.9.2 / 25`。未通过日常终端实际打开 AI 会话；菜单可用状态、选择与 CLI 路由另有测试。
+- 真机发现并修复两处单测最初未暴露的问题：菜单栏标签在布局时反复更新当前时间，触发 AppKit 状态项反复重排；改为等到明确的过期时间再唤醒，[一次前台观测](output/release-v0.9.2/native/menu-responsive.json)从按下状态项到可见菜单为 0.182 秒（含探针开销）。旧标记里的 `/private/tmp` 与项目索引里的 `/tmp` 曾导致工作台漏报；按项目统一的路径规则匹配和归组后，两条提醒都在原生工作台出现。
+- [隔离核对](output/release-v0.9.2/isolation-verification.json)：验收 GUI 使用启动前沙箱；全套测试使用独立、经 Foundation 核实的 home。三个受保护目录只从父目录取根元数据。安装包和封存 Wave 086 均无事件或根元数据变化；16 个快照项中 15 个一致，真实 `.repodeck` 的目录时间变动，实时观察到 36 条通知，含扫描和会话缓存活动。FSEvents 不提供写入 PID，未查读或回写其中任何文件。[剪贴板](output/release-v0.9.2/native/clipboard.log)原有三种表示已逐字节还原，验收实例均已退出注销。
+
+## v0.9.1 / Build 24 · 本地审核通过，未单独发布
+
+[审核索引：项目库实拍与 16 张分享卡原图](output/release-v0.9.1/REVIEW.md) · [发行说明](docs/releases/v0.9.1.md) · [本轮 Git 文件清单](output/release-v0.9.1/git-files.txt)。基于 Build 23 发布后的 `main`（`35103ee`）；公开版本及官网仍为 Build 23。本轮未提交或发布。
+
+- 项目库打开「封面」后，有图项目保留原图，无图项目按稳定项目色及近七天的提交、对话绘制光栅。六个样例中有两张自定义封面、三个活跃项目和一个空闲项目。1000pt 两列、1320pt 三列，浅暗四组的 24 个头图外框[实测均为 64pt](output/release-v0.9.1/native/gallery-verification.json)；关闭封面仍为紧凑卡。
+- 项目「进度」可分享所选目录最近七天的战报。复盘与单项目共用一个渲染器：默认匿名、彩色、带右下角 `fizzdeck`，可选 Mono 或关闭角标。点分日期保留跨年年份，非零 ASCII 尾段可见；带未计价副行时三项指标相邻基线实测都是 41pt。[16 张导出](output/release-v0.9.1/native/share-verification.json)均为 1280 × 800。验收发现只对 SwiftUI 视图去色仍有最多 5 级 RGB 通道差，改为单通道灰度编码后八张 Mono 的通道差全部为零。
+- [严格并发构建](output/release-v0.9.1/strict-build.log)零警告、零错误；[完整测试](output/release-v0.9.1/swift-test.log) **381/381，无跳过**。千项目、万会话检索 P95 0.78ms。锁屏时千行表格压测拿不到 WindowServer 帧；桌面恢复后重新全跑，3.01 秒采到 181 帧（60 Hz），四张正式项目库图也均取自前台窗口。[独立启动冒烟](output/release-v0.9.1/native/stock-binary-smoke.json)实读 `0.9.1 / 24`，运行中的可执行文件与组装包 SHA-256 相同。
+- [隔离核对](output/release-v0.9.1/isolation-verification.json)：GUI 在业务启动前启用内核沙箱，测试另用经 Foundation 核实的临时 home。只从父目录读取三个受保护根的元数据。安装包与封存的 Wave 086 未见事件或根元数据变化；15 个快照项中 14 个一致，真实 `~/.repodeck` 的目录时间有变化。全时段监测到该目录 73 条通知，可辨认出扫描、会话及提交缓存等活动。FSEvents 不提供写入 PID，未读取真实文件内容或回写缓存。验收实例均已退出；[剪贴板](output/release-v0.9.1/native/clipboard.log)的一个项目、三种表示最终与原始备份逐字节一致。
 
 ## v0.9.0 / Build 23 · 已公开，官网已部署
 

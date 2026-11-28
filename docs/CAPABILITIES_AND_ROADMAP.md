@@ -1,11 +1,11 @@
 # FizzDeck 现有能力全量梳理与后续演进路线
 
-> **当前公开版本**：macOS 原生端 [`v0.9.0`（Build `23`）](releases/v0.9.0.md)｜ [公开下载](https://github.com/CClishan/Fizzdeck/releases/latest) ｜ [官网](https://koroo.top/fizzdeck)
-> Build 13 保留独立源码和安装包；Build 16 汇总三个后续阶段，见[发行说明](releases/v0.8.0.md)。Build 23 已设为 [GitHub Latest](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.0)（ad-hoc 签名，无 Team ID，未经 Apple 公证）。
+> **当前公开版本**：macOS 原生端 [`v0.9.3`（Build `26`）](releases/v0.9.3.md)｜ [公开下载](https://github.com/CClishan/Fizzdeck/releases/latest) ｜ [官网](https://koroo.top/fizzdeck)
+> Build 13 保留独立源码和安装包；Build 16 汇总三个后续阶段，见[发行说明](releases/v0.8.0.md)。Build 24–26 合并为[一次公开发布](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.3)（ad-hoc 签名，无 Team ID，未经 Apple 公证）。
 
 ---
 
-## 本轮版本与验证边界（2026-11-28）
+## 本轮版本与验证边界（2026-11-29）
 
 | 版本 | 原生能力 | 分发状态 |
 |---|---|---|
@@ -19,8 +19,11 @@
 | v0.8.5 / 21 | 跨 Agent 复盘、项目堆叠趋势、活跃热力图、测试胶囊与匿名 PNG 分享卡 | 已随 Build 23 分发，复盘和实拍见 [HANDOFF](../HANDOFF.md) |
 | v0.8.6 / 22 | [四层色彩预算](COLOR_RULES.md)、工作台行动区与全宽周历、复盘费用构成 | 纳入 Build 23；封存的 Wave 6 保留原貌 |
 | **v0.9.0 / 23** | 汇总 Build 17–22：Kubai 图标、浅色白底、原生玻璃侧栏、高明度项目色、光栅／ASCII 分享卡；四字重 Obel Mono + 系统中文 | [已公开](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.0)；双语官网使用 Build 23 隔离实拍 |
+| v0.9.1 / 24 | 项目库光栅微头图、单项目匿名战报、黑白与角标选项 | 随 Build 26 分发 |
+| v0.9.2 / 25 | 菜单栏继续对话、三种接力卡、临期标记提醒与固定 | 随 Build 26 分发 |
+| **v0.9.3 / 26** | 完整中英文界面，Plain English / Git Terms；官网按语言选取实拍 | [发行说明与下载](releases/v0.9.3.md) |
 
-**性能与验收口径：** L0 按既有设计持续监听前 8 个关注项目，事件合并后只重检命中的项目；L1 打开工作台后按关注名单串行检查，含第 9 个及之后手动关注的 Git 项目。不拉取工作树，单项目至少间隔 24 小时；L2 必须点击。公开 Build 16 样机版首屏图片共 116,414 字节（机身 53,770，工作台 62,644），其余三张图延迟加载。Build 23 官网首屏两张共 114,922 字节；四个字体共增加 823,012 字节原生资源，不作为网页字体下载。千项目／万会话查询 P95 0.61ms，千行原生表格 59.0 FPS（本机 60 Hz、3 秒采样）。部署状态、详细测试数字和升级验收见 [HANDOFF](../HANDOFF.md)。
+**性能与验收口径：** L0 按既有设计持续监听前 8 个关注项目，事件合并后只重检命中的项目；L1 打开工作台后按关注名单串行检查，含第 9 个及之后手动关注的 Git 项目。不拉取工作树，单项目至少间隔 24 小时；L2 必须点击。公开 Build 16 样机版首屏图片共 116,414 字节（机身 53,770，工作台 62,644），其余三张图延迟加载。Build 23 官网首屏两张共 114,922 字节；四个字体共增加 823,012 字节原生资源，不作为网页字体下载。千项目／万会话查询 P95 0.61ms，千行原生表格 59.0 FPS（本机 60 Hz、3 秒采样）。Build 26 首屏两图英文 127,946 字节，中文 114,922 字节。部署状态、详细测试数字和升级验收见 [HANDOFF](../HANDOFF.md)。
 
 **伴生 Web：** 本轮保留原有六页签与已有操作，未把有写操作的旧网页称为只读。后续是否减为四页签、或移除写操作，另行决定。
 
@@ -105,7 +108,7 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 ### 8. 分发、应用内更新与打包
 
 - **应用内下载与原子更新**（[AppUpdateService.swift](file:///Users/a003/dsh-workspace/repo-dashboard/macos/Sources/FizzDeck/Services/AppUpdateService.swift)）：GitHub Releases 检查、DMG 下载、`.sha256` 校验、挂载验证 Bundle ID 与签名、同卷暂存替换、自动重启。
-- **版本注入**（[build_and_run.sh](../macos/script/build_and_run.sh)）：默认 `0.9.0` / Build `23`，支持 `VERSION`、`BUILD_NUM` 环境变量覆盖。
+- **版本注入**（[build_and_run.sh](../macos/script/build_and_run.sh)）：默认 `0.9.3` / Build `26`，支持 `VERSION`、`BUILD_NUM` 环境变量覆盖。
 - **DMG 打包**（[package_dmg.sh](file:///Users/a003/dsh-workspace/repo-dashboard/macos/script/package_dmg.sh)）：默认 ad-hoc；支持 `--sign-identity` / `DEVELOPER_ID_APP`、Hardened Runtime、DMG 签名、`--notarize` + `NOTARY_PROFILE`、staple 与 `spctl` 校验。
 - **校验文件**：打包结束自动生成同名 `.sha256`，格式为 `shasum -a 256` 仅含文件名，供应用内更新和 GitHub Release 上传。
 
@@ -150,7 +153,7 @@ FizzDeck 是一个**面向小白 Vibe Coder 的本地优先 macOS 项目与 AI �
 
 ## 六、独立 `v0.7.5` 候选的历史验收清单
 
-以下命令仅适用于冻结的 Build 13 源码；当前工作树默认生成 `0.9.0 / 23`。
+以下命令仅适用于冻结的 Build 13 源码；当前工作树默认生成 `0.9.3 / 26`。
 
 ### 1. 本地脚本与构建
 

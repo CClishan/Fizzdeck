@@ -22,10 +22,17 @@ import workbenchShot from '../assets/native-090-workbench.webp';
 import progressShot from '../assets/native-090-progress.webp';
 import versionShot from '../assets/native-090-version.webp';
 import doctorShot from '../assets/native-090-doctor.webp';
+import enWorkbenchShot from '../assets/native-093-en-workbench.webp';
+import enProgressShot from '../assets/native-093-en-progress.webp';
+import enVersionShot from '../assets/native-093-en-version.webp';
+import enDoctorShot from '../assets/native-093-en-doctor.webp';
 import { COPY, DMG_URL, REPO_URL } from './i18n.js';
 import './landing.css';
 
-const screenshots = { workbench: progressShot, git: versionShot, services: doctorShot };
+const screenshots = {
+  zh: { hero: workbenchShot, workbench: progressShot, git: versionShot, services: doctorShot },
+  en: { hero: enWorkbenchShot, workbench: enProgressShot, git: enVersionShot, services: enDoctorShot },
+};
 const STORAGE_KEY = 'fizzdeck.landing.lang';
 
 function resolveInitialLang() {
@@ -44,22 +51,23 @@ function resolveInitialLang() {
 function useLang() {
   const [lang, setLang] = useState(resolveInitialLang);
 
+  const t = COPY[lang];
+
   useEffect(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, lang);
     } catch {
       // ignore storage errors
     }
-    const dict = COPY[lang];
     document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
-    document.title = dict.meta.title;
+    document.title = t.meta.title;
     for (const tag of document.querySelectorAll('meta[name="description"], meta[property="og:description"], meta[name="twitter:description"]')) {
-      tag.content = dict.meta.description;
+      tag.content = t.meta.description;
     }
     for (const tag of document.querySelectorAll('meta[property="og:title"], meta[name="twitter:title"]')) {
-      tag.content = dict.meta.title;
+      tag.content = t.meta.title;
     }
-  }, [lang]);
+  }, [lang, t]);
 
   const toggleLang = () => {
     const next = lang === 'zh' ? 'en' : 'zh';
@@ -68,7 +76,7 @@ function useLang() {
     window.history.replaceState(window.history.state, '', url);
     setLang(next);
   };
-  return { toggleLang, t: COPY[lang] };
+  return { lang, toggleLang, t };
 }
 
 function AppleMark({ size = 14 }) {
@@ -136,7 +144,7 @@ function FloatingPillNav({ t, onToggleLang }) {
   );
 }
 
-function Hero({ t, onToggleLang }) {
+function Hero({ t, onToggleLang, shot }) {
   const zoomRef = useRef(null);
 
   useEffect(() => {
@@ -260,7 +268,7 @@ function Hero({ t, onToggleLang }) {
         <div className="hero-zoom-inner" ref={zoomRef}>
           <figure className="hero-figure" aria-label={t.hero.stageCaption}>
             <img src={studioDisplay} alt="" width="2400" height="1610" fetchPriority="high" decoding="async" />
-            <img className="studio-window" src={workbenchShot} alt={t.hero.heroAlt} width="1600" height="1042" fetchPriority="high" decoding="async" />
+            <img className="studio-window" src={shot} alt={t.hero.heroAlt} width="1600" height="1042" fetchPriority="high" decoding="async" />
           </figure>
         </div>
       </div>
@@ -268,7 +276,7 @@ function Hero({ t, onToggleLang }) {
   );
 }
 
-function Showcase({ t }) {
+function Showcase({ t, shots }) {
   return (
     <section className="section container" id="views">
       <h2 className="two-tone-h2">
@@ -280,7 +288,7 @@ function Showcase({ t }) {
         {t.showcase.tiles.map((tile) => (
           <article className="showcase-col" key={tile.id}>
             <div className="showcase-media">
-              <img src={screenshots[tile.id]} alt={tile.alt} width="1056" height="688" loading="lazy" decoding="async" />
+              <img src={shots[tile.id]} alt={tile.alt} width="1056" height="688" loading="lazy" decoding="async" />
             </div>
             <p className="tile-copy">
               <strong className="ink-strong">{tile.lead}</strong>{' '}
@@ -436,7 +444,7 @@ function Footer({ t, onToggleLang }) {
 }
 
 export function Landing() {
-  const { t, toggleLang } = useLang();
+  const { lang, t, toggleLang } = useLang();
 
   return (
     <div className="landing-page">
@@ -445,8 +453,8 @@ export function Landing() {
       </a>
       <FloatingPillNav t={t} onToggleLang={toggleLang} />
       <main id="main" tabIndex={-1}>
-        <Hero t={t} onToggleLang={toggleLang} />
-        <Showcase t={t} />
+        <Hero t={t} onToggleLang={toggleLang} shot={screenshots[lang].hero} />
+        <Showcase t={t} shots={screenshots[lang]} />
         <FeatureGrid t={t} />
         <ShortcutCallout t={t} />
         <FAQ t={t} />

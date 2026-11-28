@@ -111,7 +111,8 @@ struct SessionRecord: Codable, Sendable, Hashable {
     }
 
     var resumeCommand: String? {
-        guard kind == .conversation else { return nil }
+        // The ID is a single CLI argument and, for Codex Desktop, a URL path component.
+        guard kind == .conversation, id.wholeMatch(of: #/[A-Za-z0-9_][A-Za-z0-9_.:-]*/#) != nil else { return nil }
         switch tool {
         case "codex": return "codex resume \(id)"
         case "claude": return "claude --resume \(id)"
@@ -738,7 +739,7 @@ enum SessionIndex {
                         let isError = (parsed.exitCode != nil && parsed.exitCode != 0)
                             || containsErrorMarker(parsed.text)
                         if isError {
-                            lastError = meaningfulErrorSnippet(from: parsed.text) ?? "命令执行失败"
+                            lastError = meaningfulErrorSnippet(from: parsed.text) ?? FizzL10n.text("命令执行失败", "Command failed")
                             endedWithError = true
                         } else {
                             endedWithError = false
@@ -935,7 +936,7 @@ enum SessionIndex {
                         }
                         if item["is_error"] as? Bool == true {
                             let errText = text(from: item["content"])
-                            lastError = meaningfulErrorSnippet(from: errText) ?? "工具调用失败"
+                            lastError = meaningfulErrorSnippet(from: errText) ?? FizzL10n.text("工具调用失败", "Tool call failed")
                             endedWithError = true
                         } else {
                             endedWithError = false
@@ -1327,7 +1328,7 @@ enum SessionIndex {
             modified: modified,
             lastUser: lastUser,
             kind: .workspaceSummary
-        ).withLastUserFallback("\(title) 工作区活动")
+        ).withLastUserFallback(FizzL10n.text("\(title) 工作区活动", "\(title) workspace activity"))
     }
 
     private static func ideWorkspaceDirectory(_ workspaceFile: URL) -> String? {

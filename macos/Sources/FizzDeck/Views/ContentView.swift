@@ -55,8 +55,8 @@ struct ContentView: View {
                     } label: {
                         FizzIcon(.md, symbol: "sidebar.left")
                     }
-                    .help(sidebarCollapsed ? "展开侧栏" : "折叠侧栏")
-                    .accessibilityLabel(sidebarCollapsed ? "展开侧栏" : "折叠侧栏")
+                    .help(sidebarCollapsed ? FizzL10n.text("展开侧栏", "Show sidebar") : FizzL10n.text("折叠侧栏", "Hide sidebar"))
+                    .accessibilityLabel(sidebarCollapsed ? FizzL10n.text("展开侧栏", "Show sidebar") : FizzL10n.text("折叠侧栏", "Hide sidebar"))
                 }
 
                 if let project = store.selectedProject {
@@ -65,8 +65,8 @@ struct ContentView: View {
                     } label: {
                         FizzIcon(.md, symbol: "chevron.left")
                     }
-                    .help("返回工作台")
-                    .accessibilityLabel("返回工作台")
+                    .help(FizzL10n.text("返回工作台", "Back to Workbench"))
+                    .accessibilityLabel(FizzL10n.text("返回工作台", "Back to Workbench"))
 
                     Button {
                         Task {
@@ -81,8 +81,8 @@ struct ContentView: View {
                                 isActive: store.phase == .scanning && !reduceMotion
                             )
                     }
-                    .help("重新扫描 \(project.displayName)")
-                    .accessibilityLabel("重新扫描项目")
+                    .help(FizzL10n.text("重新扫描 \(project.displayName)", "Rescan \(project.displayName)"))
+                    .accessibilityLabel(FizzL10n.text("重新扫描项目", "Rescan projects"))
                     .disabled(store.phase == .scanning)
                 } else {
                     Button {
@@ -92,7 +92,7 @@ struct ContentView: View {
                         }
                     } label: {
                         Label {
-                            Text("重新扫描")
+                            Text(FizzL10n.text("重新扫描", "Rescan"))
                         } icon: {
                             FizzIcon(.md, symbol: "arrow.clockwise")
                                 .symbolEffect(
@@ -102,19 +102,19 @@ struct ContentView: View {
                                 )
                         }
                     }
-                    .help("重新扫描受管目录")
+                    .help(FizzL10n.text("重新扫描受管目录", "Rescan managed folders"))
                     .disabled(store.phase == .scanning)
 
                     Button {
                         Task { await store.addRoot() }
                     } label: {
                         Label {
-                            Text("文件夹")
+                            Text(FizzL10n.text("文件夹", "Folders"))
                         } icon: {
                             FizzIcon(.md, symbol: "folder")
                         }
                     }
-                    .help("查看已加入文件夹，或扫描新目录")
+                    .help(FizzL10n.text("查看已加入文件夹，或扫描新目录", "View added folders or scan a new one"))
                 }
             }
 
@@ -124,8 +124,8 @@ struct ContentView: View {
                 } label: {
                     FizzIcon(.md, symbol: "magnifyingglass")
                 }
-                .help("搜索项目、分支、远程或动作（⌘K）")
-                .accessibilityLabel("搜索")
+                .help(FizzL10n.text("搜索项目、分支、远程或动作（⌘K）", "Search projects, branches, remotes, or actions (⌘K)"))
+                .accessibilityLabel(FizzL10n.text("搜索", "Search"))
             }
         }
         .overlay {
@@ -207,10 +207,10 @@ struct ContentView: View {
             .map { Double($0.count) }
             .sorted(by: >)
         ToastCenter.shared.show(
-            "重新扫描完成",
+            FizzL10n.text("重新扫描完成", "Rescan complete"),
             symbol: "arrow.clockwise.circle.fill",
             tint: Color.secondary,
-            subtitle: "\(store.projects.count) 个项目 · \(Format.relative(store.scannedAt ?? Date()))",
+            subtitle: FizzL10n.text("\(store.projects.count) 个项目 · \(Format.relative(store.scannedAt ?? Date()))", "\(SessionSummaryText.englishCount(store.projects.count, "project")) · \(Format.relative(store.scannedAt ?? Date()))"),
             microViz: .bars(values: counts, improved: false)
         )
     }
@@ -221,10 +221,10 @@ struct ContentView: View {
             .suffix(8)
             .map { Double($0.value) }
         ToastCenter.shared.show(
-            "已刷新 \(project.displayName)",
+            FizzL10n.text("已刷新 \(project.displayName)", "Refreshed \(project.displayName)"),
             symbol: "arrow.clockwise.circle.fill",
             tint: Color.secondary,
-            subtitle: project.branch ?? project.group,
+            subtitle: project.branch ?? project.groupTitle,
             microViz: .bars(values: values, improved: false)
         )
     }
@@ -254,11 +254,11 @@ private struct WelcomeView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label("把本地项目收进 FizzDeck", systemImage: "square.stack.3d.up")
+            Label(FizzL10n.text("把本地项目收进 FizzDeck", "Add local projects to FizzDeck"), systemImage: "square.stack.3d.up")
         } description: {
-            Text("扫描常用目录，查看体积、Git 状态、AI 会话和可清理项。文件不会被修改。")
+            Text(FizzL10n.text("扫描常用目录，查看体积、Git 状态、AI 会话和可清理项。文件不会被修改。", "Scan your folders to see project sizes, Git status, AI sessions, and reclaimable space. Your files stay unchanged."))
         } actions: {
-            Button("添加项目目录") {
+            Button(FizzL10n.text("添加项目目录", "Add project folder")) {
                 Task { await store.addRoot() }
             }
             .buttonStyle(.glassProminent)

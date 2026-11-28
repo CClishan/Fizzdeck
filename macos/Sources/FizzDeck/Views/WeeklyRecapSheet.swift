@@ -31,7 +31,7 @@ struct WeeklyRecapSheet: View {
                     if let recap {
                         dashboard(recap)
                     } else {
-                        ProgressView("正在汇总本机记录…")
+                        ProgressView(FizzL10n.text("正在汇总本机记录…", "Gathering local activity…"))
                             .frame(maxWidth: .infinity, minHeight: 280)
                     }
                 }
@@ -47,17 +47,18 @@ struct WeeklyRecapSheet: View {
         .background(FizzTheme.page)
         .sheet(isPresented: $showingShare) {
             if let recap {
-                WeeklyRecapShareSheet(data: shareData(recap))
+                WeeklyRecapShareSheet(data: .init(recap: recap))
             }
         }
-        .alert("允许润色这份复盘？", isPresented: $showConsent) {
-            Button("取消", role: .cancel) {}
-            Button("同意并润色") { consentFor = providerKind }
+        .alert(FizzL10n.text("允许润色这份复盘？", "Send recap totals to AI?"), isPresented: $showConsent) {
+            Button(FizzL10n.text("取消", "Cancel"), role: .cancel) {}
+            Button(FizzL10n.text("同意并润色", "Allow and Edit")) { consentFor = providerKind }
         } message: {
-            Text("只向当前 AI 提供方（\(providerKind.title)）发送项目、会话、文件和提交数量及估算费用。不发送名称、路径、复盘原文或聊天内容。仅本次有效。")
+            Text(FizzL10n.text("只向当前 AI 提供方（\(providerKind.title)）发送项目、会话、文件和提交数量及估算费用。不发送名称、路径、复盘原文或聊天内容。仅本次有效。", "\(providerKind.title) will receive only project, session, file, and commit counts and the estimated cost. Names, paths, the recap itself, and chats stay on this Mac. This permission applies once."))
         }
         .onChange(of: aiEnabled && summaryConsent) { if !aiEnabled || !summaryConsent { resetPolish() } }
         .onChange(of: providerKind) { resetPolish() }
+        .onChange(of: FizzL10n.isEnglish) { resetPolish() }
         .task(id: range) {
             let selected = range
             let task = Task.detached(priority: .userInitiated) { [projects] in
@@ -84,7 +85,7 @@ struct WeeklyRecapSheet: View {
     }
 
     private var header: some View {
-        FizzPageHeader(title: "跨 Agent 复盘", subtitle: periodSubtitle) {
+        FizzPageHeader(title: FizzL10n.text("跨 Agent 复盘", "Agent Recap"), subtitle: periodSubtitle) {
             FizzSegmentedCapsule(items: WeeklyRecapRange.allCases, selection: Binding(
                 get: { range }, set: { selected in
                     guard range != selected else { return }
@@ -93,13 +94,13 @@ struct WeeklyRecapSheet: View {
                     range = selected
                 }
             ), keyboardNavigation: true) { item, _ in
-                Text(item.rawValue)
+                Text(item.shortTitle)
                     .font(FizzTypography.caption)
                     .accessibilityLabel(item.periodTitle)
             }
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("复盘周期")
-            FizzIconButton(title: "关闭复盘", symbol: "xmark", height: .compact) { dismiss() }
+            .accessibilityLabel(FizzL10n.text("复盘周期", "Recap period"))
+            FizzIconButton(title: FizzL10n.text("关闭复盘", "Close recap"), symbol: "xmark", height: .compact) { dismiss() }
         }
     }
 
@@ -108,13 +109,13 @@ struct WeeklyRecapSheet: View {
         let span = dateSpan(recap.windowStart, recap.generatedAt)
         guard let previous = recap.analysis.previousStart,
               let end = Calendar.current.date(byAdding: .day, value: -1, to: recap.windowStart) else {
-            return "\(span) · 全部已索引历史"
+            return FizzL10n.text("\(span) · 全部已索引历史", "\(span) · All indexed history")
         }
-        return "\(span) · 较上期 \(dateSpan(previous, end))"
+        return FizzL10n.text("\(span) · 较上期 \(dateSpan(previous, end))", "\(span) · Compared with \(dateSpan(previous, end))")
     }
 
     private func dateSpan(_ first: Date, _ last: Date) -> String {
-        let style = Date.FormatStyle().month(.defaultDigits).day()
+        let style = Date.FormatStyle().month(.abbreviated).day().locale(FizzL10n.locale)
         let firstStyle = Calendar.current.isDate(first, equalTo: last, toGranularity: .year) ? style : style.year()
         let lastStyle = Calendar.current.isDate(last, equalTo: Date(), toGranularity: .year) ? style : style.year()
         return "\(first.formatted(firstStyle))–\(last.formatted(lastStyle))"
@@ -135,8 +136,8 @@ struct WeeklyRecapSheet: View {
         }
 
         if analysis.sessions.isEmpty {
-            Panel(title: "这个周期没有对话", symbol: "bubble.left.and.bubble.right") {
-                Text("切换到更长的周期，可以查看此前已索引的本机对话。")
+            Panel(title: FizzL10n.text("这个周期没有对话", "No sessions in this period"), symbol: "bubble.left.and.bubble.right") {
+                Text(FizzL10n.text("切换到更长的周期，可以查看此前已索引的本机对话。", "Choose a longer period to see earlier sessions indexed on this Mac."))
                     .font(FizzTypography.body)
                     .foregroundStyle(.secondary)
             }
@@ -163,7 +164,7 @@ struct WeeklyRecapSheet: View {
     private var polishControls: some View {
         VStack(alignment: .leading, spacing: FizzSpacing.row) {
             HStack(spacing: FizzSpacing.row) {
-                Toggle("AI 润色", isOn: Binding(get: { consentFor != nil }, set: { on in
+                Toggle(FizzL10n.text("AI 润色", "Edit with AI"), isOn: Binding(get: { consentFor != nil }, set: { on in
                     if on { showConsent = true } else { resetPolish() }
                 }))
                 .toggleStyle(.switch)
@@ -172,7 +173,7 @@ struct WeeklyRecapSheet: View {
                 .fizzKeyboardAction { if consentFor != nil { resetPolish() } else { showConsent = true } }
                 .disabled(!aiEnabled || !summaryConsent)
                 if !aiEnabled || !summaryConsent {
-                    FizzActionButton(title: "设置 AI 总结…", height: .compact) { openSettings() }
+                    FizzActionButton(title: FizzL10n.text("设置 AI 总结…", "Set Up AI Summaries…"), height: .compact) { openSettings() }
                         .fizzKeyboardAction { openSettings() }
                 }
             }
@@ -188,19 +189,19 @@ struct WeeklyRecapSheet: View {
         FizzSheetFooter {
             if polishing {
                 ProgressView().controlSize(.mini)
-                Text("正在润色复盘…")
+                Text(FizzL10n.text("正在润色复盘…", "Editing recap…"))
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: FizzSpacing.row)
-            FizzActionButton(title: "关闭", role: .cancel) { dismiss() }
+            FizzActionButton(title: FizzL10n.text("关闭", "Close"), role: .cancel) { dismiss() }
                 .keyboardShortcut(.cancelAction)
                 .fizzKeyboardAction { dismiss() }
-            FizzActionButton(title: "复制 Markdown", symbol: "doc.on.clipboard", action: copyMarkdown)
+            FizzActionButton(title: FizzL10n.text("复制 Markdown", "Copy Markdown"), symbol: "doc.on.clipboard", action: copyMarkdown)
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .fizzKeyboardAction(action: copyMarkdown)
                 .disabled(recap?.hasActivity != true)
-            FizzActionButton(title: "分享卡", symbol: "photo.on.rectangle", prominence: .primary) { showingShare = true }
+            FizzActionButton(title: FizzL10n.text("分享卡", "Share Card"), symbol: "photo.on.rectangle", prominence: .primary) { showingShare = true }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
                 .fizzKeyboardAction { showingShare = true }
                 .disabled(recap?.hasActivity != true)
@@ -210,13 +211,6 @@ struct WeeklyRecapSheet: View {
 
     private func copyMarkdown() {
         guard let recap else { return }
-        SystemActions.copy(recap.markdown(polishedSummary: polished), feedback: "复盘已复制", microViz: .compact(state: .done))
-    }
-
-    private func shareData(_ recap: WeeklyRecap) -> WeeklyRecapShareData {
-        WeeklyRecapShareData(
-            period: "\(recap.range.periodTitle) · \(dateSpan(recap.windowStart, recap.generatedAt))",
-            analysis: recap.analysis
-        )
+        SystemActions.copy(recap.markdown(polishedSummary: polished), feedback: FizzL10n.text("复盘已复制", "Recap copied"), microViz: .compact(state: .done))
     }
 }

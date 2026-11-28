@@ -83,7 +83,9 @@ final class RepositoryStore {
     private(set) var recentActionIDs: [String] = []
     private(set) var activeAIProjectPaths: Set<String> = []
     private(set) var activeAISessionIDs: Set<String> = []
-    private(set) var marks: [SessionMark] = MarkStore.load()
+    private let marksFile: URL
+    private(set) var marks: [SessionMark]
+    private(set) var updatingMarkPins: Set<String> = []
     private(set) var doctorReports: [String: DoctorProjectReport] = [:]
     private(set) var machineEnv: MachineEnvironmentReport?
     private(set) var isRunningDoctor = false
@@ -120,10 +122,12 @@ final class RepositoryStore {
     private var hasSeededActiveAISessions = false
     private var lastSessionFinishToastByProject: [String: Date] = [:]
 
-    init(preferences: UserDefaults = .standard, quietFetchAttempts: QuietGitFetch.AttemptWindow = .shared,
+    init(preferences: UserDefaults = .standard, marksFile: URL = AppPaths.marksFile, quietFetchAttempts: QuietGitFetch.AttemptWindow = .shared,
          quietFetchNow: @escaping () -> Date = Date.init,
          checkRemote: @escaping @Sendable (URL) async -> QuietGitFetch.Result? = { await QuietGitFetch.check(in: $0) }) {
         self.preferences = preferences
+        self.marksFile = marksFile
+        self.marks = MarkStore.load(from: marksFile)
         self.quietFetchAttempts = quietFetchAttempts
         self.quietFetchNow = quietFetchNow
         self.checkRemote = checkRemote
@@ -228,6 +232,7 @@ final class RepositoryStore {
 
     func scan() async {
         guard phase != .scanning else { return }
+        reloadMarks()
         sizeEnrichmentTask?.cancel()
         sizeEnrichmentTask = nil
         pendingSizeCount = 0
@@ -316,6 +321,7 @@ final class RepositoryStore {
     func rescanProjects(_ projects: [RepoProject]) async {
         let paths = projects.map(\.path)
         guard !paths.isEmpty else { return }
+        reloadMarks()
 
         let started = Date()
         let fast = await RepositoryScanner.scanFast(paths: paths, meta: metadata)
@@ -352,9 +358,9 @@ final class RepositoryStore {
 
     func chooseFolderForScan() -> URL? {
         let panel = NSOpenPanel()
-        panel.title = "添加项目文件夹"
-        panel.message = "选择父文件夹后，自动查找其中的项目。"
-        panel.prompt = "扫描"
+        panel.title = FizzL10n.text("添加项目文件夹", "Add Project Folders")
+        panel.message = FizzL10n.text("选择父文件夹后，自动查找其中的项目。", "Choose a parent folder to find its projects.")
+        panel.prompt = FizzL10n.text("扫描", "Scan")
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
@@ -576,12 +582,25 @@ final class RepositoryStore {
     }
 
     func reloadMarks() {
-        marks = MarkStore.load()
+        let latest = MarkStore.load(from: marksFile)
+        if marks != latest { marks = latest }
+    }
+
+    func dismissExpiryReminders(for ids: Set<String>) throws {
+        marks = try MarkStore.dismissExpiryReminders(ids, in: marksFile)
     }
 
     func openProjectDiff(project: RepoProject, markID: String) {
         requestedMarkIDForDiff = markID
         openProject(project, tab: .progress)
+    }
+
+    func openAttentionItem(_ item: ProjectAttentionItem) {
+        if let target = item.expiringMarks.first {
+            openProjectDiff(project: item.project, markID: target.mark.id)
+        } else {
+            openProject(item.project, tab: item.kind.tab)
+        }
     }
 
     func openProjectSaveVersion(project: RepoProject) {
@@ -605,16 +624,16 @@ final class RepositoryStore {
             label: label,
             allowGitSnapshot: allowSnapshot
         )
-        marks = MarkStore.upsert(mark)
+        marks = MarkStore.upsert(mark, in: marksFile)
 
         if mark.kind == .gitSnapshot, !MarkPreferences.firstMarkToastShown() {
             MarkPreferences.setFirstMarkToastShown(true)
             ToastCenter.shared.show(
-                "已为这次对话记下开始前的样子，保留约 14 天",
+                FizzL10n.text("已为这次对话记下开始前的样子，保留约 14 天", "Saved a restore point before this conversation. It lasts about 14 days."),
                 symbol: "bookmark.circle.fill",
                 tint: .secondary,
                 duration: 4.0,
-                subtitle: "以后随时可在进度时间线对比或还原"
+                subtitle: FizzL10n.text("以后随时可在进度时间线对比或还原", "Compare or restore it later in the Progress timeline")
             )
         }
         return mark
@@ -622,17 +641,25 @@ final class RepositoryStore {
 
     @discardableResult
     func togglePin(mark: SessionMark) async -> Bool {
-        let updatedPinned = !mark.pinned
-        let ok = await SessionMarkService.setPinned(
-            updatedPinned,
-            mark: mark,
-            in: URL(fileURLWithPath: mark.projectPath)
-        )
-        guard ok else { return false }
-        var copy = mark
-        copy.pinned = updatedPinned
-        marks = MarkStore.upsert(copy)
-        return true
+        await setPinned(!mark.pinned, for: mark)
+    }
+
+    @discardableResult
+    func setPinned(_ pinned: Bool, for mark: SessionMark) async -> Bool {
+        guard let current = marks.first(where: { $0.id == mark.id }), current.kind == .gitSnapshot,
+              updatingMarkPins.insert(mark.id).inserted else { return false }
+        defer { updatingMarkPins.remove(mark.id) }
+        guard current.pinned != pinned else { return true }
+        let directory = URL(fileURLWithPath: current.projectPath)
+        guard await SessionMarkService.setPinned(pinned, mark: current, in: directory) else { return false }
+        do {
+            marks = try MarkStore.setPinned(pinned, id: current.id, in: marksFile)
+            return true
+        } catch {
+            // If metadata still says pinned, keep the protecting ref too.
+            if current.pinned { _ = await SessionMarkService.setPinned(true, mark: current, in: directory) }
+            return false
+        }
     }
 
     func recordRecentProject(_ path: String) {
@@ -1134,7 +1161,7 @@ final class RepositoryStore {
         var meta = metadata[project.path] ?? ProjectMeta()
         if exempt { meta.doctorExemptions.insert(kind) } else { meta.doctorExemptions.remove(kind) }
         do { try MetaStore.saveDoctorExemptions(meta.doctorExemptions, for: project.path) } catch {
-            ToastCenter.shared.show("未能保存体检豁免", symbol: "exclamationmark.triangle", tint: FizzTheme.statusWarning)
+            ToastCenter.shared.show(FizzL10n.text("未能保存体检豁免", "Couldn’t save the Doctor exemption"), symbol: "exclamationmark.triangle", tint: FizzTheme.statusWarning)
             return
         }
         metadata[project.path] = meta
@@ -1260,7 +1287,7 @@ final class RepositoryStore {
                     _ = await self?.createMark(
                         for: context.project,
                         session: context.session,
-                        label: "对话开始前的样子",
+                        label: SessionMarkService.conversationStartLabel,
                         allowGitSnapshot: true
                     )
                 }
@@ -1287,11 +1314,11 @@ final class RepositoryStore {
         if session.endedWithError {
             let errSubtitle = session.lastError.map { String($0.prefix(80)) }
             ToastCenter.shared.show(
-                "「\(updatedProject.displayName)」的对话以报错结束",
+                FizzL10n.text("「\(updatedProject.displayName)」的对话以报错结束", "A conversation in “\(updatedProject.displayName)” ended with an error"),
                 symbol: "exclamationmark.triangle.fill",
                 tint: FizzTheme.statusWarning,
                 subtitle: errSubtitle,
-                action: ToastAction(title: "去看看", symbol: "arrow.right.circle") { [weak self] in
+                action: ToastAction(title: FizzL10n.text("去看看", "View Session"), symbol: "arrow.right.circle") { [weak self] in
                     self?.openProject(updatedProject, tab: .progress, sessionID: session.id)
                 }
             )
@@ -1311,21 +1338,21 @@ final class RepositoryStore {
         }
         lastSessionFinishToastByProject[updatedProject.path] = now
 
-        let subtitle = issues.first?.title ?? "可查看改动或顺手存个版本"
+        let subtitle = issues.first?.title ?? FizzL10n.text("可查看改动或顺手存个版本", "Review the changes or save a version")
         let toolTitle = HomeDashboardModel.toolTitle(session.tool)
         let mark = marks(for: updatedProject.path).first { $0.kind == .gitSnapshot }
         let action: ToastAction = if let mark {
-            ToastAction(title: "看改了什么", symbol: "doc.text.magnifyingglass") { [weak self] in
+            ToastAction(title: FizzL10n.text("看改了什么", "Review Changes"), symbol: "doc.text.magnifyingglass") { [weak self] in
                 self?.openProjectDiff(project: updatedProject, markID: mark.id)
             }
         } else {
-            ToastAction(title: "存个版本", symbol: "checkmark.circle") { [weak self] in
+            ToastAction(title: FizzL10n.text("存个版本", "Save a version"), symbol: "checkmark.circle") { [weak self] in
                 self?.openProjectSaveVersion(project: updatedProject)
             }
         }
 
         ToastCenter.shared.show(
-            "\(toolTitle) 刚在 \(updatedProject.displayName) 改了 \(max(1, changedCount)) 个文件",
+            FizzL10n.text("\(toolTitle) 刚在 \(updatedProject.displayName) 改了 \(max(1, changedCount)) 个文件", "\(toolTitle) just changed \(max(1, changedCount)) files in \(updatedProject.displayName)"),
             symbol: "sparkles",
             tint: .secondary,
             subtitle: subtitle,

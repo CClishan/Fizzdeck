@@ -175,7 +175,7 @@ struct FizzSheetHeader: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            FizzIconButton(title: "关闭", symbol: "xmark", height: .compact, action: onClose)
+            FizzIconButton(title: FizzL10n.text("关闭", "Close"), symbol: "xmark", height: .compact, action: onClose)
         }
     }
 }
@@ -220,7 +220,7 @@ struct FizzHeroMetricCard: View {
                     Text("\(arrow)\(percent)")
                         .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel("较上期 \(arrow)\(percent)")
+                        .accessibilityLabel(FizzL10n.text("较上期 \(arrow)\(percent)", "\(arrow)\(percent) vs. last period"))
                 }
             }
             .frame(height: 28)
@@ -688,9 +688,9 @@ extension PortState {
 
     var badgeLabel: String {
         switch self {
-        case .running: "端口运行中"
-        case .stopped: "端口未启动"
-        case .noPreview: "无预览端口"
+        case .running: FizzL10n.text("端口运行中", "Port active")
+        case .stopped: FizzL10n.text("端口未启动", "Port inactive")
+        case .noPreview: FizzL10n.text("无预览端口", "No preview port")
         }
     }
 }
@@ -706,13 +706,13 @@ struct ProjectQuickActions: View {
         Button {
             SystemActions.reveal(project.path)
         } label: {
-            Label("在 Finder 中显示", systemImage: "folder")
+            Label(FizzL10n.text("在 Finder 中显示", "Show in Finder"), systemImage: "folder")
         }
 
         Button {
             SystemActions.openTerminal(project.path)
         } label: {
-            Label("在终端中打开", systemImage: "terminal")
+            Label(FizzL10n.text("在终端中打开", "Open in Terminal"), systemImage: "terminal")
         }
 
         if !editors.isEmpty {
@@ -723,7 +723,7 @@ struct ProjectQuickActions: View {
                     }
                 }
             } label: {
-                Label("在编辑器中打开", systemImage: "chevron.left.forwardslash.chevron.right")
+                Label(FizzL10n.text("在编辑器中打开", "Open in Editor"), systemImage: "chevron.left.forwardslash.chevron.right")
             }
         }
 
@@ -732,7 +732,7 @@ struct ProjectQuickActions: View {
         Button {
             SystemActions.copy(project.path)
         } label: {
-            Label("复制路径", systemImage: "doc.on.doc")
+            Label(FizzL10n.text("复制路径", "Copy Path"), systemImage: "doc.on.doc")
         }
     }
 }
@@ -742,8 +742,8 @@ struct ProjectGroupingMenu: View {
     let project: RepoProject
 
     var body: some View {
-        Menu("移动到分组") {
-            Button("恢复自动分类", systemImage: "arrow.uturn.backward") {
+        Menu(FizzL10n.text("移动到分组", "Move to Group")) {
+            Button(FizzL10n.text("恢复自动分类", "Restore Automatic Group"), systemImage: "arrow.uturn.backward") {
                 store.setGroup(nil, for: project)
             }
 
@@ -754,7 +754,7 @@ struct ProjectGroupingMenu: View {
                     store.setGroup(group, for: project)
                 } label: {
                     Label(
-                        group,
+                        ProjectGrouping.title(for: group),
                         systemImage: project.group == group ? "checkmark" : "circle.fill"
                     )
                 }
@@ -762,7 +762,7 @@ struct ProjectGroupingMenu: View {
 
             Divider()
 
-            Button("新建分组…", systemImage: "plus") {
+            Button(FizzL10n.text("新建分组…", "New Group…"), systemImage: "plus") {
                 guard let name = SystemActions.promptForGroupName() else { return }
                 store.setGroup(name, for: project)
             }

@@ -3,7 +3,7 @@ import SQLite3
 import XCTest
 @testable import FizzDeck
 
-final class OpenCodeSessionReaderTests: XCTestCase {
+final class OpenCodeSessionReaderTests: ChineseInterfaceTestCase {
     func testDefaultDatabaseFeedsProjectCountsAndIncrementalChineseSearch() async throws {
         let fixture = try Fixture(useDefaultLocation: true)
         let home = fixture.folder

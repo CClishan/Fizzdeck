@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import FizzDeck
 
-final class HomeDashboardModelTests: XCTestCase {
+final class HomeDashboardModelTests: ChineseInterfaceTestCase {
     private func makeProject(
         path: String,
         displayName: String? = nil,
@@ -206,6 +206,52 @@ final class HomeDashboardModelTests: XCTestCase {
         let all = HomeDashboardModel.batchCleanupCommands(for: [p1, p3])
         XCTAssertEqual(all.script, "# AppA\nrm -rf '/tmp/a/dist'\n# AppC\nrm -rf '/tmp/c/build'")
         XCTAssertEqual(all.feedback, "已复制 2 个项目的清理命令")
+        FizzL10n.$languageOverride.withValue(.english) {
+            XCTAssertEqual(partial.feedback, "Copied commands for 1; 1 had nothing to clean")
+            XCTAssertEqual(all.feedback, "Copied cleanup commands for 2 projects")
+        }
+    }
+
+    func testCachedSearchHitsRelocalizeGeneratedCopyButKeepIdenticalUserText() throws {
+        var project = makeProject(path: "/tmp/工作室 Atlas")
+        var untitled = SessionRecord(tool: "codex", id: "untitled", cwd: nil, startedAt: nil, modified: .now)
+        untitled.lastError = "构建失败: Atlas"
+        var named = SessionRecord(tool: "codex", id: "named", cwd: nil, startedAt: nil, modified: .now)
+        named.firstUser = "Codex 会话"
+        project.sessions.recentSessions = [untitled, named]
+
+        let hits = FizzL10n.$languageOverride.withValue(.chinese) {
+            let results = SessionSearchIndex.inMemorySearch(projects: [project], query: "Atlas")
+            return WorkbenchSearchHit.make(results, query: "Atlas")
+        }
+        let fallback = try XCTUnwrap(hits.first { $0.result.sessionID == "untitled" })
+        let prompt = try XCTUnwrap(hits.first { $0.result.sessionID == "named" })
+        FizzL10n.$languageOverride.withValue(.chinese) {
+            XCTAssertEqual(fallback.title, prompt.title)
+            XCTAssertEqual(fallback.snippet, "命中报错：构建失败: Atlas")
+        }
+        FizzL10n.$languageOverride.withValue(.english) {
+            XCTAssertEqual(fallback.title, "Codex session")
+            XCTAssertEqual(prompt.title, "Codex 会话")
+            XCTAssertEqual(fallback.snippet, "Error: 构建失败: Atlas")
+            XCTAssertEqual(prompt.result.projectName, "工作室 Atlas")
+        }
+    }
+
+    func testLibraryShowsOtherInEnglishButFiltersOnTheOriginalStackKey() throws {
+        var project = makeProject(path: "/tmp/示例")
+        project.stacks = [StackGroup(key: "framework", label: "框架", items: ["其他"])]
+        try FizzL10n.$languageOverride.withValue(.english) {
+            let choice = try XCTUnwrap(HomeDashboardModel.availableFrameworks(in: [project]).first)
+            XCTAssertEqual(choice.title, "Other")
+            XCTAssertEqual(choice.id, "其他")
+            XCTAssertEqual(LibraryTableRow.makeRows(from: [project]).first?.framework, "Other")
+            var query = LibraryQuery()
+            query.framework = choice.id
+            XCTAssertEqual(HomeDashboardModel.libraryProjects(from: [project], query: query, sort: .name, commitActivity: .empty).map(\.path), [project.path])
+            query.framework = choice.title
+            XCTAssertTrue(HomeDashboardModel.libraryProjects(from: [project], query: query, sort: .name, commitActivity: .empty).isEmpty)
+        }
     }
 
     func testLibraryProjectsFilterSortAndDirtySort() {
@@ -234,7 +280,7 @@ final class HomeDashboardModelTests: XCTestCase {
         p2.stacks = [StackGroup(key: "framework", label: "框架", items: ["SwiftUI"])]
 
         XCTAssertEqual(HomeSort.dirty.sort([p1, p2]).map(\.name), ["b", "a"])
-        XCTAssertEqual(HomeDashboardModel.availableFrameworks(in: [p1, p2]), ["Next.js", "SwiftUI"])
+        XCTAssertEqual(HomeDashboardModel.availableFrameworks(in: [p1, p2]).map(\.id), ["Next.js", "SwiftUI"])
 
         var query = LibraryQuery()
         query.starredOnly = true

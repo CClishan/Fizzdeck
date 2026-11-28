@@ -8,6 +8,7 @@ enum ProjectAttentionKind: String, CaseIterable, Identifiable, Sendable {
     case behind
     case unpushed
     case cleanup
+    case expiringMarks
 
     var id: String { rawValue }
 
@@ -20,6 +21,7 @@ enum ProjectAttentionKind: String, CaseIterable, Identifiable, Sendable {
         case .unpushed: 3
         case .dirty: 4
         case .cleanup: 5
+        case .expiringMarks: 6
         }
     }
 
@@ -32,6 +34,7 @@ enum ProjectAttentionKind: String, CaseIterable, Identifiable, Sendable {
         case .unpushed: 3
         case .behind: 4
         case .cleanup: 5
+        case .expiringMarks: 6
         }
     }
 
@@ -42,7 +45,7 @@ enum ProjectAttentionKind: String, CaseIterable, Identifiable, Sendable {
     var tab: ProjectTab {
         switch self {
         case .doctorCritical, .testFailed: .run
-        case .sessionError, .cleanup: .progress
+        case .sessionError, .cleanup, .expiringMarks: .progress
         case .dirty, .behind, .unpushed: .version
         }
     }
@@ -53,6 +56,7 @@ struct ProjectAttentionItem: Identifiable, Sendable {
     let kind: ProjectAttentionKind
     let title: String
     let detail: String
+    var expiringMarks: [ExpiringSessionMark] = []
 
     var id: String { "\(project.path):\(kind.rawValue)" }
 }
@@ -85,13 +89,24 @@ enum ProjectAttentionQueue {
         testRuns: [String: TestRunState],
         focusedPaths: Set<String>?,
         copyMode: CopyMode,
-        doctorReports: [String: DoctorProjectReport] = [:]
+        doctorReports: [String: DoctorProjectReport] = [:],
+        expiringMarks: [ExpiringSessionMark] = []
     ) -> [ProjectAttentionItem] {
         var items: [ProjectAttentionItem] = []
+        let marksByProject = Dictionary(grouping: expiringMarks, by: \.projectPath)
 
         for project in projects {
             if let focusedPaths, !focusedPaths.contains(project.path) {
                 continue
+            }
+
+            if let reminders = marksByProject[project.path], let first = reminders.first {
+                let name = first.mark.displayLabel
+                let date = first.mark.createdAt.formatted(.dateTime.month().day().hour().minute().locale(FizzL10n.locale))
+                items.append(ProjectAttentionItem(
+                    project: project, kind: .expiringMarks, title: FizzL10n.text("\(reminders.count) 个标记即将过期", "\(reminders.count) expiring \(reminders.count == 1 ? "mark" : "marks")"),
+                    detail: FizzL10n.text("约 \(first.daysRemaining) 天后过期 · \(name) · \(date)", "Expires in about \(SessionSummaryText.englishCount(first.daysRemaining, "day")) · \(name) · \(date)"), expiringMarks: reminders
+                ))
             }
 
             if let report = doctorReports[project.path],
@@ -107,12 +122,12 @@ enum ProjectAttentionQueue {
             }
 
             if let test = testRuns[project.path], test.status == .failed {
-                let exit = test.exitCode.map { " · exit \($0)" } ?? ""
+                let exit = test.exitCode.map { FizzL10n.text(" · 退出码 \($0)", " · exit \($0)") } ?? ""
                 items.append(
                     ProjectAttentionItem(
                         project: project,
                         kind: .testFailed,
-                        title: copyMode == .plain ? "跑不起来：检查没通过" : "测试失败",
+                        title: copyMode == .plain ? FizzL10n.text("跑不起来：检查没通过", "Can’t run: check failed") : FizzL10n.text("测试失败", "Tests failed"),
                         detail: test.command + exit
                     )
                 )
@@ -126,8 +141,8 @@ enum ProjectAttentionQueue {
                     ProjectAttentionItem(
                         project: project,
                         kind: .sessionError,
-                        title: copyMode == .plain ? "上次 AI 对话报错结束" : "会话报错结束",
-                        detail: latestConversation.lastError ?? "点击查看进度"
+                        title: copyMode == .plain ? FizzL10n.text("上次 AI 对话报错结束", "Last AI conversation ended with an error") : FizzL10n.text("会话报错结束", "Session ended with an error"),
+                        detail: latestConversation.lastError ?? FizzL10n.text("点击查看进度", "View Progress")
                     )
                 )
             }
@@ -170,8 +185,8 @@ enum ProjectAttentionQueue {
                     ProjectAttentionItem(
                         project: project,
                         kind: .cleanup,
-                        title: "可回收 \(Format.bytes(project.cleanup.reusableBytes))",
-                        detail: "\(project.cleanup.items.count) 个缓存或构建目录"
+                        title: FizzL10n.text("可回收 \(Format.bytes(project.cleanup.reusableBytes))", "Reclaim \(Format.bytes(project.cleanup.reusableBytes))"),
+                        detail: FizzL10n.text("\(project.cleanup.items.count) 个缓存或构建目录", "\(project.cleanup.items.count) cache or build \(project.cleanup.items.count == 1 ? "folder" : "folders")")
                     )
                 )
             }
@@ -191,6 +206,6 @@ enum ProjectAttentionQueue {
         if let branch = project.branch {
             return branch
         }
-        return project.group
+        return project.groupTitle
     }
 }

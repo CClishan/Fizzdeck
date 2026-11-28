@@ -112,13 +112,13 @@ struct RuntimeVersionMismatch: Identifiable, Equatable, Sendable {
 
     var title: String {
         if let currentText {
-            return "这个项目需要 \(runtime.title) \(requiredText)，本机当前是 \(runtime.title) \(currentText)"
+            return FizzL10n.text("这个项目需要 \(runtime.title) \(requiredText)，本机当前是 \(runtime.title) \(currentText)", "This project needs \(runtime.title) \(requiredText); this Mac has \(runtime.title) \(currentText)")
         }
-        return "这个项目需要 \(runtime.title) \(requiredText)，但本机还没找到 \(runtime.title)"
+        return FizzL10n.text("这个项目需要 \(runtime.title) \(requiredText)，但本机还没找到 \(runtime.title)", "This project needs \(runtime.title) \(requiredText); \(runtime.title) wasn’t found on this Mac")
     }
 
     var detail: String {
-        "来自 \(source)。可复制切换命令，切到匹配版本后再运行一次体检。"
+        FizzL10n.text("来自 \(source)。可复制切换命令，切到匹配版本后再运行一次体检。", "From \(source). Copy the switch command, then run Doctor again.")
     }
 }
 

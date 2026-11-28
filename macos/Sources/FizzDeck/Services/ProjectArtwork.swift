@@ -7,7 +7,7 @@ enum ProjectArtwork {
         case invalidImage
 
         var errorDescription: String? {
-            "所选文件不是有效的图片格式。"
+            FizzL10n.text("所选文件不是有效的图片格式。", "Choose a valid image file.")
         }
     }
 

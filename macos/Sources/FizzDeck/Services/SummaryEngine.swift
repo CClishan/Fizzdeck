@@ -143,7 +143,7 @@ enum SummaryCacheStore {
             String(session.turnCount ?? 0),
             session.endedWithError ? "err" : "ok",
             String(session.touchedFiles.count),
-        ].joined(separator: "|")
+        ].joined(separator: "|") + (FizzL10n.isEnglish ? "|en" : "")
     }
 
     static func projectFingerprint(for project: RepoProject) -> String {
@@ -155,7 +155,7 @@ enum SummaryCacheStore {
             String(project.behind),
             String(Int((project.sessions.lastSessionAt ?? .distantPast).timeIntervalSince1970)),
             String(project.sessions.sessionCount),
-        ].joined(separator: "|")
+        ].joined(separator: "|") + (FizzL10n.isEnglish ? "|en" : "")
     }
 
     static func loadSession(
@@ -163,7 +163,7 @@ enum SummaryCacheStore {
         fingerprint: String,
         directory: URL = AppPaths.summariesDir
     ) -> SessionAISummary? {
-        let file = cacheFile(kind: "sessions", key: stableID, directory: directory)
+        let file = cacheFile(kind: "sessions", key: stableID, fingerprint: fingerprint, directory: directory)
         guard let cached: SessionAISummary = decode(from: file),
               cached.fingerprint == fingerprint,
               !cached.headline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -176,7 +176,7 @@ enum SummaryCacheStore {
         _ summary: SessionAISummary,
         directory: URL = AppPaths.summariesDir
     ) {
-        let file = cacheFile(kind: "sessions", key: summary.sessionStableID, directory: directory)
+        let file = cacheFile(kind: "sessions", key: summary.sessionStableID, fingerprint: summary.fingerprint, directory: directory)
         encode(summary, to: file)
     }
 
@@ -185,7 +185,7 @@ enum SummaryCacheStore {
         fingerprint: String,
         directory: URL = AppPaths.summariesDir
     ) -> ProjectStatusAISummary? {
-        let file = cacheFile(kind: "projects", key: PathTools.canonical(projectPath), directory: directory)
+        let file = cacheFile(kind: "projects", key: PathTools.canonical(projectPath), fingerprint: fingerprint, directory: directory)
         guard let cached: ProjectStatusAISummary = decode(from: file),
               cached.fingerprint == fingerprint,
               !cached.headline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -198,7 +198,7 @@ enum SummaryCacheStore {
         _ summary: ProjectStatusAISummary,
         directory: URL = AppPaths.summariesDir
     ) {
-        let file = cacheFile(kind: "projects", key: PathTools.canonical(summary.projectPath), directory: directory)
+        let file = cacheFile(kind: "projects", key: PathTools.canonical(summary.projectPath), fingerprint: summary.fingerprint, directory: directory)
         encode(summary, to: file)
     }
 
@@ -206,8 +206,10 @@ enum SummaryCacheStore {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private static func cacheFile(kind: String, key: String, directory: URL) -> URL {
-        directory
+    private static func cacheFile(kind: String, key: String, fingerprint: String, directory: URL) -> URL {
+        // Existing caches contain Chinese summaries. Keep their paths and store English separately.
+        let root = fingerprint.hasSuffix("|en") ? directory.appendingPathComponent("en") : directory
+        return root
             .appendingPathComponent(kind, isDirectory: true)
             .appendingPathComponent("\(sha256Hex(key)).json")
     }
@@ -239,44 +241,48 @@ enum SummaryPromptBuilder {
         copyMode: CopyMode = .plain
     ) -> SummaryRequest {
         let toolTitle = HomeDashboardModel.toolTitle(session.tool)
-        let redactedIntent = SecretRedactor.redact(String((session.primaryIntent ?? "未记录起始描述").prefix(240))).text
-        let redactedLastUser = SecretRedactor.redact(String((session.lastUser ?? "").prefix(240))).text
+        let redactedIntent = SecretRedactor.redactedPrefix(session.primaryIntent ?? FizzL10n.text("未记录起始描述", "No opening request recorded"), 240)
+        let redactedLastUser = SecretRedactor.redactedPrefix(session.lastUser ?? "", 240)
         let files = session.touchedFiles.prefix(8).map {
             SecretRedactor.redact(URL(fileURLWithPath: $0).lastPathComponent).text
         }
         let redactedError = session.lastError.map {
-            SecretRedactor.redact(String($0.prefix(200))).text
+            SecretRedactor.redactedPrefix($0, 200)
         }
 
         var lines: [String] = [
-            "项目: \(projectName)",
-            "工具: \(toolTitle)",
-            "起始目标: \(redactedIntent)",
+            FizzL10n.text("项目: \(projectName)", "Project: \(projectName)"),
+            FizzL10n.text("工具: \(toolTitle)", "Tool: \(toolTitle)"),
+            FizzL10n.text("起始目标: \(redactedIntent)", "Initial goal: \(redactedIntent)"),
         ]
         if !redactedLastUser.isEmpty, redactedLastUser != redactedIntent {
-            lines.append("最近提问: \(redactedLastUser)")
+            lines.append(FizzL10n.text("最近提问: \(redactedLastUser)", "Latest request: \(redactedLastUser)"))
         }
         if let duration = session.durationMinutes, duration > 0 {
-            lines.append("耗时: 约 \(duration) 分钟")
+            lines.append(FizzL10n.text("耗时: 约 \(duration) 分钟", "Duration: about \(SessionSummaryText.englishCount(duration, "minute"))"))
         }
         if let turns = session.turnCount, turns > 0 {
-            lines.append("对话轮数: \(turns)")
+            lines.append(FizzL10n.text("对话轮数: \(turns)", "Turns: \(turns)"))
         }
         if !files.isEmpty {
-            lines.append("涉及文件名: \(files.joined(separator: ", "))")
+            lines.append(FizzL10n.text("涉及文件名: \(files.joined(separator: ", "))", "Files: \(files.joined(separator: ", "))"))
         }
         if session.endedWithError {
-            lines.append("异常状态: 以失败结束\(redactedError.map { " (\($0))" } ?? "")")
+            lines.append(FizzL10n.text("异常状态: 以失败结束\(redactedError.map { " (\($0))" } ?? "")", "Session ended with an error\(redactedError.map { ": \($0)" } ?? "")"))
         }
 
         let toneRule = copyMode == .plain
-            ? "面向非程序员初学者，用温和的大白话，避免 git 术语。"
-            : "简洁准确，可保留少量技术关键词。"
-        let systemPrompt = """
+            ? FizzL10n.text("面向非程序员初学者，用温和的大白话，避免 git 术语。", "Use plain language for someone new to programming. Avoid Git jargon.")
+            : FizzL10n.text("简洁准确，可保留少量技术关键词。", "Be concise and precise. Use technical terms where useful.")
+        let systemPrompt = FizzL10n.text("""
         你是工作台摘要助手。\(toneRule)
         只根据提供的少量结构化元信息，返回 JSON 对象：{"headline": "...", "blockerOrNext": "..."}。
         要求：headline 不超过 35 个字，说清做了什么；blockerOrNext 可为空字符串或 1 句下一步建议（不超过 35 个字）。不要编造未提及的文件内容。
-        """
+        """, """
+        Write an English session summary. \(toneRule)
+        Use only the supplied metadata. Return a JSON object with the keys "headline" and "blockerOrNext".
+        Give a short headline describing the work and, if known, one next step. Otherwise leave blockerOrNext empty. Do not infer file contents.
+        """)
 
         return SummaryRequest(
             systemPrompt: systemPrompt,
@@ -298,30 +304,34 @@ enum SummaryPromptBuilder {
             .map { SecretRedactor.redact(URL(fileURLWithPath: $0).lastPathComponent).text }
             .filter { seenFiles.insert($0).inserted }
             .prefix(8)
-        let intent = SecretRedactor.redact(
-            String((recentSessionHeadline ?? project.sessions.lastUserMessage ?? "近期无会话记录").prefix(220))
-        ).text
+        let intent = SecretRedactor.redactedPrefix(
+            recentSessionHeadline ?? project.sessions.lastUserMessage ?? FizzL10n.text("近期无会话记录", "No recent sessions recorded"), 220
+        )
 
         var lines: [String] = [
-            "项目: \(project.displayName)",
-            "分支: \(project.branch ?? "未命名")",
-            "未保存改动文件数: \(project.dirtyCount)",
-            "领先远程提交数: \(project.ahead)",
-            "落后远程提交数: \(project.behind)",
-            "最近工作概括: \(intent)",
+            FizzL10n.text("项目: \(project.displayName)", "Project: \(project.displayName)"),
+            FizzL10n.text("分支: \(project.branch ?? "未命名")", "Branch: \(project.branch ?? "Unnamed")"),
+            FizzL10n.text("未保存改动文件数: \(project.dirtyCount)", "Files with unsaved changes: \(project.dirtyCount)"),
+            FizzL10n.text("领先远程提交数: \(project.ahead)", "Commits ahead of remote: \(project.ahead)"),
+            FizzL10n.text("落后远程提交数: \(project.behind)", "Commits behind remote: \(project.behind)"),
+            FizzL10n.text("最近工作概括: \(intent)", "Recent work: \(intent)"),
         ]
         if !changedNames.isEmpty {
-            lines.append("待保存文件名: \(changedNames.joined(separator: ", "))")
+            lines.append(FizzL10n.text("待保存文件名: \(changedNames.joined(separator: ", "))", "Files awaiting save: \(changedNames.joined(separator: ", "))"))
         }
 
         let toneRule = copyMode == .plain
-            ? "面向非程序员用户，严禁使用 commit/dirty/ahead/branch 等行话。"
-            : "简洁明了，突出当前状态和下一步动作。"
-        let systemPrompt = """
+            ? FizzL10n.text("面向非程序员用户，严禁使用 commit/dirty/ahead/branch 等行话。", "Write for someone new to programming. Avoid jargon such as commit, dirty, ahead, or branch.")
+            : FizzL10n.text("简洁明了，突出当前状态和下一步动作。", "Focus on the current state and the next action.")
+        let systemPrompt = FizzL10n.text("""
         你是项目进度总结助手。\(toneRule)
         根据提供的轻量状态计数，返回 JSON 对象：{"headline": "...", "suggestion": "..."}。
         要求：headline 不超过 36 个字，一句说清现在的状态；suggestion 不超过 30 个字，给出最建议的下一步（没有则为空字符串）。
-        """
+        """, """
+        Write an English project update. \(toneRule)
+        Use only the supplied counts. Return a JSON object with the keys "headline" and "suggestion".
+        Give one short sentence on the current state and one on the best next action. Leave suggestion empty if none is supported.
+        """)
 
         return SummaryRequest(
             systemPrompt: systemPrompt,
@@ -340,19 +350,19 @@ enum SummaryPromptBuilder {
         let files = changedFiles.prefix(10).map {
             SecretRedactor.redact(URL(fileURLWithPath: $0).lastPathComponent).text
         }
-        let intent = SecretRedactor.redact(String((latestIntent ?? "").prefix(220))).text
+        let intent = SecretRedactor.redactedPrefix(latestIntent ?? "", 220)
 
         var lines = [
-            "项目: \(projectName)",
-            "改动文件名: \(files.isEmpty ? "若干文件" : files.joined(separator: ", "))",
+            FizzL10n.text("项目: \(projectName)", "Project: \(projectName)"),
+            FizzL10n.text("改动文件名: \(files.isEmpty ? "若干文件" : files.joined(separator: ", "))", "Changed files: \(files.isEmpty ? "Not listed" : files.joined(separator: ", "))"),
         ]
         if !intent.isEmpty {
-            lines.append("最近任务意图: \(intent)")
+            lines.append(FizzL10n.text("最近任务意图: \(intent)", "Latest goal: \(intent)"))
         }
 
         let systemPrompt = copyMode == .plain
-            ? "生成一句简短的中文版本保存说明（不超过 28 个字），通俗说明改了什么，只输出纯文本。"
-            : "生成一句简明中文 commit message（不超过 36 个字），只输出纯文本。"
+            ? FizzL10n.text("生成一句简短的中文版本保存说明（不超过 28 个字），通俗说明改了什么，只输出纯文本。", "Describe the change in one short, plain English sentence. Return only that sentence, under 60 characters.")
+            : FizzL10n.text("生成一句简明中文 commit message（不超过 36 个字），只输出纯文本。", "Write one concise English commit message under 60 characters. Return plain text only.")
 
         return SummaryRequest(
             systemPrompt: systemPrompt,
@@ -373,9 +383,11 @@ enum SummaryPromptBuilder {
             copyMode: copyMode,
             maxCharacters: 1_200
         )
-        let systemPrompt = """
+        let systemPrompt = FizzL10n.text("""
         请把下面的项目接力信息整理得更适合直接粘贴给下一位 AI 编程助手继续干活，保留全部事实与文件路径，不要编造信息，直接输出 Markdown。
-        """
+        """, """
+        Edit the handoff below for the next AI coding assistant. Write the headings and instructions in English. Preserve the facts, quoted user text, commands, and file paths. Do not invent details. Return only Markdown.
+        """)
         return SummaryRequest(
             systemPrompt: systemPrompt,
             userPrompt: clampPrompt(baseCard.markdown),
@@ -391,9 +403,9 @@ enum SummaryPromptBuilder {
             cwd: nil,
             startedAt: Date().addingTimeInterval(-1_500),
             modified: Date(),
-            lastUser: "顺便检查 sk-live-demo1234567890abcdef 和密码不要写死",
+            lastUser: FizzL10n.text("顺便检查 sk-live-demo1234567890abcdef 和密码不要写死", "Check sk-live-demo1234567890abcdef and make sure passwords aren’t hard-coded."),
             model: "claude-sonnet-4",
-            firstUser: "把登录按钮的样式改圆润一点，然后补一个退出提示",
+            firstUser: FizzL10n.text("把登录按钮的样式改圆润一点，然后补一个退出提示", "Round the sign-in button and add a sign-out confirmation."),
             touchedFiles: ["LoginView.swift", "SessionBanner.swift"],
             lastError: nil,
             endedWithError: false,
@@ -420,7 +432,8 @@ final class SummaryEngine {
 
     private(set) var sessionSummaries: [String: SessionAISummary] = [:]
     private(set) var projectSummaries: [String: ProjectStatusAISummary] = [:]
-    private(set) var lastError: String?
+    private var lastFailure: SummaryProviderError?
+    var lastError: String? { lastFailure?.errorDescription }
     private(set) var inFlightKeys: Set<String> = []
     private(set) var monthlySelfUsage: SelfUsageTotals = .zero
 
@@ -461,7 +474,7 @@ final class SummaryEngine {
         SummaryCacheStore.clearAll(directory: cacheDirectory)
         sessionSummaries.removeAll()
         projectSummaries.removeAll()
-        lastError = nil
+        lastFailure = nil
     }
 
     func cachedOrRuleBasedSessionSummary(
@@ -531,7 +544,7 @@ final class SummaryEngine {
             return fallback
         }
 
-        let inflightKey = "session:\(session.stableID)"
+        let inflightKey = "session:\(fingerprint)"
         guard !inFlightKeys.contains(inflightKey) else {
             return fallback
         }
@@ -558,12 +571,15 @@ final class SummaryEngine {
                 generatedAt: Date(),
                 fingerprint: fingerprint
             )
-            sessionSummaries[session.stableID] = summary
             SummaryCacheStore.saveSession(summary, directory: cacheDirectory)
-            lastError = nil
+            guard fingerprint == SummaryCacheStore.sessionFingerprint(for: session) else {
+                return Self.ruleBasedSessionSummary(for: session, projectName: projectName, copyMode: copyMode)
+            }
+            sessionSummaries[session.stableID] = summary
+            lastFailure = nil
             return summary
         } catch {
-            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            lastFailure = error as? SummaryProviderError ?? .transportError(error.localizedDescription)
             return fallback
         }
     }
@@ -611,7 +627,7 @@ final class SummaryEngine {
             return fallback
         }
 
-        let inflightKey = "project:\(key)"
+        let inflightKey = "project:\(fingerprint)"
         guard !inFlightKeys.contains(inflightKey) else {
             return fallback
         }
@@ -641,12 +657,15 @@ final class SummaryEngine {
                 generatedAt: Date(),
                 fingerprint: fingerprint
             )
-            projectSummaries[key] = summary
             SummaryCacheStore.saveProject(summary, directory: cacheDirectory)
-            lastError = nil
+            guard fingerprint == SummaryCacheStore.projectFingerprint(for: project) else {
+                return Self.ruleBasedProjectSummary(for: project, copyMode: copyMode)
+            }
+            projectSummaries[key] = summary
+            lastFailure = nil
             return summary
         } catch {
-            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            lastFailure = error as? SummaryProviderError ?? .transportError(error.localizedDescription)
             return fallback
         }
     }
@@ -670,10 +689,10 @@ final class SummaryEngine {
             let cleaned = SecretRedactor.redact(
                 response.text.trimmingCharacters(in: .whitespacesAndNewlines)
             ).text
-            lastError = nil
+            lastFailure = nil
             return cleaned.isEmpty ? nil : cleaned
         } catch {
-            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            lastFailure = error as? SummaryProviderError ?? .transportError(error.localizedDescription)
             return nil
         }
     }
@@ -701,31 +720,31 @@ final class SummaryEngine {
                 .first { !$0.isEmpty } ?? ""
             let redacted = SecretRedactor.redact(firstLine).text
             guard !redacted.isEmpty else { return nil }
-            lastError = nil
+            lastFailure = nil
             return String(redacted.prefix(60))
         } catch {
-            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            lastFailure = error as? SummaryProviderError ?? .transportError(error.localizedDescription)
             return nil
         }
     }
 
     func testConnection() async -> Result<String, SummaryProviderError> {
         let request = SummaryRequest(
-            systemPrompt: "你是连通性检测助手，只回复一行简短确认文字。",
-            userPrompt: "请回复：连接正常",
+            systemPrompt: FizzL10n.text("你是连通性检测助手，只回复一行简短确认文字。", "Confirm the connection with a single short line in English."),
+            userPrompt: FizzL10n.text("请回复：连接正常", "Reply: Connection OK"),
             maxOutputTokens: 24,
             jsonMode: false
         )
         do {
             let response = try await execute(request)
-            lastError = nil
-            return .success("\(response.providerLabel) 可用：\(String(response.text.prefix(40)))")
+            lastFailure = nil
+            return .success(FizzL10n.text("\(response.providerLabel) 可用：\(SecretRedactor.redactedPrefix(response.text, 40))", "\(response.providerLabel) is available: \(SecretRedactor.redactedPrefix(response.text, 40))"))
         } catch let error as SummaryProviderError {
-            lastError = error.errorDescription
+            lastFailure = error
             return .failure(error)
         } catch {
             let wrapped = SummaryProviderError.transportError(error.localizedDescription)
-            lastError = wrapped.errorDescription
+            lastFailure = wrapped
             return .failure(wrapped)
         }
     }
@@ -765,17 +784,17 @@ final class SummaryEngine {
         } else if !session.touchedFiles.isEmpty {
             let firstFile = URL(fileURLWithPath: session.touchedFiles[0]).lastPathComponent
             headline = session.touchedFiles.count == 1
-                ? "调整了 \(firstFile)"
-                : "修改了 \(firstFile) 等 \(session.touchedFiles.count) 个文件"
+                ? FizzL10n.text("调整了 \(firstFile)", "Updated \(firstFile)")
+                : FizzL10n.text("修改了 \(firstFile) 等 \(session.touchedFiles.count) 个文件", "Updated \(SessionSummaryText.englishCount(session.touchedFiles.count, "file")), including \(firstFile)")
         } else {
-            headline = "\(projectName) · \(HomeDashboardModel.toolTitle(session.tool)) 对话"
+            headline = FizzL10n.text("\(projectName) · \(HomeDashboardModel.toolTitle(session.tool)) 对话", "\(projectName) · \(HomeDashboardModel.toolTitle(session.tool)) session")
         }
 
         let blockerOrNext: String? = if session.endedWithError {
-            session.lastError.map { "上次失败：\(SecretRedactor.redact(String($0.prefix(60))).text)" }
-                ?? (copyMode == .plain ? "上次结束时遇到问题，点开对话可继续排查" : "上次会话异常结束")
+            session.lastError.map { FizzL10n.text("上次失败：\(SecretRedactor.redactedPrefix($0, 60))", "Last error: \(SecretRedactor.redactedPrefix($0, 60))") }
+                ?? (copyMode == .plain ? FizzL10n.text("上次结束时遇到问题，点开对话可继续排查", "The last session ended with an error. Open it to investigate.") : FizzL10n.text("上次会话异常结束", "The last session ended unexpectedly."))
         } else if !session.touchedFiles.isEmpty {
-            "涉及 \(session.touchedFiles.count) 个文件"
+            FizzL10n.text("涉及 \(session.touchedFiles.count) 个文件", "\(SessionSummaryText.englishCount(session.touchedFiles.count, "file")) involved")
         } else {
             nil
         }
@@ -803,11 +822,11 @@ final class SummaryEngine {
         )
 
         let suggestion: String? = if project.dirtyCount > 0 {
-            copyMode == .plain ? "点「存个版本」把这些改动安全记下来" : "建议提交当前工作区改动"
+            copyMode == .plain ? FizzL10n.text("点「存个版本」把这些改动安全记下来", "Save a version to keep these changes.") : FizzL10n.text("建议提交当前工作区改动", "Commit the working tree changes.")
         } else if project.ahead > 0 {
-            copyMode == .plain ? "还有版本没同步到云端，有空推上去更安心" : "可将本地提交推送到远端"
+            copyMode == .plain ? FizzL10n.text("还有版本没同步到云端，有空推上去更安心", "Sync your saved versions to the remote.") : FizzL10n.text("可将本地提交推送到远端", "Push your local commits to the remote.")
         } else if project.behind > 0 {
-            copyMode == .plain ? "云端有新进展，拉取一下保持最新" : "建议拉取远端最新提交"
+            copyMode == .plain ? FizzL10n.text("云端有新进展，拉取一下保持最新", "Pull the latest changes from the remote.") : FizzL10n.text("建议拉取远端最新提交", "Pull the latest remote commits.")
         } else {
             nil
         }
@@ -872,8 +891,8 @@ final class SummaryEngine {
         guard let first = lines.first else {
             return ("", nil)
         }
-        let headline = SecretRedactor.redact(String(first.prefix(64))).text
-        let second = lines.dropFirst().first.map { SecretRedactor.redact(String($0.prefix(64))).text }
+        let headline = SecretRedactor.redactedPrefix(first, 64)
+        let second = lines.dropFirst().first.map { SecretRedactor.redactedPrefix($0, 64) }
         return (headline, second)
     }
 

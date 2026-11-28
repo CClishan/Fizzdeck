@@ -54,11 +54,11 @@ enum GitWorktreeService {
         var errorDescription: String? {
             switch self {
             case .dirtyRemoval:
-                "目录有未提交改动或被 Git 忽略的内容。确认丢弃后才能移除。"
+                FizzL10n.text("目录有未提交改动或被 Git 忽略的内容。确认丢弃后才能移除。", "This worktree has uncommitted or ignored files. Confirm that you want to discard them before removing it.")
             case let .mergeConflict(_, rollbackSucceeded):
                 rollbackSucceeded
-                    ? "这次合并遇到冲突，已用 Git 中止，主仓恢复到合并前。可以在编辑器或终端处理后再合并。"
-                    : "这次合并未能自动恢复。请在主仓的编辑器或终端核对并处理现有合并，不要重复合并。"
+                    ? FizzL10n.text("这次合并遇到冲突，已用 Git 中止，主仓恢复到合并前。可以在编辑器或终端处理后再合并。", "Git aborted the conflicting merge and restored the main worktree. Resolve the differences in your editor or Terminal, then try again.")
+                    : FizzL10n.text("这次合并未能自动恢复。请在主仓的编辑器或终端核对并处理现有合并，不要重复合并。", "Git couldn’t restore the main worktree automatically. Resolve the existing merge in your editor or Terminal before trying again.")
             case let .blocked(message), let .git(message):
                 message
             }
@@ -108,13 +108,13 @@ enum GitWorktreeService {
         try await withWrite(in: directory) { primary, _ in
             guard let target = destination(for: branch, beside: primary),
                   (await command(["check-ref-format", "--branch", branch], in: primary))?.succeeded == true else {
-                throw Failure.blocked("分支名不合法。请使用 Git 分支名，例如 feature/layout。")
+                throw Failure.blocked(FizzL10n.text("分支名不合法。请使用 Git 分支名，例如 feature/layout。", "Enter a valid Git branch name, such as feature/layout."))
             }
             guard let base = await mainBranch(in: primary), let start = await branchObject(base, in: primary) else {
-                throw Failure.blocked("找不到已提交的主分支，不能新建并行目录。")
+                throw Failure.blocked(FizzL10n.text("找不到已提交的主分支，不能新建并行目录。", "No main branch with a commit was found. The worktree can’t be created."))
             }
             guard await branchObject(branch, in: primary) == nil else {
-                throw Failure.blocked("分支「\(branch)」已存在，请换一个名字。")
+                throw Failure.blocked(FizzL10n.text("分支「\(branch)」已存在，请换一个名字。", "Branch “\(branch)” already exists. Choose another name."))
             }
 
             try Task.checkCancellation()
@@ -122,8 +122,8 @@ enum GitWorktreeService {
             try ensureContainer(container)
             // Reserve the exact name first: Git will accept an existing empty directory on its own.
             guard mkdir(target.path, 0o755) == 0 else {
-                if errno == EEXIST { throw Failure.blocked("目标位置已存在，不会覆盖：\(target.path)") }
-                throw Failure.blocked("无法创建并行目录：\(target.path)")
+                if errno == EEXIST { throw Failure.blocked(FizzL10n.text("目标位置已存在，不会覆盖：\(target.path)", "The destination already exists and won’t be overwritten: \(target.path)")) }
+                throw Failure.blocked(FizzL10n.text("无法创建并行目录：\(target.path)", "Couldn’t create a worktree at \(target.path)"))
             }
             let reserved = FileStamp(target.path)
             do {
@@ -134,7 +134,7 @@ enum GitWorktreeService {
             }
             guard let created = try await inventory(in: primary).first(where: {
                 $0.branch == branch && PathTools.canonical($0.path) == target.path
-            }) else { throw Failure.git("Git 已创建目录，但暂时无法读取记录，请刷新后核对。") }
+            }) else { throw Failure.git(FizzL10n.text("Git 已创建目录，但暂时无法读取记录，请刷新后核对。", "Git created the worktree, but its record couldn’t be read. Refresh to check it.")) }
             return created
         }
     }
@@ -146,19 +146,19 @@ enum GitWorktreeService {
             guard let branch = worktree.branch, let source = worktree.objectID,
                   let base = await mainBranch(in: primary), let original = await branchObject(base, in: primary),
                   worktrees.first?.branch == base, await currentBranch(in: primary) == base else {
-                throw Failure.blocked("请先在主仓检出主分支，再重新合并。FizzDeck 不会自动切换分支。")
+                throw Failure.blocked(FizzL10n.text("请先在主仓检出主分支，再重新合并。FizzDeck 不会自动切换分支。", "Check out the main branch in the main worktree before merging. FizzDeck won’t switch branches automatically."))
             }
             try await requireIdleGit(in: checkout)
             guard try await changes(in: checkout).changes.isEmpty else {
-                throw Failure.blocked("并行目录还有未提交的改动，请先提交，再合并。")
+                throw Failure.blocked(FizzL10n.text("并行目录还有未提交的改动，请先提交，再合并。", "Commit changes in the worktree before merging."))
             }
             let gitDir = try await requireIdleGit(in: primary)
             guard try await changes(in: primary).changes.isEmpty else {
-                throw Failure.blocked("主仓有未提交的改动，请先处理后再合并。")
+                throw Failure.blocked(FizzL10n.text("主仓有未提交的改动，请先处理后再合并。", "Resolve uncommitted changes in the main worktree before merging."))
             }
             guard await currentBranch(in: primary) == base, await branchObject(base, in: primary) == original,
                   await currentBranch(in: checkout) == branch, await branchObject(branch, in: checkout) == source else {
-                throw Failure.blocked("分支已变化。请刷新并重新确认要合并的版本。")
+                throw Failure.blocked(FizzL10n.text("分支已变化。请刷新并重新确认要合并的版本。", "The branch has changed. Refresh and confirm the version to merge."))
             }
             try Task.checkCancellation()
             let result = await command(
@@ -167,7 +167,7 @@ enum GitWorktreeService {
                 in: primary, timeout: 120
             )
             if let result, result.succeeded, !result.timedOut {
-                return "已将「\(branch)」合并到「\(base)」。并行目录仍保留。"
+                return FizzL10n.text("已将「\(branch)」合并到「\(base)」。并行目录仍保留。", "Merged “\(branch)” into “\(base)”. The worktree was kept.")
             }
 
             let mergeHead = gitDir.appendingPathComponent("MERGE_HEAD")
@@ -184,7 +184,7 @@ enum GitWorktreeService {
                     throw Failure.mergeConflict(mainPath: primary.path, rollbackSucceeded: restored)
                 }
             }
-            throw gitFailure(result, fallback: "合并未完成，请在主仓的终端核对状态。")
+            throw gitFailure(result, fallback: FizzL10n.text("合并未完成，请在主仓的终端核对状态。", "Merge incomplete. Check the status in the main worktree’s terminal."))
         }
     }
 
@@ -199,7 +199,7 @@ enum GitWorktreeService {
             try await requireIdleGit(in: checkout)
             let snapshot = try await changes(in: checkout, includingIgnored: true)
             guard try !hasProcess(in: checkout), await !managedActivity(checkout.path) else {
-                throw Failure.blocked("该目录仍有服务、测试或其他进程在使用。请先停止它们或让终端离开此目录。")
+                throw Failure.blocked(FizzL10n.text("该目录仍有服务、测试或其他进程在使用。请先停止它们或让终端离开此目录。", "A service, test or other process is using this folder. Stop it or change the terminal’s working directory first."))
             }
             var arguments = ["worktree", "remove"]
             if !snapshot.changes.isEmpty {
@@ -228,14 +228,14 @@ enum GitWorktreeService {
         let raw = try await git(["worktree", "list", "--porcelain", "-z"], in: current)
         let worktrees = parsePorcelain(raw)
         guard raw.last == "\0", worktrees.contains(where: { PathTools.canonical($0.path) == current.path }) else {
-            throw Failure.blocked("当前目录不是 Git 登记的工作区，无法确认要操作的仓库。")
+            throw Failure.blocked(FizzL10n.text("当前目录不是 Git 登记的工作区，无法确认要操作的仓库。", "This folder isn’t a registered Git worktree. The repository could not be verified."))
         }
         return worktrees
     }
 
     private static func primaryDirectory(_ worktrees: [GitWorktree]) throws -> URL {
         guard let primary = worktrees.first, !primary.isBare, !primary.isPrunable else {
-            throw Failure.blocked("找不到可用的主工作区。")
+            throw Failure.blocked(FizzL10n.text("找不到可用的主工作区。", "No main worktree found."))
         }
         return URL(fileURLWithPath: PathTools.canonical(primary.path), isDirectory: true)
     }
@@ -246,7 +246,7 @@ enum GitWorktreeService {
         let worktrees = try await inventory(in: directory)
         let primary = try primaryDirectory(worktrees)
         guard activeWrites.withLock({ $0.insert(primary.path).inserted }) else {
-            throw Failure.blocked("这个仓库正在执行并行目录操作，请稍后再试。")
+            throw Failure.blocked(FizzL10n.text("这个仓库正在执行并行目录操作，请稍后再试。", "Another worktree operation is in progress. Try again shortly."))
         }
         defer { _ = activeWrites.withLock { $0.remove(primary.path) } }
         try await requireTopLevel(primary)
@@ -256,10 +256,10 @@ enum GitWorktreeService {
 
     private static func checkedDirectory(_ worktree: GitWorktree, among worktrees: [GitWorktree], primary: URL) async throws -> URL {
         guard worktree.canManage, worktrees.contains(worktree) else {
-            throw Failure.blocked("目录、分支或版本已变化，或该目录已锁定。请先刷新再操作。")
+            throw Failure.blocked(FizzL10n.text("目录、分支或版本已变化，或该目录已锁定。请先刷新再操作。", "The folder, branch or revision changed, or the worktree is locked. Refresh and try again."))
         }
         guard FileStamp(worktree.path)?.isDirectory == true else {
-            throw Failure.blocked("并行目录已移走或是符号链接，不能操作。")
+            throw Failure.blocked(FizzL10n.text("并行目录已移走或是符号链接，不能操作。", "The worktree moved or is a symbolic link. The operation stopped."))
         }
         let directory = URL(fileURLWithPath: PathTools.canonical(worktree.path), isDirectory: true)
         try await requireTopLevel(directory)
@@ -267,7 +267,7 @@ enum GitWorktreeService {
         async let expected = git(common, in: primary)
         async let actual = git(common, in: directory)
         guard try await expected == actual else {
-            throw Failure.blocked("该位置已不是主仓登记的并行目录，已停止操作。")
+            throw Failure.blocked(FizzL10n.text("该位置已不是主仓登记的并行目录，已停止操作。", "This location is no longer registered as a worktree. The operation stopped."))
         }
         return directory
     }
@@ -276,7 +276,7 @@ enum GitWorktreeService {
         var root = try await git(["rev-parse", "--show-toplevel"], in: directory)
         if root.last == "\n" { root.removeLast() }
         guard root.hasPrefix("/"), PathTools.canonical(root) == directory.path else {
-            throw Failure.blocked("Git 根目录和所选目录不一致，已停止操作。")
+            throw Failure.blocked(FizzL10n.text("Git 根目录和所选目录不一致，已停止操作。", "The selected folder doesn’t match the Git root. The operation stopped."))
         }
     }
 
@@ -294,11 +294,11 @@ enum GitWorktreeService {
 
     private static func ensureContainer(_ directory: URL) throws {
         if mkdir(directory.path, 0o755) != 0, errno != EEXIST {
-            throw Failure.blocked("无法创建并行目录的上级目录：\(directory.path)")
+            throw Failure.blocked(FizzL10n.text("无法创建并行目录的上级目录：\(directory.path)", "Couldn’t create the parent folder for the worktree: \(directory.path)"))
         }
         guard FileStamp(directory.path)?.isDirectory == true,
               FileStamp(directory.appendingPathComponent(".git").path) == nil else {
-            throw Failure.blocked("上级位置必须是普通目录，不能是符号链接或另一个 Git 仓库。")
+            throw Failure.blocked(FizzL10n.text("上级位置必须是普通目录，不能是符号链接或另一个 Git 仓库。", "The parent must be a regular folder, not a symbolic link or another Git repository."))
         }
     }
 
@@ -347,11 +347,11 @@ enum GitWorktreeService {
     private static func requireIdleGit(in directory: URL) async throws -> URL {
         var path = try await git(["rev-parse", "--absolute-git-dir"], in: directory)
         if path.last == "\n" { path.removeLast() }
-        guard path.hasPrefix("/") else { throw Failure.blocked("无法确认 Git 状态，请先在终端核对。") }
+        guard path.hasPrefix("/") else { throw Failure.blocked(FizzL10n.text("无法确认 Git 状态，请先在终端核对。", "Couldn’t confirm Git status. Check it in Terminal first.")) }
         let gitDir = URL(fileURLWithPath: path, isDirectory: true)
         let states = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD", "rebase-apply", "rebase-merge", "sequencer", "BISECT_START"]
         guard !states.contains(where: { FileStamp(gitDir.appendingPathComponent($0).path) != nil }) else {
-            throw Failure.blocked("这个目录有未完成的 Git 操作，请先在终端处理。")
+            throw Failure.blocked(FizzL10n.text("这个目录有未完成的 Git 操作，请先在终端处理。", "A Git operation is unfinished in this folder. Resolve it in Terminal first."))
         }
         return gitDir
     }
@@ -365,23 +365,23 @@ enum GitWorktreeService {
         let statuses: Set<Character> = [" ", "M", "T", "A", "D", "R", "C", "U", "?", "!"]
         guard raw.isEmpty || (raw.last == "\0" && !parsed.isEmpty && parsed.allSatisfy({
             !$0.path.isEmpty && statuses.contains($0.indexStatus) && statuses.contains($0.worktreeStatus)
-        })) else { throw Failure.blocked("无法可靠读取工作区状态，请先在终端核对。") }
+        })) else { throw Failure.blocked(FizzL10n.text("无法可靠读取工作区状态，请先在终端核对。", "Couldn’t verify the working tree status. Check it in Terminal first.")) }
         return (raw, parsed)
     }
 
     private static func hasProcess(in directory: URL) throws -> Bool {
         // libproc reports the physical path even when Foundation displays /var or /tmp.
         guard let physicalPath = realpath(directory.path, nil) else {
-            throw Failure.blocked("无法确认工作区路径，先取消移除。")
+            throw Failure.blocked(FizzL10n.text("无法确认工作区路径，先取消移除。", "Couldn’t verify the worktree path. Removal canceled."))
         }
         defer { free(physicalPath) }
         let root = String(cString: physicalPath)
         let count = proc_listpids(UInt32(PROC_UID_ONLY), getuid(), nil, 0)
-        guard count > 0 else { throw Failure.blocked("无法核对运行中的服务，先取消移除。") }
+        guard count > 0 else { throw Failure.blocked(FizzL10n.text("无法核对运行中的服务，先取消移除。", "Couldn’t check for running services. Removal canceled.")) }
         var pids = [pid_t](repeating: 0, count: Int(count) / MemoryLayout<pid_t>.stride + 64)
         let read = pids.withUnsafeMutableBytes { proc_listpids(UInt32(PROC_UID_ONLY), getuid(), $0.baseAddress, Int32($0.count)) }
         guard read > 0, Int(read) < pids.count * MemoryLayout<pid_t>.stride else {
-            throw Failure.blocked("无法核对运行中的服务，先取消移除。")
+            throw Failure.blocked(FizzL10n.text("无法核对运行中的服务，先取消移除。", "Couldn’t check for running services. Removal canceled."))
         }
         let nestedPrefix = root + "/"
         for pid in pids.prefix(Int(read) / MemoryLayout<pid_t>.stride) where pid > 1 && pid != getpid() {
@@ -408,13 +408,13 @@ enum GitWorktreeService {
     private static func git(_ arguments: [String], in directory: URL, timeout: TimeInterval = 20) async throws -> String {
         let result = await command(arguments, in: directory, timeout: timeout)
         guard let result, result.succeeded, !result.timedOut, result.hasUTF8Output else {
-            throw gitFailure(result, fallback: "Git 操作未完成。")
+            throw gitFailure(result, fallback: FizzL10n.text("Git 操作未完成。", "Git did not complete the operation."))
         }
         return result.text
     }
 
     private static func gitFailure(_ result: ShellOutput?, fallback: String) -> Failure {
-        guard let result, !result.timedOut else { return .git("\(fallback) Git 超时或无法启动。") }
+        guard let result, !result.timedOut else { return .git(FizzL10n.text("\(fallback) Git 超时或无法启动。", "\(fallback) Git timed out or could not start.")) }
         let lines = result.text.split(whereSeparator: \.isNewline)
         let detail = lines.first(where: { $0.hasPrefix("fatal:") || $0.hasPrefix("error:") }) ?? lines.last
         let explanation = detail.map { " \(SecretRedactor.redact(String($0.prefix(200))).text)" } ?? ""

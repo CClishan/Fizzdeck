@@ -1,7 +1,7 @@
 import XCTest
 @testable import FizzDeck
 
-final class SessionIndexTests: XCTestCase {
+final class SessionIndexTests: ChineseInterfaceTestCase {
     func testSummarySortsAndGroupsSessions() {
         let target = URL(fileURLWithPath: "/tmp/fizzdeck-session")
         let start = Date(timeIntervalSince1970: 1_000)

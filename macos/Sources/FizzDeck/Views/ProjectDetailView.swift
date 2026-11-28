@@ -39,7 +39,7 @@ struct ProjectDetailView: View {
                         noteDraft: $noteDraft,
                         saveNote: {
                             store.setNote(noteDraft, for: project)
-                            ToastCenter.shared.show("备注已保存", symbol: "checkmark.circle.fill", tint: FizzTheme.statusSuccess)
+                            ToastCenter.shared.show(FizzL10n.text("备注已保存", "Saved note"), symbol: "checkmark.circle.fill", tint: FizzTheme.statusSuccess)
                         },
                         onShowCleanup: {
                             showingCleanupSheet = true
@@ -89,7 +89,7 @@ struct ProjectDetailView: View {
         }
         .sheet(isPresented: $showingCleanupSheet) {
             VStack(spacing: 0) {
-                FizzSheetHeader(title: "清理空间 · \(project.displayName)") {
+                FizzSheetHeader(title: FizzL10n.text("清理空间 · \(project.displayName)", "Free up space · \(project.displayName)")) {
                     showingCleanupSheet = false
                 }
                 .padding(FizzSpacing.panel)
@@ -101,7 +101,7 @@ struct ProjectDetailView: View {
         .focusedSceneValue(\.fizzProjectTab, $tab)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Picker("项目页签", selection: $tab.animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring))) {
+                Picker(FizzL10n.text("项目页签", "Project tabs"), selection: $tab.animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring))) {
                     ForEach(ProjectTab.allCases) { item in
                         Text(item.title(for: copyMode)).tag(item)
                     }
@@ -181,16 +181,16 @@ private struct ProjectHero: View {
                     .help(project.path)
 
                 FlowLayout(spacing: 6) {
-                    TagChip(text: project.group)
+                    TagChip(text: project.groupTitle)
                         .frame(maxWidth: 200)
-                        .help(project.group)
+                        .help(project.groupTitle)
                     if let branch = project.branch {
                         TagChip(text: branch, tint: Color.secondary)
                             .frame(maxWidth: 200)
                             .help(branch)
                     }
                     if project.dirtyCount > 0 {
-                        TagChip(text: "\(project.dirtyCount) 个改动", tint: FizzTheme.statusWarning)
+                        TagChip(text: FizzL10n.text("\(project.dirtyCount) 个改动", "\(project.dirtyCount) \(project.dirtyCount == 1 ? "change" : "changes")"), tint: FizzTheme.statusWarning)
                     }
                     if let tool = project.sessions.lastTool {
                         TagChip(
@@ -230,8 +230,8 @@ private struct ProjectHeroActions: View {
 
     private var starTitle: String {
         copyMode == .plain
-            ? (project.starred ? "取消关注" : "加入关注")
-            : (project.starred ? "取消星标" : "设为星标")
+            ? (project.starred ? FizzL10n.text("取消关注", "Unfollow") : FizzL10n.text("加入关注", "Follow"))
+            : (project.starred ? FizzL10n.text("取消星标", "Unstar") : FizzL10n.text("设为星标", "Star"))
     }
 
     var body: some View {
@@ -243,11 +243,11 @@ private struct ProjectHeroActions: View {
             }
             .foregroundStyle(project.starred ? Color.secondary : Color.primary)
 
-            FizzMenuButton(title: "打开方式", symbol: "folder") {
+            FizzMenuButton(title: FizzL10n.text("打开方式", "Open with"), symbol: "folder") {
                 ProjectQuickActions(project: project)
             }
 
-            FizzMenuButton(title: "更多项目操作") {
+            FizzMenuButton(title: FizzL10n.text("更多项目操作", "More project actions")) {
                 projectMenuItems
             }
 
@@ -255,7 +255,7 @@ private struct ProjectHeroActions: View {
                 .id(project.path)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("项目操作")
+        .accessibilityLabel(FizzL10n.text("项目操作", "Project actions"))
         .sheet(item: $removalRequest) { request in
             ProjectRemovalSheet(
                 project: project,
@@ -281,13 +281,13 @@ private struct ProjectHeroActions: View {
             )
         }
         .alert(
-            "无法移除项目",
+            FizzL10n.text("无法移除项目", "Couldn’t remove project"),
             isPresented: Binding(
                 get: { removalError != nil },
                 set: { if !$0 { removalError = nil } }
             )
         ) {
-            Button("好") { removalError = nil }
+            Button(FizzL10n.text("好", "OK")) { removalError = nil }
         } message: {
             Text(removalError ?? "")
         }
@@ -295,8 +295,8 @@ private struct ProjectHeroActions: View {
 
     @ViewBuilder
     private var projectMenuItems: some View {
-        Menu("标签颜色") {
-            Button("无标签") { store.setColor(nil, for: project) }
+        Menu(FizzL10n.text("标签颜色", "Label color")) {
+            Button(FizzL10n.text("无标签", "No label")) { store.setColor(nil, for: project) }
             ForEach(TagColor.allCases) { color in
                 Button(color.label) { store.setColor(color, for: project) }
             }
@@ -307,53 +307,53 @@ private struct ProjectHeroActions: View {
         Button {
             if let url = ArtworkFilePicker.pickImageURL(),
                store.setCustomArtwork(from: url, for: project) {
-                ToastCenter.shared.show("已更新项目封面", symbol: "photo.badge.checkmark", tint: Color.secondary)
+                ToastCenter.shared.show(FizzL10n.text("已更新项目封面", "Updated project cover"), symbol: "photo.badge.checkmark", tint: Color.secondary)
             }
         } label: {
-            Label(project.artwork == nil ? "上传项目截图…" : "替换项目截图…", systemImage: "photo.badge.plus")
+            Label(project.artwork == nil ? FizzL10n.text("上传项目截图…", "Upload project screenshot…") : FizzL10n.text("替换项目截图…", "Replace project screenshot…"), systemImage: "photo.badge.plus")
         }
         if project.customArtwork != nil {
-            Button("恢复自动识别截图", systemImage: "arrow.uturn.backward") {
+            Button(FizzL10n.text("恢复自动识别截图", "Restore automatic screenshot"), systemImage: "arrow.uturn.backward") {
                 store.clearCustomArtwork(for: project)
-                ToastCenter.shared.show("已恢复自动识别封面", symbol: "arrow.uturn.backward.circle.fill", tint: .secondary)
+                ToastCenter.shared.show(FizzL10n.text("已恢复自动识别封面", "Restored automatic cover"), symbol: "arrow.uturn.backward.circle.fill", tint: .secondary)
             }
         }
 
         Divider()
 
-        Button("复制接力卡", systemImage: "doc.on.clipboard") {
+        Button(FizzL10n.text("复制接力卡", "Copy handoff card"), systemImage: "doc.on.clipboard") {
             let result = HandoffCardBuilder.build(project: project, copyMode: copyMode)
             SystemActions.copy(result.markdown, feedback: nil)
             let subtitle = result.redactedCount > 0
-                ? "\(result.characterCount) 字 · 已打码 \(result.redactedCount) 处密钥"
-                : "\(result.characterCount) 字 · 含 \(result.includedSessionCount) 次对话"
+                ? FizzL10n.text("\(result.characterCount) 字 · 已打码 \(result.redactedCount) 处密钥", "\(result.characterCount) characters · Secrets redacted: \(result.redactedCount)")
+                : FizzL10n.text("\(result.characterCount) 字 · 含 \(result.includedSessionCount) 次对话", "\(result.characterCount) characters · Sessions: \(result.includedSessionCount)")
             ToastCenter.shared.show(
-                "接力卡已复制",
+                FizzL10n.text("接力卡已复制", "Copied handoff card"),
                 symbol: "doc.on.clipboard.fill",
                 tint: Color.secondary,
                 subtitle: subtitle,
-                action: ToastAction(title: "预览", symbol: "eye") { onShowHandoff() }
+                action: ToastAction(title: FizzL10n.text("预览", "Preview"), symbol: "eye") { onShowHandoff() }
             )
         }
-        Button("预览接力卡…", systemImage: "text.viewfinder", action: onShowHandoff)
+        Button(FizzL10n.text("预览接力卡…", "Preview handoff card…"), systemImage: "text.viewfinder", action: onShowHandoff)
 
         Divider()
 
-        Button("移入废纸篓…", role: .destructive) {
+        Button(FizzL10n.text("移入废纸篓…", "Move to Trash…"), role: .destructive) {
             removalRequest = ProjectRemovalRequest(mode: .trash)
         }
-        Button("永久删除…", role: .destructive) {
+        Button(FizzL10n.text("永久删除…", "Delete permanently…"), role: .destructive) {
             removalRequest = ProjectRemovalRequest(mode: .permanent)
         }
     }
 
     private var removalBlockedReason: String? {
-        if removalWorking { return "正在处理移除操作。" }
-        if project.port == .running { return "先停止运行中的开发服务。" }
+        if removalWorking { return FizzL10n.text("正在处理移除操作。", "Removal is in progress.") }
+        if project.port == .running { return FizzL10n.text("先停止运行中的开发服务。", "Stop the development service first.") }
         if actions.testRun(for: project.path)?.status == .running {
-            return "先停止运行中的测试。"
+            return FizzL10n.text("先停止运行中的测试。", "Stop the running tests first.")
         }
-        if actions.isBusy(project.path) { return "正在启动或停止服务，稍后再试。" }
+        if actions.isBusy(project.path) { return FizzL10n.text("正在启动或停止服务，稍后再试。", "A service is starting or stopping. Try again shortly.") }
         return nil
     }
 }
@@ -398,7 +398,7 @@ private struct ProjectRemovalSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("输入目录名「\(expectedName)」确认")
+                Text(FizzL10n.text("输入目录名「\(expectedName)」确认", "Type the folder name “\(expectedName)” to confirm"))
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
                 TextField(expectedName, text: $confirmation)
@@ -407,7 +407,7 @@ private struct ProjectRemovalSheet: View {
             }
 
             FizzSheetFooter {
-                FizzActionButton(title: "取消", role: .cancel, action: onCancel)
+                FizzActionButton(title: FizzL10n.text("取消", "Cancel"), role: .cancel, action: onCancel)
                     .keyboardShortcut(.cancelAction)
                 FizzActionButton(title: mode.actionTitle, prominence: .primary, role: .destructive) {
                     onConfirm(confirmation)

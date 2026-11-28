@@ -8,8 +8,8 @@ enum HomeViewMode: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .cards: "卡片墙"
-        case .list: "表格"
+        case .cards: FizzL10n.text("卡片墙", "Cards")
+        case .list: FizzL10n.text("表格", "Table")
         }
     }
 
@@ -31,10 +31,10 @@ enum HomeSort: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .recent: "最近活动"
-        case .name: "名称"
-        case .size: "体积"
-        case .dirty: "改动数"
+        case .recent: FizzL10n.text("最近活动", "Recent activity")
+        case .name: FizzL10n.text("名称", "Name")
+        case .size: FizzL10n.text("体积", "Size")
+        case .dirty: FizzL10n.text("改动数", "Change count")
         }
     }
 
@@ -94,6 +94,72 @@ struct HomeSummaryStats: Equatable, Sendable {
     let cleanupItemCount: Int
 }
 
+enum LibraryBatchResult: Equatable, Sendable {
+    case cleanup(copied: Int, skipped: Int)
+    case starred(Int, Bool)
+    case grouped(Int, String?)
+    case fetched(succeeded: Int, failed: Int)
+    case rescanned(Int, missing: Int)
+
+    var message: String {
+        switch self {
+        case .cleanup(0, _):
+            return FizzL10n.text("所选项目没有可清理项", "Nothing to clean in the selected projects")
+        case let .cleanup(count, 0):
+            return FizzL10n.text("已复制 \(count) 个项目的清理命令", "Copied cleanup commands for \(SessionSummaryText.englishCount(count, "project"))")
+        case let .cleanup(count, skipped):
+            return FizzL10n.text("已复制 \(count) 个；\(skipped) 个没有可清理项", "Copied commands for \(count); \(skipped) had nothing to clean")
+        case let .starred(count, starred):
+            return starred
+                ? FizzL10n.text("已为 \(count) 个项目设为星标", "Starred \(SessionSummaryText.englishCount(count, "project"))")
+                : FizzL10n.text("已取消 \(count) 个项目的星标", "Unstarred \(SessionSummaryText.englishCount(count, "project"))")
+        case let .grouped(count, group?):
+            let title = ProjectGrouping.title(for: group)
+            return FizzL10n.text("已将 \(count) 个项目移至「\(title)」", "Moved \(SessionSummaryText.englishCount(count, "project")) to “\(title)”")
+        case let .grouped(count, nil):
+            return FizzL10n.text("已将 \(count) 个项目恢复自动分组", "Restored automatic grouping for \(SessionSummaryText.englishCount(count, "project"))")
+        case .fetched(0, 0):
+            return FizzL10n.text("所选项目均非 Git 仓库", "None of the selected projects are Git repositories.")
+        case let .fetched(count, 0):
+            return FizzL10n.text("已 Fetch \(count) 个仓库", "Fetched \(count) \(count == 1 ? "repository" : "repositories")")
+        case let .fetched(count, failed):
+            return FizzL10n.text("Fetch 完成：\(count) 个成功，\(failed) 个失败", "Fetch complete: \(count) succeeded, \(failed) failed")
+        case .rescanned(0, _):
+            return FizzL10n.text("所选目录都不存在", "None of the selected folders exist.")
+        case let .rescanned(count, 0):
+            return FizzL10n.text("已重新扫描 \(count) 个项目", "Rescanned \(SessionSummaryText.englishCount(count, "project"))")
+        case let .rescanned(count, missing):
+            return FizzL10n.text("已重新扫描 \(count) 个；\(missing) 个目录不存在", "Rescanned \(count); \(SessionSummaryText.englishCount(missing, "folder")) missing")
+        }
+    }
+}
+
+struct BatchCleanupCommands {
+    let script: String?
+    let result: LibraryBatchResult
+    var feedback: String { result.message }
+}
+
+struct WorkbenchSearchHit: Identifiable {
+    let result: SessionSearchResult
+    private let terms: [String]
+    var id: String { result.id }
+    var title: String { result.displayTitle }
+
+    var snippet: String? {
+        // An AI excerpt is already redacted source text. Regenerate only the index's labels.
+        guard let cached = result.matchedSnippet, !cached.hasPrefix("✦ ") else { return result.matchedSnippet }
+        return SessionSearchIndex.makeSnippet(queryTerms: terms, primaryIntent: result.primaryIntent,
+                                              lastUser: result.lastUser ?? "", aiSummary: "",
+                                              lastError: result.lastError ?? "", touchedFiles: result.touchedFilesText) ?? cached
+    }
+
+    static func make(_ results: [SessionSearchResult], query: String) -> [Self] {
+        let terms = SessionSearchIndex.tokenizeQuery(query)
+        return results.map { Self(result: $0, terms: terms) }
+    }
+}
+
 enum HomeDashboardModel {
     static func matchingProjects(from projects: [RepoProject], filter: HomeFilter) -> [RepoProject] {
         projects.filter(filter.matches)
@@ -124,16 +190,18 @@ enum HomeDashboardModel {
         return preferred + detected.subtracting(preferred).sorted()
     }
 
-    static func availableFrameworks(in projects: [RepoProject]) -> [String] {
+    struct FrameworkChoice: Identifiable {
+        let id: String
+        let title: String
+    }
+
+    static func availableFrameworks(in projects: [RepoProject]) -> [FrameworkChoice] {
         var seen = Set<String>()
-        var result: [String] = []
-        for project in projects {
-            if let primary = project.stacks.first?.items.first,
-               seen.insert(primary).inserted {
-                result.append(primary)
-            }
-        }
-        return result.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        return projects.compactMap { project -> FrameworkChoice? in
+            guard let stack = project.stacks.first, let key = stack.items.first,
+                  seen.insert(key).inserted, let title = stack.displayItems.first else { return nil }
+            return FrameworkChoice(id: key, title: title)
+        }.sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
     }
 
     static func libraryProjects(
@@ -175,6 +243,7 @@ enum HomeDashboardModel {
                     || project.kind.title.lowercased().contains(needle)
                     || project.stacks.contains(where: { group in
                         group.items.contains(where: { $0.lowercased().contains(needle) })
+                            || group.displayItems.contains(where: { $0.lowercased().contains(needle) })
                     })
                 if !matchesSearch { return false }
             }
@@ -245,42 +314,37 @@ enum HomeDashboardModel {
     ) -> String {
         var parts: [String] = []
         if hasFacets {
-            parts.append("显示 \(visibleCount) / \(matchingCount) 个项目")
+            parts.append(FizzL10n.text("显示 \(visibleCount) / \(matchingCount) 个项目", "Showing \(visibleCount) of \(matchingCount)"))
         } else {
-            parts.append("\(visibleCount) 个项目")
+            parts.append(FizzL10n.text("\(visibleCount) 个项目", SessionSummaryText.englishCount(visibleCount, "project")))
         }
         if filter != .running, runningCount > 0 {
-            parts.append("\(runningCount) 个运行中")
+            parts.append(FizzL10n.text("\(runningCount) 个运行中", "\(runningCount) running"))
         }
         if isScanning {
-            parts.append("正在扫描")
+            parts.append(FizzL10n.text("正在扫描", "Scanning"))
         } else if pendingSizeCount > 0 {
-            parts.append("正在统计体积 (\(pendingSizeCount))")
+            parts.append(FizzL10n.text("正在统计体积 (\(pendingSizeCount))", "Calculating sizes (\(pendingSizeCount))"))
         } else if let relativeScannedAt {
-            parts.append("\(relativeScannedAt)更新")
+            parts.append(FizzL10n.text("\(relativeScannedAt)更新", "Updated \(relativeScannedAt)"))
         }
         return parts.joined(separator: " · ")
     }
 
-    static func batchCleanupCommands(for projects: [RepoProject]) -> (script: String?, feedback: String) {
+    static func batchCleanupCommands(for projects: [RepoProject]) -> BatchCleanupCommands {
         let commands = projects.compactMap { project -> String? in
             let command = project.cleanup.removalCommand
             guard !command.isEmpty else { return nil }
             return "# \(project.displayName)\n\(command)"
         }
-        guard !commands.isEmpty else {
-            return (nil, "所选项目没有可清理项")
-        }
-
-        let skipped = projects.count - commands.count
-        let feedback = skipped == 0
-            ? "已复制 \(commands.count) 个项目的清理命令"
-            : "已复制 \(commands.count) 个；\(skipped) 个没有可清理项"
-        return (commands.joined(separator: "\n"), feedback)
+        return BatchCleanupCommands(
+            script: commands.isEmpty ? nil : commands.joined(separator: "\n"),
+            result: .cleanup(copied: commands.count, skipped: projects.count - commands.count)
+        )
     }
 
     static func toolTitle(_ raw: String) -> String {
-        DetectedTool(rawValue: raw)?.title ?? raw.capitalized
+        DetectedTool(rawValue: raw)?.title ?? raw
     }
 
     static func toolSymbol(_ raw: String) -> String {

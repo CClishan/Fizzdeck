@@ -15,31 +15,31 @@ struct CleanupTabView: View {
                     spacing: FizzSpacing.grid
                 ) {
                     GlassStatCard(
-                        title: "可回收",
+                        title: FizzL10n.text("可回收", "Reclaimable"),
                         value: project.sizeLoadState == .ready
                             ? Format.bytes(project.cleanup.reusableBytes)
                             : "",
-                        detail: "只复制命令，不执行删除",
+                        detail: FizzL10n.text("只复制命令，不执行删除", "Copies the command without deleting anything"),
                         symbol: "trash.slash",
                         valuePlaceholder: project.sizeLoadState != .ready
                     )
                     GlassStatCard(
-                        title: "命中目录",
+                        title: FizzL10n.text("命中目录", "Folders found"),
                         value: "\(project.cleanup.items.count)",
-                        detail: "依赖、缓存、构建产物、归档",
+                        detail: FizzL10n.text("依赖、缓存、构建产物、归档", "Dependencies, caches, builds and archives"),
                         symbol: "folder.badge.minus"
                     )
                 }
 
                 if project.cleanup.items.isEmpty {
                     ContentUnavailableView(
-                        "没有可清理项",
+                        FizzL10n.text("没有可清理项", "Nothing to clean up"),
                         systemImage: "checkmark.seal",
-                        description: Text("没有命中 node_modules、构建产物、缓存或归档规则。")
+                        description: Text(FizzL10n.text("没有命中 node_modules、构建产物、缓存或归档规则。", "No node_modules, build output, caches or archives matched the cleanup rules."))
                     )
                     .frame(minHeight: 220)
                 } else {
-                    Panel(title: "可清理目录", symbol: "trash.slash") {
+                    Panel(title: FizzL10n.text("可清理目录", "Folders to clean up"), symbol: "trash.slash") {
                         VStack(spacing: 0) {
                             ForEach(project.cleanup.items) { item in
                                 cleanupRow(item)
@@ -53,7 +53,7 @@ struct CleanupTabView: View {
                 }
 
                 if !project.size.breakdown.isEmpty {
-                    Panel(title: "体积构成", symbol: "chart.bar.doc.horizontal") {
+                    Panel(title: FizzL10n.text("体积构成", "Space by folder"), symbol: "chart.bar.doc.horizontal") {
                         VStack(spacing: 10) {
                             ForEach(project.size.breakdown) { row in
                                 sizeRow(row)
@@ -66,23 +66,23 @@ struct CleanupTabView: View {
         }
         .fizzTracksScrollPastTop()
         .alert(
-            "将目录移到废纸篓？",
+            FizzL10n.text("将目录移到废纸篓？", "Move this folder to the Trash?"),
             isPresented: Binding(
                 get: { confirmTrashItem != nil },
                 set: { if !$0 { confirmTrashItem = nil } }
             )
         ) {
-            Button("取消", role: .cancel) {
+            Button(FizzL10n.text("取消", "Cancel"), role: .cancel) {
                 confirmTrashItem = nil
             }
-            Button("移到废纸篓", role: .destructive) {
+            Button(FizzL10n.text("移到废纸篓", "Move to Trash"), role: .destructive) {
                 guard let item = confirmTrashItem else { return }
                 confirmTrashItem = nil
                 Task { await trashSingleItem(item) }
             }
         } message: {
             if let item = confirmTrashItem {
-                Text("将把「\(item.label)」（\(Format.bytes(item.bytes))）移到系统废纸篓，随时可恢复或重新生成。")
+                Text(FizzL10n.text("将把「\(item.label)」（\(Format.bytes(item.bytes))）移到系统废纸篓，随时可恢复或重新生成。", "Move “\(item.label)” (\(Format.bytes(item.bytes))) to the Trash. You can put it back or regenerate it later."))
             }
         }
     }
@@ -102,10 +102,10 @@ struct CleanupTabView: View {
                         .foregroundStyle(.secondary)
                 }
                 HStack(spacing: 5) {
-                    Text(item.reason)
-                    if !item.regen.isEmpty {
+                    Text(item.displayReason)
+                    if !item.displayRegen.isEmpty {
                         Text("·")
-                        Text(item.regen)
+                        Text(item.displayRegen)
                     }
                 }
                 .font(FizzTypography.micro)
@@ -125,7 +125,7 @@ struct CleanupTabView: View {
                 }
             } label: {
                 if copyMode == .plain {
-                    Label("移到废纸篓", systemImage: "trash")
+                    Label(FizzL10n.text("移到废纸篓", "Move to Trash"), systemImage: "trash")
                         .font(FizzTypography.caption(.medium))
                 } else {
                     FizzIcon(.sm, symbol: "doc.on.doc")
@@ -133,8 +133,8 @@ struct CleanupTabView: View {
             }
             .buttonStyle(.glass)
             .controlSize(.small)
-            .help(copyMode == .plain ? "安全移到系统废纸篓" : "复制删除命令")
-            .accessibilityLabel(copyMode == .plain ? "移到废纸篓" : "复制删除命令")
+            .help(copyMode == .plain ? FizzL10n.text("安全移到系统废纸篓", "Move safely to the Trash") : FizzL10n.text("复制删除命令", "Copy deletion command"))
+            .accessibilityLabel(copyMode == .plain ? FizzL10n.text("移到废纸篓", "Move to Trash") : FizzL10n.text("复制删除命令", "Copy deletion command"))
         }
         .padding(.vertical, 7)
     }
@@ -146,7 +146,7 @@ struct CleanupTabView: View {
             ToastCenter.shared.show(err, symbol: "exclamationmark.triangle.fill", tint: FizzTheme.statusWarning)
         } else {
             ToastCenter.shared.show(
-                "已移入废纸篓（\(Format.bytes(res.freedBytes))）",
+                FizzL10n.text("已移入废纸篓（\(Format.bytes(res.freedBytes))）", "Moved to Trash (\(Format.bytes(res.freedBytes)))"),
                 symbol: "trash.fill",
                 tint: FizzTheme.statusSuccess,
                 subtitle: item.label
@@ -161,7 +161,7 @@ struct CleanupTabView: View {
             : 0
         return VStack(spacing: 4) {
             HStack {
-                Text(row.isDirectory ? "▸ \(row.label)" : row.label)
+                Text(row.isDirectory ? "▸ \(row.displayLabel)" : row.displayLabel)
                     .font(FizzTypography.caption)
                     .lineLimit(1)
                 Spacer()

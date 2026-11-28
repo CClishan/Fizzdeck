@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import FizzDeck
 
-final class ProjectDailyActivityTests: XCTestCase {
+final class ProjectDailyActivityTests: ChineseInterfaceTestCase {
     func testLocalDayWindowsAcrossDSTKeepUnknownZeroPartialAndEmptySeparate() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))

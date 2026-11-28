@@ -12,7 +12,7 @@ struct LibraryView: View {
     @State private var localQuery = LibraryQuery()
     @State private var selectionMode = false
     @State private var selectedPaths: Set<String> = []
-    @State private var batchFeedback: String?
+    @State private var batchFeedback: LibraryBatchResult?
     @State private var batchRunning = false
     @State private var showIdleProjects = false
     @State private var focusedProjectPath: String?
@@ -64,7 +64,7 @@ struct LibraryView: View {
         HomeDashboardModel.availableTools(in: baseProjects)
     }
 
-    private var availableFrameworks: [String] {
+    private var availableFrameworks: [HomeDashboardModel.FrameworkChoice] {
         HomeDashboardModel.availableFrameworks(in: baseProjects)
     }
 
@@ -109,7 +109,7 @@ struct LibraryView: View {
                     ScrollView(.vertical) {
                         VStack(alignment: .leading, spacing: FizzSpacing.section) {
                             HomeHeaderView(
-                                title: "项目库",
+                                title: FizzL10n.text("项目库", "Library"),
                                 detail: headerDetail,
                                 mode: mode,
                                 showsCoverPreview: showCoverPreview,
@@ -158,7 +158,7 @@ struct LibraryView: View {
                                     allVisibleSelected: allVisibleSelected,
                                     batchRunning: batchRunning,
                                     isScanning: store.phase == .scanning,
-                                    batchFeedback: batchFeedback,
+                                    batchFeedback: batchFeedback?.message,
                                     showsCoverPreview: showCoverPreview,
                                     knownGroups: store.knownGroups,
                                     allSelectedStarred: allSelectedStarred,
@@ -260,60 +260,64 @@ struct LibraryView: View {
     }
 
     private var filterToolbar: some View {
-        HStack(spacing: FizzSpacing.row) {
-            HStack(spacing: 6) {
-                FizzIcon(.sm, symbol: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                TextField("搜索项目、分支、路径或技术栈（⌘F）", text: $localQuery.searchText)
-                    .textFieldStyle(.plain)
-                    .font(FizzTypography.body)
-                    .focused($searchFocused)
-                    .accessibilityLabel("搜索项目库")
-                if !localQuery.searchText.isEmpty {
-                    Button {
-                        localQuery.searchText = ""
-                    } label: {
-                        FizzIcon(.sm, symbol: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                            .frame(width: FizzControlHeight.compact.rawValue, height: FizzControlHeight.compact.rawValue)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help("清除搜索")
-                    .accessibilityLabel("清除项目搜索")
-                }
-            }
-            .padding(.leading, 10)
-            .padding(.trailing, localQuery.searchText.isEmpty ? 10 : 2)
-            .frame(height: FizzControlHeight.compact.rawValue)
-            .frame(maxWidth: 340)
-            .background(FizzTheme.recessedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control))
-            .overlay {
-                RoundedRectangle(cornerRadius: FizzRadius.control)
-                    .strokeBorder(FizzTheme.stroke, lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
+        FlowLayout(spacing: FizzSpacing.row) {
+            projectSearchField.frame(width: min(browserWidth, 310))
+            quickFilters
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    quickChip("星标", active: localQuery.starredOnly) {
-                        localQuery.starredOnly.toggle()
-                    }
-                    quickChip("有改动", active: localQuery.dirtyOnly) {
-                        localQuery.dirtyOnly.toggle()
-                    }
-                    quickChip("运行中", active: localQuery.runningOnly) {
-                        localQuery.runningOnly.toggle()
-                    }
-                    quickChip("有 AI 会话", active: localQuery.hasSessionsOnly) {
-                        localQuery.hasSessionsOnly.toggle()
-                    }
-                    quickChip("有未推送", active: localQuery.unpushedOnly) {
-                        localQuery.unpushedOnly.toggle()
-                    }
+    private var projectSearchField: some View {
+        HStack(spacing: 6) {
+            FizzIcon(.sm, symbol: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField(FizzL10n.text("搜索项目、分支、路径或技术栈（⌘F）", "Search Library (⌘F)"), text: $localQuery.searchText)
+                .textFieldStyle(.plain)
+                .font(FizzTypography.body)
+                .focused($searchFocused)
+                .accessibilityLabel(FizzL10n.text("搜索项目库", "Search Library"))
+                .help(FizzL10n.text("搜索项目、分支、路径或技术栈（⌘F）", "Search names, branches, paths, or stacks (⌘F)"))
+            if !localQuery.searchText.isEmpty {
+                Button {
+                    localQuery.searchText = ""
+                } label: {
+                    FizzIcon(.sm, symbol: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(width: FizzControlHeight.compact.rawValue, height: FizzControlHeight.compact.rawValue)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .help(FizzL10n.text("清除搜索", "Clear search"))
+                .accessibilityLabel(FizzL10n.text("清除项目搜索", "Clear project search"))
             }
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, localQuery.searchText.isEmpty ? 10 : 2)
+        .frame(height: FizzControlHeight.compact.rawValue)
+        .background(FizzTheme.recessedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control))
+        .overlay {
+            RoundedRectangle(cornerRadius: FizzRadius.control)
+                .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder private var quickFilters: some View {
+        quickChip(FizzL10n.text("星标", "Starred"), active: localQuery.starredOnly) {
+            localQuery.starredOnly.toggle()
+        }
+        quickChip(FizzL10n.text("有改动", "Changed"), active: localQuery.dirtyOnly) {
+            localQuery.dirtyOnly.toggle()
+        }
+        quickChip(FizzL10n.text("运行中", "Running"), active: localQuery.runningOnly) {
+            localQuery.runningOnly.toggle()
+        }
+        quickChip(FizzL10n.text("有 AI 会话", "AI sessions"), active: localQuery.hasSessionsOnly) {
+            localQuery.hasSessionsOnly.toggle()
+        }
+        quickChip(FizzL10n.text("有未推送", "Unpushed"), active: localQuery.unpushedOnly) {
+            localQuery.unpushedOnly.toggle()
         }
     }
 
@@ -324,24 +328,24 @@ struct LibraryView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("提交日期筛选")
+                Text(FizzL10n.text("提交日期筛选", "Commit date"))
                     .font(FizzTypography.micro)
                     .foregroundStyle(.secondary)
                 Text(formattedCommitDay(dayKey))
                     .font(FizzTypography.cardTitle)
             }
 
-            TagChip(text: "\(visibleProjects.count) 个项目", compact: true)
+            TagChip(text: FizzL10n.text("\(visibleProjects.count) 个项目", SessionSummaryText.englishCount(visibleProjects.count, "project")), compact: true)
 
             Spacer(minLength: 8)
 
-            FizzActionButton(title: "清除", symbol: "xmark", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("清除", "Clear"), symbol: "xmark", height: .compact) {
                 withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                     localQuery.commitDayKey = nil
                 }
             }
-            .help("清除提交日期筛选")
-            .accessibilityLabel("清除提交日期筛选")
+            .help(FizzL10n.text("清除提交日期筛选", "Clear commit date filter"))
+            .accessibilityLabel(FizzL10n.text("清除提交日期筛选", "Clear commit date filter"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
@@ -356,8 +360,8 @@ struct LibraryView: View {
         parser.dateFormat = "yyyy-MM-dd"
         guard let date = parser.date(from: dayKey) else { return dayKey }
         let display = DateFormatter()
-        display.locale = Locale(identifier: "zh_Hans")
-        display.dateFormat = "yyyy 年 M 月 d 日 EEEE"
+        display.locale = FizzL10n.locale
+        display.setLocalizedDateFormatFromTemplate("yMMMMdEEEE")
         return display.string(from: date)
     }
 
@@ -391,7 +395,7 @@ struct LibraryView: View {
                         .xs, symbol: showIdleProjects ? "chevron.down" : "chevron.right"
                     )
                     .foregroundStyle(.secondary)
-                    Text("闲置 30 天以上")
+                    Text(FizzL10n.text("闲置 30 天以上", "Inactive for 30+ days"))
                         .font(FizzTypography.sectionTitle)
                         .foregroundStyle(.secondary)
                     Text("\(idleProjects.count)")
@@ -403,8 +407,8 @@ struct LibraryView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("闲置 30 天以上的项目，共 \(idleProjects.count) 个")
-            .accessibilityValue(showIdleProjects ? "已展开" : "已折叠")
+            .accessibilityLabel(FizzL10n.text("闲置 30 天以上的项目，共 \(idleProjects.count) 个", "\(SessionSummaryText.englishCount(idleProjects.count, "project")) inactive for 30 days or more"))
+            .accessibilityValue(showIdleProjects ? FizzL10n.text("已展开", "Expanded") : FizzL10n.text("已折叠", "Collapsed"))
 
             if showIdleProjects {
                 switch mode {
@@ -452,14 +456,14 @@ struct LibraryView: View {
 
     private var emptyResults: some View {
         ContentUnavailableView {
-            Label("没有匹配项目", systemImage: "square.grid.2x2")
+            Label(FizzL10n.text("没有匹配项目", "No matching projects"), systemImage: "square.grid.2x2")
         } description: {
             Text(localQuery.hasActiveFilters
-                ? "当前筛选条件下没有项目，清除筛选后再试。"
-                : "没有找到匹配的项目。")
+                ? FizzL10n.text("当前筛选条件下没有项目，清除筛选后再试。", "No projects match these filters. Clear the filters to try again.")
+                : FizzL10n.text("没有找到匹配的项目。", "No projects match your search."))
         } actions: {
             if localQuery.hasActiveFilters || !store.query.isEmpty {
-                FizzActionButton(title: "清除筛选", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("清除筛选", "Clear filters"), height: .compact) {
                     clearFilters()
                     store.query = ""
                 }
@@ -473,21 +477,21 @@ struct LibraryView: View {
         if store.phase == .scanning {
             VStack(spacing: 12) {
                 ProgressView()
-                Text("正在扫描本机项目…")
+                Text(FizzL10n.text("正在扫描本机项目…", "Scanning local projects…"))
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ContentUnavailableView {
-                Label("还没有项目", systemImage: "square.stack.3d.up")
+                Label(FizzL10n.text("还没有项目", "No projects yet"), systemImage: "square.stack.3d.up")
             } description: {
-                Text("扫描常用目录或手动添加文件夹，FizzDeck 会分析 Git、AI 会话和体积。")
+                Text(FizzL10n.text("扫描常用目录或手动添加文件夹，FizzDeck 会分析 Git、AI 会话和体积。", "Scan for projects or add a folder to see Git status, AI sessions, and disk usage."))
             } actions: {
                 HStack(spacing: FizzSpacing.row) {
-                    FizzActionButton(title: "手动添加文件夹") {
+                    FizzActionButton(title: FizzL10n.text("手动添加文件夹", "Add a folder…")) {
                         Task { await store.addRoot() }
                     }
-                    FizzActionButton(title: "智能扫描本机项目", prominence: .primary) {
+                    FizzActionButton(title: FizzL10n.text("智能扫描本机项目", "Scan for projects"), prominence: .primary) {
                         store.presentFirstRunScan()
                     }
                 }
@@ -671,19 +675,17 @@ struct LibraryView: View {
                 microViz: .compact(state: .done)
             )
         }
-        batchFeedback = result.feedback
+        batchFeedback = result.result
     }
 
     private func batchStar(_ starred: Bool) {
         let projects = selectedProjects
         guard !projects.isEmpty else { return }
         store.setStarred(starred, for: projects)
-        let message = starred
-            ? "已为 \(projects.count) 个项目设为星标"
-            : "已取消 \(projects.count) 个项目的星标"
-        batchFeedback = message
+        let result = LibraryBatchResult.starred(projects.count, starred)
+        batchFeedback = result
         ToastCenter.shared.show(
-            message,
+            result.message,
             symbol: starred ? "star.fill" : "star",
             tint: Color.secondary,
             microViz: .compact(state: .done)
@@ -694,11 +696,10 @@ struct LibraryView: View {
         let projects = selectedProjects
         guard !projects.isEmpty else { return }
         store.setGroup(group, for: projects)
-        let message = group.map { "已将 \(projects.count) 个项目移至「\($0)」" }
-            ?? "已将 \(projects.count) 个项目恢复自动分组"
-        batchFeedback = message
+        let result = LibraryBatchResult.grouped(projects.count, group)
+        batchFeedback = result
         ToastCenter.shared.show(
-            message,
+            result.message,
             symbol: "folder.fill",
             tint: Color.secondary,
             microViz: .compact(state: .done)
@@ -711,7 +712,7 @@ struct LibraryView: View {
             GitService.hasGit(URL(fileURLWithPath: $0.path))
         }
         guard !gitProjects.isEmpty else {
-            batchFeedback = "所选项目均非 Git 仓库"
+            batchFeedback = .fetched(succeeded: 0, failed: 0)
             return
         }
 
@@ -729,9 +730,7 @@ struct LibraryView: View {
             }
         }
         batchRunning = false
-        batchFeedback = failed == 0
-            ? "已 Fetch \(succeeded) 个仓库"
-            : "Fetch 完成：\(succeeded) 个成功，\(failed) 个失败"
+        batchFeedback = .fetched(succeeded: succeeded, failed: failed)
     }
 
     private func rescanSelected() async {
@@ -744,7 +743,7 @@ struct LibraryView: View {
         }
         let missing = projects.count - existing.count
         guard !existing.isEmpty else {
-            batchFeedback = "所选目录都不存在"
+            batchFeedback = .rescanned(0, missing: missing)
             return
         }
 
@@ -752,14 +751,12 @@ struct LibraryView: View {
         batchFeedback = nil
         await store.rescanProjects(existing)
         batchRunning = false
-        batchFeedback = missing == 0
-            ? "已重新扫描 \(existing.count) 个项目"
-            : "已重新扫描 \(existing.count) 个；\(missing) 个目录不存在"
+        batchFeedback = .rescanned(existing.count, missing: missing)
         ToastCenter.shared.show(
-            "批量扫描完成",
+            FizzL10n.text("批量扫描完成", "Batch scan complete"),
             symbol: "arrow.clockwise.circle.fill",
             tint: Color.secondary,
-            subtitle: batchFeedback,
+            subtitle: batchFeedback?.message,
             microViz: .bars(
                 values: existing.map { Double($0.weekly.values.reduce(0, +)) },
                 improved: false

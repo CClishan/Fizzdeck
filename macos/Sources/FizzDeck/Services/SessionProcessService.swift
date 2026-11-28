@@ -124,7 +124,7 @@ enum SessionProcessService {
         guard !processes.isEmpty else {
             return SessionEndResult(
                 success: false,
-                message: "没有找到这个会话对应的 CLI 进程；Codex Desktop 请在客户端内结束。"
+                message: FizzL10n.text("没有找到这个会话对应的 CLI 进程；Codex Desktop 请在客户端内结束。", "No CLI process was found for this session. End Codex Desktop sessions in the app.")
             )
         }
 
@@ -132,18 +132,18 @@ enum SessionProcessService {
         let targets = processes.filter { $0 != currentPID }
         let signalled = targets.filter { Darwin.kill($0, SIGTERM) == 0 }
         guard !signalled.isEmpty else {
-            return SessionEndResult(success: false, message: "无法向会话进程发送结束信号。")
+            return SessionEndResult(success: false, message: FizzL10n.text("无法向会话进程发送结束信号。", "Couldn’t send a stop signal to the session process."))
         }
 
         try? await Task.sleep(for: .milliseconds(700))
         let remaining = await liveProcesses(for: [session])[session.stableID] ?? []
         let pids = signalled.map(String.init).joined(separator: ", ")
         if remaining.isEmpty {
-            return SessionEndResult(success: true, message: "已结束会话进程 \(pids)")
+            return SessionEndResult(success: true, message: FizzL10n.text("已结束会话进程 \(pids)", "Stopped session process \(pids)"))
         }
         return SessionEndResult(
             success: false,
-            message: "已发送结束信号 \(pids)，进程仍在退出。"
+            message: FizzL10n.text("已发送结束信号 \(pids)，进程仍在退出。", "Stop signal sent to \(pids). The process is still exiting.")
         )
     }
 

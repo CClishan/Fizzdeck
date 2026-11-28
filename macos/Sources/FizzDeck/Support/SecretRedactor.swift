@@ -6,8 +6,6 @@ struct RedactionResult: Equatable, Sendable {
 }
 
 enum SecretRedactor {
-    private static let placeholder = "[已脱敏]"
-
     private static let bearerRegex = try? NSRegularExpression(
         pattern: #"(?i)\bBearer\s+[A-Za-z0-9._-]{20,}"#
     )
@@ -25,6 +23,7 @@ enum SecretRedactor {
             return RedactionResult(text: input, redactedCount: 0)
         }
 
+        let placeholder = FizzL10n.text("[已脱敏]", "[redacted]")
         var current = input
         var totalCount = 0
 
@@ -59,7 +58,7 @@ enum SecretRedactor {
                 let quoteRange = match.range(at: 2)
                 let quote = quoteRange.location != NSNotFound ? nsText.substring(with: quoteRange) : ""
                 let value = nsText.substring(with: match.range(at: 3))
-                if value == placeholder || value.contains(placeholder) {
+                if value == "[redacted]" || value == "[已脱敏]" {
                     return nil
                 }
                 return "\(prefix)\(quote)\(placeholder)\(quote)"
@@ -69,6 +68,10 @@ enum SecretRedactor {
         }
 
         return RedactionResult(text: current, redactedCount: totalCount)
+    }
+
+    static func redactedPrefix(_ input: String, _ limit: Int) -> String {
+        String(redact(input).text.prefix(limit))
     }
 
     static func containsSecret(_ input: String) -> Bool {

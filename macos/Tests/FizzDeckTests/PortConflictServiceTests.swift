@@ -2,7 +2,18 @@ import Darwin
 import XCTest
 @testable import FizzDeck
 
-final class PortConflictServiceTests: XCTestCase {
+final class PortConflictServiceTests: ChineseInterfaceTestCase {
+    func testCachedListenerCanLocalizeAMissingNameAndPreserveARealName() throws {
+        let inputs = ["p12\0f5\0tIPv4\0n127.0.0.1:3000\0", "p12\0c未知进程\0f5\0tIPv4\0n127.0.0.1:3000\0"]
+        let captured = try FizzL10n.$languageOverride.withValue(.chinese) {
+            try inputs.map { try XCTUnwrap(PortConflictService.parseListeners($0, ports: [3000]).first) }
+        }
+        FizzL10n.$languageOverride.withValue(.english) {
+            XCTAssertTrue(captured[0].occupantSummary.contains("Unknown process"), "Unnamed process: \(captured[0].occupantSummary)")
+            XCTAssertTrue(captured[1].occupantSummary.contains("未知进程"), "Real process name: \(captured[1].occupantSummary)")
+        }
+    }
+
     func testFieldRecordsKeepPortPIDAndFamilyTogetherWithoutDuplicateListeners() throws {
         let fields = ["p101", "cnode", "u501", "\nf4", "tIPv6", "n[::1]:5173", "\nf5", "tIPv4", "n*:5173",
                       "\nf6", "tIPv4", "n127.0.0.1:9100", "\np202", "cpython", "u502", "\nf7", "tIPv4", "n*:3000"]
@@ -20,7 +31,7 @@ final class PortConflictServiceTests: XCTestCase {
         let fields = ["p404", "u501", "\nf4", "tIPv4", "n*:3000", "\np505", "cworker\np777", "u501", "\nf4", "tIPv4", "n*:3000", "\npABC", "\nf4", "tIPv4", "n*:3000"]
         let row = try XCTUnwrap(PortConflictService.parseListeners(fields.joined(separator: "\0"), ports: [3000]).first)
         XCTAssertEqual(row.occupants.map(\.pid), [404, 505])
-        XCTAssertEqual(row.occupants.map(\.name), ["未知进程", "worker\np777"])
+        XCTAssertEqual(row.occupants.map(\.displayName), ["未知进程", "worker\np777"])
         XCTAssertNil(ListenerIdentity.read(getpid()))
         XCTAssertNil(ListenerIdentity.read(1))
     }

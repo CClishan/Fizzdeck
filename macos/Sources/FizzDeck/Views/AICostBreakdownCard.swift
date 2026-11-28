@@ -10,12 +10,12 @@ struct AICostBreakdownCard: View {
         let showsRing = segments.count > 1
         if !byTool.isEmpty || !byProject.isEmpty {
             let hasCost = segments.contains { $0.costUSD > 0 }
-            Panel(title: hasCost || segments.isEmpty ? "估算费用构成" : "用量构成", symbol: "chart.pie") {
+            Panel(title: hasCost || segments.isEmpty ? FizzL10n.text("估算费用构成", "Estimated cost breakdown") : FizzL10n.text("用量构成", "Usage breakdown"), symbol: "chart.pie") {
                 HStack(spacing: FizzSpacing.panel) {
                     if showsRing { donutChart(segments) }
                     VStack(alignment: .leading, spacing: FizzSpacing.row) {
                         if segments.isEmpty {
-                            Text("该分类暂无计价或用量记录")
+                            Text(FizzL10n.text("该分类暂无计价或用量记录", "No cost or usage data for this group."))
                                 .font(FizzTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -28,7 +28,7 @@ struct AICostBreakdownCard: View {
                                 Text(segment.label).font(FizzTypography.caption)
                                 Spacer(minLength: FizzSpacing.row)
                                 Text(valueLabel(for: segment)).font(FizzTypography.mono)
-                                Text(segment.fraction.formatted(.percent.precision(.fractionLength(0...1))))
+                                Text(segment.fraction.formatted(.percent.precision(.fractionLength(0...1)).locale(FizzL10n.locale)))
                                     .font(FizzTypography.monoSmall)
                                     .frame(minWidth: 44, alignment: .trailing)
                             }

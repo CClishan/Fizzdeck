@@ -13,7 +13,7 @@ struct RelatedSessionsButton: View {
 
     var body: some View {
         trigger
-            .help("查看改过 \(URL(fileURLWithPath: file).lastPathComponent) 的历史对话")
+            .help(FizzL10n.text("查看改过 \(URL(fileURLWithPath: file).lastPathComponent) 的历史对话", "Show past conversations that changed \(URL(fileURLWithPath: file).lastPathComponent)"))
             .popover(isPresented: $isPresented, arrowEdge: .bottom) {
                 popoverContent
             }
@@ -22,9 +22,9 @@ struct RelatedSessionsButton: View {
     @ViewBuilder
     private var trigger: some View {
         if compact {
-            FizzIconButton(title: "查相关对话", symbol: "text.bubble", height: .compact, action: togglePopover)
+            FizzIconButton(title: FizzL10n.text("查相关对话", "Related conversations"), symbol: "text.bubble", height: .compact, action: togglePopover)
         } else {
-            FizzActionButton(title: "查相关对话", symbol: "text.bubble", height: .compact, action: togglePopover)
+            FizzActionButton(title: FizzL10n.text("查相关对话", "Related conversations"), symbol: "text.bubble", height: .compact, action: togglePopover)
         }
     }
 
@@ -36,7 +36,7 @@ struct RelatedSessionsButton: View {
 
     private var popoverContent: some View {
         VStack(spacing: 0) {
-            FizzSheetHeader(title: "改过这个文件的对话", subtitle: file) {
+            FizzSheetHeader(title: FizzL10n.text("改过这个文件的对话", "Conversations that changed this file"), subtitle: file) {
                 isPresented = false
             }
             .truncationMode(.middle)
@@ -54,7 +54,7 @@ struct RelatedSessionsButton: View {
                 .opacity(0.4)
 
             FizzSheetFooter {
-                FizzActionButton(title: "关闭", role: .cancel) { isPresented = false }
+                FizzActionButton(title: FizzL10n.text("关闭", "Close"), role: .cancel) { isPresented = false }
                     .keyboardShortcut(.cancelAction)
             }
             .padding(.horizontal, FizzSpacing.page)
@@ -70,16 +70,16 @@ struct RelatedSessionsButton: View {
             HStack(spacing: FizzSpacing.row) {
                 ProgressView()
                     .controlSize(.small)
-                Text("正在翻这段时间的记录…")
+                Text(FizzL10n.text("正在翻这段时间的记录…", "Searching past conversations…"))
                     .font(FizzTypography.body)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
         } else if results.isEmpty {
             VStack(alignment: .leading, spacing: FizzSpacing.row) {
-                Text("还没有对话改过这个文件")
+                Text(FizzL10n.text("还没有对话改过这个文件", "No conversations have changed this file yet"))
                     .font(FizzTypography.body(.medium))
-                Text("之后 AI 在这里改动后，会自动出现在这里。")
+                Text(FizzL10n.text("之后 AI 在这里改动后，会自动出现在这里。", "Future AI edits to this file will appear here."))
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -120,13 +120,13 @@ struct RelatedSessionsButton: View {
                             .font(FizzTypography.caption)
                             .foregroundStyle(.tertiary)
                         if result.endedWithError {
-                            Text("报错结束")
+                            Text(FizzL10n.text("报错结束", "Ended with an error"))
                                 .font(FizzTypography.micro)
                                 .foregroundStyle(.secondary)
                         }
                     }
 
-                    Text(result.primaryIntent.isEmpty ? (result.lastUser ?? "未记录起始描述") : result.primaryIntent)
+                    Text(result.displayTitle)
                         .font(FizzTypography.body(.medium))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -151,7 +151,7 @@ struct RelatedSessionsButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(HomeDashboardModel.toolTitle(result.tool))，\(result.primaryIntent)")
+        .accessibilityLabel(FizzL10n.text("\(HomeDashboardModel.toolTitle(result.tool))，\(result.displayTitle)", "\(HomeDashboardModel.toolTitle(result.tool)), \(result.displayTitle)"))
     }
 
     private func load() async {

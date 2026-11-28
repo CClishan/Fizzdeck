@@ -38,6 +38,7 @@ struct RepoProject: Identifiable, Codable, Sendable {
     var sizeLoadState: MetricLoadState = .ready
     var sessionLoadState: MetricLoadState = .ready
 
+    var groupTitle: String { ProjectGrouping.title(for: group) }
     var id: String { path }
 
     init(
@@ -138,6 +139,18 @@ struct StackGroup: Identifiable, Codable, Sendable, Hashable {
     let label: String
     let items: [String]
 
+    var displayTitle: String {
+        guard FizzL10n.isEnglish else { return label }
+        switch key {
+        case "framework": return "Framework"
+        case "language": return "Language"
+        case "infra": return "Infrastructure"
+        case "feature": return "Features"
+        default: return label
+        }
+    }
+
+    var displayItems: [String] { items.map { $0 == "其他" ? FizzL10n.text("其他", "Other") : $0 } }
     var id: String { key }
 }
 
@@ -146,6 +159,7 @@ struct SizeRow: Identifiable, Codable, Sendable, Hashable {
     let bytes: Int64
     let isDirectory: Bool
 
+    var displayLabel: String { !isDirectory && label == "(根目录文件)" ? FizzL10n.text(label, "(Files at root)") : label }
     var id: String { label }
 }
 
@@ -164,6 +178,17 @@ struct CleanupItem: Identifiable, Codable, Sendable, Hashable {
     let regen: String
     let kind: String
 
+    var displayReason: String {
+        guard FizzL10n.isEnglish else { return reason }
+        switch kind {
+        case "deps": return "Reinstallable dependencies"
+        case "build": return "Rebuildable output"
+        case "tmp": return "Temporary files"
+        case "archive": return "Archive; review before deleting"
+        default: return reason
+        }
+    }
+    var displayRegen: String { regen == "构建时自动生成" ? FizzL10n.text(regen, "Generated during builds") : regen }
     var id: String { path }
 }
 
@@ -284,11 +309,11 @@ enum TagColor: String, CaseIterable, Codable, Sendable, Identifiable {
 
     var label: String {
         switch self {
-        case .red: "红"
-        case .amber: "琥珀"
-        case .green: "绿"
-        case .blue: "蓝"
-        case .violet: "紫"
+        case .red: FizzL10n.text("红", "Red")
+        case .amber: FizzL10n.text("琥珀", "Amber")
+        case .green: FizzL10n.text("绿", "Green")
+        case .blue: FizzL10n.text("蓝", "Blue")
+        case .violet: FizzL10n.text("紫", "Purple")
         }
     }
 }

@@ -140,7 +140,7 @@ enum ProjectDiscovery {
                 maxDepth: 4,
                 category: .suggested,
                 selectedByDefault: true,
-                detail: "常见开发目录（深度 4）"
+                detail: FizzL10n.text("常见开发目录（深度 4）", "Common development folder (4 levels deep)")
             )
         }
 
@@ -156,7 +156,7 @@ enum ProjectDiscovery {
                 maxDepth: 4,
                 category: .suggested,
                 selectedByDefault: true,
-                detail: "工作区目录（深度 4）"
+                detail: FizzL10n.text("工作区目录（深度 4）", "Workspace folder (4 levels deep)")
             )
         }
 
@@ -166,17 +166,17 @@ enum ProjectDiscovery {
                 maxDepth: 4,
                 category: .systemProtected,
                 selectedByDefault: false,
-                detail: "系统受保护目录，勾选后可能请求文件权限"
+                detail: FizzL10n.text("系统受保护目录，勾选后可能请求文件权限", "Protected system folder; selecting it may prompt for access")
             )
         }
 
         appendScope(
             url: homeDirectory,
-            title: "主目录 (~)",
+            title: FizzL10n.text("主目录 (~)", "Home (~)"),
             maxDepth: 3,
             category: .home,
             selectedByDefault: false,
-            detail: "浅扫主目录 3 层（跳过 Library / 系统 / 媒体目录）"
+            detail: FizzL10n.text("浅扫主目录 3 层（跳过 Library / 系统 / 媒体目录）", "Scan 3 levels of Home, skipping Library, system and media folders")
         )
 
         if FileTools.isDirectory(volumesRoot) {
@@ -199,11 +199,11 @@ enum ProjectDiscovery {
                 else { continue }
                 appendScope(
                     url: volume,
-                    title: "卷：\(name)",
+                    title: FizzL10n.text("卷：\(name)", "Volume: \(name)"),
                     maxDepth: 3,
                     category: .volume,
                     selectedByDefault: false,
-                    detail: "外置挂载卷（深度 3）"
+                    detail: FizzL10n.text("外置挂载卷（深度 3）", "External volume (3 levels deep)")
                 )
             }
         }

@@ -62,7 +62,7 @@ struct ServicesPanel: View {
     }
 
     private var services: some View {
-        Panel(title: "服务", symbol: "bolt.horizontal") {
+        Panel(title: FizzL10n.text("服务", "Services"), symbol: "bolt.horizontal") {
             VStack(alignment: .leading, spacing: FizzSpacing.grid) {
                 if let run = project.run {
                     devCard(run)
@@ -86,7 +86,7 @@ struct ServicesPanel: View {
             )
         } accessory: {
             HStack(spacing: 8) {
-                Text(runningCount > 0 ? "\(runningCount) 运行中" : "空闲")
+                Text(runningCount > 0 ? FizzL10n.text("\(runningCount) 运行中", "\(runningCount) running") : FizzL10n.text("空闲", "Idle"))
                     .font(FizzTypography.monoSmall(.medium))
                     .foregroundStyle(.secondary)
 
@@ -97,12 +97,12 @@ struct ServicesPanel: View {
         }
         .alert(item: $pendingConflict) { conflict in
             Alert(
-                title: Text("结束占用 :\(conflict.port) 的进程？"),
+                title: Text(FizzL10n.text("结束占用 :\(conflict.port) 的进程？", "Stop the process on port \(conflict.port)?")),
                 message: Text(
-                    "\(conflict.details)\n只向以上进程发送 SIGTERM。"
+                    FizzL10n.text("\(conflict.details)\n只向以上进程发送 SIGTERM。", "\(conflict.details)\nOnly the listed processes will receive SIGTERM.")
                 ),
-                primaryButton: .cancel(Text("取消")),
-                secondaryButton: .destructive(Text("结束并启动")) {
+                primaryButton: .cancel(Text(FizzL10n.text("取消", "Cancel"))),
+                secondaryButton: .destructive(Text(FizzL10n.text("结束并启动", "Stop and start service"))) {
                     Task {
                         await actions.resolvePortConflictAndLaunch(
                             project,
@@ -143,7 +143,7 @@ struct ServicesPanel: View {
                 DeveloperPortList(project: project) { devRunning = $0 }
                     .id(project.path)
             } else {
-                Text("未配置预览端口").font(FizzTypography.caption).foregroundStyle(.secondary)
+                Text(FizzL10n.text("未配置预览端口", "No preview port configured")).font(FizzTypography.caption).foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -157,7 +157,7 @@ struct ServicesPanel: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("端口 :\(conflict.port) 被占用")
+                Text(FizzL10n.text("端口 :\(conflict.port) 被占用", "Port \(conflict.port) is in use"))
                     .font(FizzTypography.cardTitle)
                 Text(conflict.occupantSummary)
                     .font(FizzTypography.monoSmall)
@@ -173,11 +173,11 @@ struct ServicesPanel: View {
 
             Spacer(minLength: 8)
 
-            FizzActionButton(title: "结束占用进程并启动", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("结束占用进程并启动", "Stop process and start service"), height: .compact) {
                 pendingConflict = conflict
             }
             .disabled(busy || !conflict.canStop)
-            .help("确认后向占用 PID 发送 SIGTERM 并启动服务")
+            .help(FizzL10n.text("确认后向占用 PID 发送 SIGTERM 并启动服务", "Confirm to send SIGTERM to the process using this port and start the service."))
         }
         .padding(10)
         .background(
@@ -193,7 +193,7 @@ struct ServicesPanel: View {
     private var scriptsSection: some View {
         VStack(alignment: .leading, spacing: FizzSpacing.row) {
             HStack(spacing: 7) {
-                Text("脚本")
+                Text(FizzL10n.text("脚本", "Scripts"))
                     .font(FizzTypography.cardTitle)
                 Text("\(scripts.count)")
                     .font(FizzTypography.caption)
@@ -216,16 +216,16 @@ struct ServicesPanel: View {
     }
 
     private var scriptPinMenu: some View {
-        FizzMenuButton(title: "固定脚本", symbol: "plus") {
+        FizzMenuButton(title: FizzL10n.text("固定脚本", "Pin script"), symbol: "plus") {
             if unpinnedScripts.isEmpty {
-                Text("全部脚本已固定")
+                Text(FizzL10n.text("全部脚本已固定", "All scripts are pinned"))
             } else {
                 ForEach(ProjectScriptSource.allCases, id: \.rawValue) { source in
                     let items = unpinnedScripts.filter { $0.source == source }
                     if !items.isEmpty {
                         Section(source.label) {
                             ForEach(items) { script in
-                                Button("固定 \(script.name)") { pin(script) }
+                                Button(FizzL10n.text("固定 \(script.name)", "Pin \(script.name)")) { pin(script) }
                             }
                         }
                     }
@@ -267,33 +267,33 @@ struct ServicesPanel: View {
 
             Spacer(minLength: 0)
 
-            FizzMenuButton(title: "\(script.name) 的更多操作") {
-                Button(selectedScriptID == script.id ? "收起输出" : "查看输出", systemImage: "terminal") {
+            FizzMenuButton(title: FizzL10n.text("\(script.name) 的更多操作", "More actions for \(script.name)")) {
+                Button(selectedScriptID == script.id ? FizzL10n.text("收起输出", "Hide output") : FizzL10n.text("查看输出", "Show output"), systemImage: "terminal") {
                     withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                         selectedScriptID = selectedScriptID == script.id ? nil : script.id
                     }
                 }
-                Button("打开完整日志", systemImage: "arrow.up.right.square") {
+                Button(FizzL10n.text("打开完整日志", "Open full log"), systemImage: "arrow.up.right.square") {
                     actions.openScriptLog(script, project: project)
                 }
-                Button("取消固定", systemImage: "star.slash") { unpin(script) }
+                Button(FizzL10n.text("取消固定", "Unpin"), systemImage: "star.slash") { unpin(script) }
                     .disabled(running)
             }
 
             if running {
-                FizzActionButton(title: "停止", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("停止", "Stop"), height: .compact) {
                     actions.stopScript(script, project: project)
                 }
-                .help("停止 \(script.name)")
+                .help(FizzL10n.text("停止 \(script.name)", "Stop \(script.name)"))
             } else {
-                FizzActionButton(title: "运行", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("运行", "Run"), height: .compact) {
                     withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                         selectedScriptID = script.id
                     }
                     actions.runScript(script, project: project, store: store)
                 }
                 .disabled(ProjectTrialService.shared.runs[project.path].map { $0.status == .running && $0.choice.command == script.command } == true)
-                .help("运行 \(script.command)")
+                .help(FizzL10n.text("运行 \(script.command)", "Run \(script.command)"))
             }
         }
         .padding(FizzSpacing.card)
@@ -312,7 +312,7 @@ struct ServicesPanel: View {
                     TagChip(text: scriptStatusText(run) ?? "", tint: scriptStatusColor(run.status), compact: true)
                 }
                 Spacer(minLength: 8)
-                FizzIconButton(title: "收起脚本输出", symbol: "xmark", height: .compact) {
+                FizzIconButton(title: FizzL10n.text("收起脚本输出", "Collapse script output"), symbol: "xmark", height: .compact) {
                     withAnimation(FizzMotion.resolved(reduceMotion, FizzMotion.spring)) {
                         selectedScriptID = nil
                     }
@@ -320,7 +320,7 @@ struct ServicesPanel: View {
             }
 
             ScrollView {
-                Text(text.isEmpty ? "暂无输出" : text)
+                Text(text.isEmpty ? FizzL10n.text("暂无输出", "No output yet") : text)
                     .font(FizzTypography.monoSmall)
                     .foregroundStyle(text.isEmpty ? Color.secondary : Color.primary)
                     .textSelection(.enabled)
@@ -342,13 +342,13 @@ struct ServicesPanel: View {
     private func scriptStatusText(_ run: ScriptRunState) -> String? {
         switch run.status {
         case .running:
-            "运行中"
+            FizzL10n.text("运行中", "Running")
         case .succeeded:
-            "完成 · \(String(format: "%.1fs", run.duration ?? 0))"
+            FizzL10n.text("完成 · \(String(format: "%.1fs", run.duration ?? 0))", "Finished · \(String(format: "%.1fs", run.duration ?? 0))")
         case .failed:
-            "失败 · \(String(format: "%.1fs", run.duration ?? 0))"
+            FizzL10n.text("失败 · \(String(format: "%.1fs", run.duration ?? 0))", "Failed · \(String(format: "%.1fs", run.duration ?? 0))")
         case .stopped:
-            "已停止"
+            FizzL10n.text("已停止", "Stopped")
         }
     }
 
@@ -369,7 +369,7 @@ struct ServicesPanel: View {
             .setPinned(ids, for: project.path)
             .pinnedIDs(for: project.path)
         ToastCenter.shared.show(
-            "已固定 \(script.name)",
+            FizzL10n.text("已固定 \(script.name)", "Pinned \(script.name)"),
             symbol: "star.fill",
             tint: Color.secondary
         )
@@ -384,7 +384,7 @@ struct ServicesPanel: View {
             selectedScriptID = nil
         }
         ToastCenter.shared.show(
-            "已取消固定 \(script.name)",
+            FizzL10n.text("已取消固定 \(script.name)", "Unpinned \(script.name)"),
             symbol: "star.slash",
             tint: .secondary
         )
@@ -431,15 +431,15 @@ struct ServicesPanel: View {
             }
             Spacer(minLength: 0)
 
-            FizzActionButton(title: testRunning ? "停止" : "运行", height: .compact) {
+            FizzActionButton(title: testRunning ? FizzL10n.text("停止", "Stop") : FizzL10n.text("运行", "Run"), height: .compact) {
                 if testRunning {
                     actions.stopTests(project)
                 } else {
                     actions.runTests(project, store: store)
                 }
             }
-            .help(testRunning ? "停止测试运行" : "运行测试命令")
-            .accessibilityLabel(testRunning ? "停止测试运行" : "运行测试命令")
+            .help(testRunning ? FizzL10n.text("停止测试运行", "Stop test run") : FizzL10n.text("运行测试命令", "Run test command"))
+            .accessibilityLabel(testRunning ? FizzL10n.text("停止测试运行", "Stop test run") : FizzL10n.text("运行测试命令", "Run test command"))
         }
         .padding(FizzSpacing.card)
         .fizzCard(radius: FizzRadius.card, fill: testRunning ? FizzTheme.selectedFill : FizzTheme.recessedFill)
@@ -466,11 +466,11 @@ struct ServicesPanel: View {
     private func testStatusText(_ run: TestRunState) -> String? {
         switch run.status {
         case .running:
-            "运行中"
+            FizzL10n.text("运行中", "Running")
         case .passed:
-            "通过 · \(duration(run))"
+            FizzL10n.text("通过 · \(duration(run))", "Passed · \(duration(run))")
         case .failed:
-            "失败 · \(duration(run))"
+            FizzL10n.text("失败 · \(duration(run))", "Failed · \(duration(run))")
         }
     }
 
@@ -570,7 +570,7 @@ struct ProjectLogsPanel: View {
 
     var body: some View {
         let detectedError = LogErrorHelper.extractError(from: text)
-        return Panel(title: "日志", symbol: "terminal") {
+        return Panel(title: FizzL10n.text("日志", "Logs"), symbol: "terminal") {
             if expanded {
                 VStack(alignment: .leading, spacing: 10) {
                     viewport
@@ -590,7 +590,7 @@ struct ProjectLogsPanel: View {
                 }
 
                 FizzIconButton(
-                    title: expanded ? "折叠日志" : "展开日志",
+                    title: expanded ? FizzL10n.text("折叠日志", "Collapse logs") : FizzL10n.text("展开日志", "Expand logs"),
                     symbol: expanded ? "chevron.up" : "chevron.down",
                     height: .compact
                 ) {
@@ -598,9 +598,9 @@ struct ProjectLogsPanel: View {
                         expanded.toggle()
                     }
                 }
-                .accessibilityValue(expanded ? "已展开" : "已折叠")
+                .accessibilityValue(expanded ? FizzL10n.text("已展开", "Expanded") : FizzL10n.text("已折叠", "Collapsed"))
 
-                FizzIconButton(title: "打开完整日志", symbol: "arrow.up.forward.square", height: .compact) {
+                FizzIconButton(title: FizzL10n.text("打开完整日志", "Open full log"), symbol: "arrow.up.forward.square", height: .compact) {
                     actions.openLog(for: project, test: source == .test)
                 }
             }
@@ -628,7 +628,7 @@ struct ProjectLogsPanel: View {
         .sheet(isPresented: $showingErrorSheet) {
             if let match = LogErrorHelper.extractError(from: text) {
                 VStack(alignment: .leading, spacing: FizzSpacing.panel) {
-                    FizzSheetHeader(title: "这是什么意思") {
+                    FizzSheetHeader(title: FizzL10n.text("这是什么意思", "What does this mean?")) {
                         showingErrorSheet = false
                     }
 
@@ -640,7 +640,7 @@ struct ProjectLogsPanel: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Text("建议动作：\(match.suggestedAction)")
+                    Text(FizzL10n.text("建议动作：\(match.suggestedAction)", "Suggested action: \(match.suggestedAction)"))
                         .font(FizzTypography.body)
                         .foregroundStyle(.secondary)
 
@@ -655,11 +655,11 @@ struct ProjectLogsPanel: View {
                     .background(FizzTheme.recessedFill, in: RoundedRectangle(cornerRadius: FizzRadius.control, style: .continuous))
 
                     FizzSheetFooter {
-                        FizzActionButton(title: "关闭", role: .cancel) {
+                        FizzActionButton(title: FizzL10n.text("关闭", "Close"), role: .cancel) {
                             showingErrorSheet = false
                         }
                         .keyboardShortcut(.cancelAction)
-                        FizzActionButton(title: "复制求助 prompt", symbol: "doc.on.clipboard", prominence: .primary) {
+                        FizzActionButton(title: FizzL10n.text("复制求助 prompt", "Copy help prompt"), symbol: "doc.on.clipboard", prominence: .primary) {
                             copyHelpPrompt(match)
                             showingErrorSheet = false
                         }
@@ -689,11 +689,11 @@ struct ProjectLogsPanel: View {
 
             Spacer(minLength: 8)
 
-            FizzActionButton(title: "这是什么意思", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("这是什么意思", "What does this mean?"), height: .compact) {
                 showingErrorSheet = true
             }
 
-            FizzActionButton(title: "复制求助 prompt", height: .compact, prominence: .primary) {
+            FizzActionButton(title: FizzL10n.text("复制求助 prompt", "Copy help prompt"), height: .compact, prominence: .primary) {
                 copyHelpPrompt(match)
             }
         }
@@ -705,14 +705,14 @@ struct ProjectLogsPanel: View {
     private func copyHelpPrompt(_ match: LogErrorMatch) {
         let prompt = LogErrorHelper.buildHelpPrompt(project: project, match: match)
         SystemActions.copy(prompt, feedback: nil)
-        ToastCenter.shared.show("已复制求助 prompt，可直接粘贴给 AI", symbol: "doc.on.clipboard.fill", tint: Color.secondary)
+        ToastCenter.shared.show(FizzL10n.text("已复制求助 prompt，可直接粘贴给 AI", "Copied help prompt. Paste it into your AI conversation."), symbol: "doc.on.clipboard.fill", tint: Color.secondary)
     }
 
     private var sourceSwitcher: some View {
-        Picker("日志来源", selection: $source) {
+        Picker(FizzL10n.text("日志来源", "Log source"), selection: $source) {
             ForEach(ProjectLogSource.allCases) { item in
                 Text(item.title)
-                    .accessibilityLabel(item == .dev ? "开发日志" : "测试日志")
+                    .accessibilityLabel(item == .dev ? FizzL10n.text("开发日志", "Development log") : FizzL10n.text("测试日志", "Test log"))
                     .tag(item)
             }
         }
@@ -727,7 +727,7 @@ struct ProjectLogsPanel: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(text.isEmpty ? "暂无日志输出" : text)
+                    Text(text.isEmpty ? FizzL10n.text("暂无日志输出", "No log output yet") : text)
                         .font(FizzTypography.mono)
                         .foregroundStyle(text.isEmpty ? Color.secondary : Color.primary)
                         .textSelection(.enabled)

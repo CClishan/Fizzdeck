@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import FizzDeck
 
-final class GitSyncServiceTests: XCTestCase {
+final class GitSyncServiceTests: ChineseInterfaceTestCase {
     func testPushWithoutUpstreamReturnsActionableMessage() async throws {
         let directory = try makeRepository()
         defer { try? FileManager.default.removeItem(at: directory) }

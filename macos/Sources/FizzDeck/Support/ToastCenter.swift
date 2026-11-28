@@ -80,15 +80,15 @@ enum ToastMicroViz: Equatable, Sendable {
     var accessibilitySummary: String {
         switch self {
         case .tests(let passed, let failed):
-            "测试通过 \(passed) 项，失败 \(failed) 项"
+            FizzL10n.text("测试通过 \(passed) 项，失败 \(failed) 项", "Tests: \(passed) passed, \(failed) failed")
         case .gitMerge:
-            "Git 提交汇入主干"
+            FizzL10n.text("Git 提交汇入主干", "Git commits merged into the main branch")
         case .pipeline(let step, let state):
-            "管线第 \(min(5, max(1, step + 1))) 步，\(state.accessibilityLabel)"
+            FizzL10n.text("管线第 \(min(5, max(1, step + 1))) 步，\(state.accessibilityLabel)", "Step \(min(5, max(1, step + 1))): \(state.accessibilityLabel)")
         case .bars(_, let improved):
-            improved ? "指标柱状图改善" : "指标柱状图更新"
+            improved ? FizzL10n.text("指标柱状图改善", "Chart shows an improvement") : FizzL10n.text("指标柱状图更新", "Chart updated")
         case .diff(let added, let removed):
-            "代码新增 \(added) 行，删除 \(removed) 行"
+            FizzL10n.text("代码新增 \(added) 行，删除 \(removed) 行", "Code: \(added) additions, \(removed) deletions")
         case .compact(let state):
             state.accessibilityLabel
         }
@@ -98,9 +98,9 @@ enum ToastMicroViz: Equatable, Sendable {
 extension ToastPipelineState {
     var accessibilityLabel: String {
         switch self {
-        case .running: "进行中"
-        case .failed: "失败"
-        case .live: "已完成"
+        case .running: FizzL10n.text("进行中", "In progress")
+        case .failed: FizzL10n.text("失败", "Failed")
+        case .live: FizzL10n.text("已完成", "Done")
         }
     }
 }
@@ -108,24 +108,56 @@ extension ToastPipelineState {
 extension ToastCompactState {
     var accessibilityLabel: String {
         switch self {
-        case .warning: "需要处理"
-        case .working: "进行中"
-        case .done: "已完成"
+        case .warning: FizzL10n.text("需要处理", "Needs attention")
+        case .working: FizzL10n.text("进行中", "In progress")
+        case .done: FizzL10n.text("已完成", "Done")
         }
     }
 }
 
+// Notifications can outlive a language switch. Capture both labels before mutable operation state changes.
+private struct ToastCopy<Value> {
+    let chinese: Value
+    let english: Value
+    var displayed: Value { FizzL10n.isEnglish ? english : chinese }
+
+    init(_ make: () -> Value) {
+        chinese = FizzL10n.$languageOverride.withValue(.chinese, operation: make)
+        english = FizzL10n.$languageOverride.withValue(.english, operation: make)
+    }
+}
+
 struct ToastAction {
-    let title: String
-    var symbol: String? = nil
+    private let label: ToastCopy<String>
+    var title: String { label.displayed }
+    let symbol: String?
     let handler: @MainActor () -> Void
+
+    init(title: @autoclosure () -> String, symbol: String? = nil, handler: @escaping @MainActor () -> Void) {
+        label = ToastCopy(title)
+        self.symbol = symbol
+        self.handler = handler
+    }
 }
 
 struct ToastMessage: Identifiable {
     let id: UUID
     var symbol: String
-    var title: String
-    var subtitle: String?
+    private var heading: ToastCopy<String>
+    private var detail: ToastCopy<String?>
+    var title: String {
+        get { heading.displayed }
+        set { heading = ToastCopy { newValue } }
+    }
+    var subtitle: String? {
+        get { detail.displayed }
+        set { detail = ToastCopy { newValue } }
+    }
+
+    mutating func setText(_ title: () -> String, subtitle: () -> String?) {
+        heading = ToastCopy(title)
+        detail = ToastCopy(subtitle)
+    }
     var tint: Color
     var microViz: ToastMicroViz?
     var action: ToastAction?
@@ -135,8 +167,8 @@ struct ToastMessage: Identifiable {
     init(
         id: UUID = UUID(),
         symbol: String = "checkmark.circle.fill",
-        title: String,
-        subtitle: String? = nil,
+        title: @autoclosure () -> String,
+        subtitle: @autoclosure () -> String? = nil,
         tint: Color = FizzTheme.statusSuccess,
         microViz: ToastMicroViz? = nil,
         action: ToastAction? = nil,
@@ -144,8 +176,8 @@ struct ToastMessage: Identifiable {
     ) {
         self.id = id
         self.symbol = symbol
-        self.title = title
-        self.subtitle = subtitle
+        self.heading = ToastCopy(title)
+        self.detail = ToastCopy(subtitle)
         self.tint = tint
         self.microViz = microViz
         self.action = action
@@ -170,18 +202,18 @@ final class ToastCenter {
 
     @discardableResult
     func show(
-        _ title: String,
+        _ title: @autoclosure () -> String,
         symbol: String = "checkmark.circle.fill",
         tint: Color = FizzTheme.statusSuccess,
         duration: TimeInterval? = 2.2,
-        subtitle: String? = nil,
+        subtitle: @autoclosure () -> String? = nil,
         microViz: ToastMicroViz? = nil,
         action: ToastAction? = nil
     ) -> UUID {
         let message = ToastMessage(
             symbol: symbol,
-            title: title,
-            subtitle: subtitle,
+            title: title(),
+            subtitle: subtitle(),
             tint: tint,
             microViz: microViz,
             action: action,

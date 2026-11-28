@@ -20,7 +20,7 @@ struct AppRelease: Sendable, Equatable {
 enum AppVersion {
     static var short: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? "开发版"
+            ?? FizzL10n.text("开发版", "Development build")
     }
 
     static var display: String {
@@ -303,7 +303,7 @@ enum AppUpdateService {
                 appURL: target,
                 parentURL: parent,
                 canInstallInPlace: false,
-                reason: "当前是开发运行，无法原地替换应用。"
+                reason: FizzL10n.text("当前是开发运行，无法原地替换应用。", "This development build cannot update itself.")
             )
         }
         guard isWritable(parent) else {
@@ -311,7 +311,7 @@ enum AppUpdateService {
                 appURL: target,
                 parentURL: parent,
                 canInstallInPlace: false,
-                reason: "应用所在目录不可写，无法自动安装。"
+                reason: FizzL10n.text("应用所在目录不可写，无法自动安装。", "The application folder is read-only. Automatic installation is unavailable.")
             )
         }
         return AppInstallPlan(
@@ -645,33 +645,33 @@ enum AppUpdateError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            "暂时无法获取最新版本"
+            FizzL10n.text("暂时无法获取最新版本", "Couldn’t check for updates")
         case .missingDMG:
-            "这个版本没有可用的 arm64 DMG"
+            FizzL10n.text("这个版本没有可用的 arm64 DMG", "No arm64 disk image is available for this release")
         case .downloadFailed(let detail):
-            "下载失败：\(detail)"
+            FizzL10n.text("下载失败：\(detail)", "Download failed: \(detail)")
         case .invalidChecksum:
-            "校验文件格式不正确"
+            FizzL10n.text("校验文件格式不正确", "Invalid checksum file")
         case .checksumReadFailed(let detail):
-            "读取更新文件失败：\(detail)"
+            FizzL10n.text("读取更新文件失败：\(detail)", "Couldn’t read the update: \(detail)")
         case .checksumMismatch:
-            "SHA-256 不匹配，已删除下载文件"
+            FizzL10n.text("SHA-256 不匹配，已删除下载文件", "The SHA-256 checksum didn’t match. The download was deleted.")
         case .mountFailed:
-            "无法挂载下载的 DMG"
+            FizzL10n.text("无法挂载下载的 DMG", "Couldn’t mount the downloaded disk image")
         case .appNotFoundInDMG:
-            "DMG 中没有 FizzDeck.app"
+            FizzL10n.text("DMG 中没有 FizzDeck.app", "The disk image doesn’t contain FizzDeck.app")
         case .bundleIdentifierMismatch:
-            "DMG 中的应用标识不匹配"
+            FizzL10n.text("DMG 中的应用标识不匹配", "The app in the disk image has a different bundle ID")
         case .signatureInvalid:
-            "应用签名校验失败"
+            FizzL10n.text("应用签名校验失败", "App signature verification failed")
         case .stagingFailed(let detail):
-            "准备安装文件失败：\(detail)"
+            FizzL10n.text("准备安装文件失败：\(detail)", "Couldn’t prepare the installer: \(detail)")
         case .unmountFailed:
-            "无法安全卸载 DMG"
+            FizzL10n.text("无法安全卸载 DMG", "Couldn’t safely unmount the disk image")
         case .installerLaunchFailed(let detail):
-            "无法启动安装助手：\(detail)"
+            FizzL10n.text("无法启动安装助手：\(detail)", "Couldn’t start the installer: \(detail)")
         case .cancelled:
-            "下载已取消"
+            FizzL10n.text("下载已取消", "Download cancelled")
         }
     }
 }
@@ -774,7 +774,7 @@ final class AppUpdateController {
         )
 
         guard plan.canInstallInPlace else {
-            openFallbackDMG(dmgURL, reason: plan.reason ?? "当前环境无法自动安装。")
+            openFallbackDMG(dmgURL, reason: plan.reason ?? FizzL10n.text("当前环境无法自动安装。", "Automatic installation is unavailable here."))
             return
         }
 
@@ -799,7 +799,7 @@ final class AppUpdateController {
 
     private func openFallbackDMG(_ dmgURL: URL, reason: String) {
         NSWorkspace.shared.open(dmgURL)
-        notice = "\(reason) 已打开校验后的 DMG，请手动拖入“应用程序”。"
+        notice = FizzL10n.text("\(reason) 已打开校验后的 DMG，请手动拖入“应用程序”。", "\(reason) The verified disk image is open. Drag FizzDeck to Applications.")
     }
 
     private func apply(_ event: AppUpdateEvent) {
@@ -818,12 +818,12 @@ final class AppUpdateController {
 
         case .available(let release):
             upsertUpdateToast(
-                title: "发现 FizzDeck v\(release.version)",
-                subtitle: "可下载 arm64 DMG",
+                title: FizzL10n.text("发现 FizzDeck v\(release.version)", "FizzDeck v\(release.version) is available"),
+                subtitle: FizzL10n.text("可下载 arm64 DMG", "An arm64 disk image is available"),
                 microViz: .pipeline(step: 0, state: .live),
                 tint: .secondary,
                 action: ToastAction(
-                    title: "下载更新",
+                    title: FizzL10n.text("下载更新", "Download Update"),
                     symbol: "arrow.down.circle"
                 ) { [weak self] in
                     self?.startDownload()
@@ -834,7 +834,7 @@ final class AppUpdateController {
             let version = pendingRelease.map { " v\($0.version)" } ?? ""
             let percent = Int((progress * 100).rounded())
             upsertUpdateToast(
-                title: "正在下载更新\(version)",
+                title: FizzL10n.text("正在下载更新\(version)", "Downloading update\(version)"),
                 subtitle: "\(percent)% · \(Format.bytes(received)) / \(Format.bytes(total))",
                 microViz: .pipeline(step: 0, state: .running),
                 tint: .secondary,
@@ -843,7 +843,7 @@ final class AppUpdateController {
 
         case .verifying:
             upsertUpdateToast(
-                title: "正在校验更新",
+                title: FizzL10n.text("正在校验更新", "Verifying update"),
                 subtitle: "SHA-256 · Bundle ID · codesign",
                 microViz: .pipeline(step: 1, state: .running),
                 tint: .secondary,
@@ -852,12 +852,12 @@ final class AppUpdateController {
 
         case .readyToInstall:
             upsertUpdateToast(
-                title: "更新已就绪",
-                subtitle: "校验通过，可安装并重启",
+                title: FizzL10n.text("更新已就绪", "Update ready"),
+                subtitle: FizzL10n.text("校验通过，可安装并重启", "Verified and ready to install"),
                 microViz: .pipeline(step: 2, state: .live),
                 tint: FizzTheme.statusSuccess,
                 action: ToastAction(
-                    title: "安装并重启",
+                    title: FizzL10n.text("安装并重启", "Install and Restart"),
                     symbol: "arrow.triangle.2.circlepath"
                 ) { [weak self] in
                     guard let self else { return }
@@ -867,8 +867,8 @@ final class AppUpdateController {
 
         case .installing:
             upsertUpdateToast(
-                title: "正在安装更新",
-                subtitle: "应用将自动重启",
+                title: FizzL10n.text("正在安装更新", "Installing update"),
+                subtitle: FizzL10n.text("应用将自动重启", "FizzDeck will restart automatically"),
                 microViz: .pipeline(step: 3, state: .running),
                 tint: .secondary,
                 action: nil
@@ -876,12 +876,12 @@ final class AppUpdateController {
 
         case .failed(let message):
             upsertUpdateToast(
-                title: "更新失败",
+                title: FizzL10n.text("更新失败", "Update failed"),
                 subtitle: message,
                 microViz: .pipeline(step: 1, state: .failed),
                 tint: FizzTheme.statusWarning,
                 action: ToastAction(
-                    title: "重新检查",
+                    title: FizzL10n.text("重新检查", "Check Again"),
                     symbol: "arrow.clockwise"
                 ) { [weak self] in
                     guard let self else { return }
@@ -892,16 +892,15 @@ final class AppUpdateController {
     }
 
     private func upsertUpdateToast(
-        title: String,
-        subtitle: String?,
+        title: @autoclosure () -> String,
+        subtitle: @autoclosure () -> String?,
         microViz: ToastMicroViz,
         tint: Color,
         action: ToastAction?
     ) {
         if let updateToastID,
            ToastCenter.shared.update(updateToastID, mutate: { message in
-               message.title = title
-               message.subtitle = subtitle
+               message.setText(title, subtitle: subtitle)
                message.tint = tint
                message.microViz = microViz
                message.action = action
@@ -911,11 +910,11 @@ final class AppUpdateController {
         }
 
         updateToastID = ToastCenter.shared.show(
-            title,
+            title(),
             symbol: "arrow.triangle.2.circlepath",
             tint: tint,
             duration: nil,
-            subtitle: subtitle,
+            subtitle: subtitle(),
             microViz: microViz,
             action: action
         )
@@ -941,7 +940,7 @@ private struct ProcessResult: Sendable {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n")
-        return output.isEmpty ? "没有更多信息" : output
+        return output.isEmpty ? FizzL10n.text("没有更多信息", "No further details") : output
     }
 }
 
@@ -1118,7 +1117,7 @@ private final class DownloadCoordinator: NSObject, URLSessionDownloadDelegate, @
         } else if let downloadedURL {
             continuation?.resume(returning: downloadedURL)
         } else {
-            continuation?.resume(throwing: AppUpdateError.downloadFailed("下载未生成文件"))
+            continuation?.resume(throwing: AppUpdateError.downloadFailed(FizzL10n.text("下载未生成文件", "The download didn’t produce a file")))
         }
     }
 }

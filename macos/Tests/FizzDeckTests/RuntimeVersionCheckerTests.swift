@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import FizzDeck
 
-final class RuntimeVersionCheckerTests: XCTestCase {
+final class RuntimeVersionCheckerTests: ChineseInterfaceTestCase {
     private func makeTempDirectory(name: String) throws -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("fizzdeck-runtime-\(name)-\(UUID().uuidString)", isDirectory: true)

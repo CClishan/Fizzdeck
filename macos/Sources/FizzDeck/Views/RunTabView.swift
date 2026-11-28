@@ -4,6 +4,7 @@ struct RunTabView: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
 
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     let project: RepoProject
 
     @State private var devLogExists = false
@@ -43,8 +44,8 @@ struct RunTabView: View {
                 if project.run != nil || project.test != nil {
                     ServicesPanel(project: project, hasTrialPanel: true)
                 } else {
-                    Panel(title: "运行服务", symbol: "play.circle") {
-                        Text("暂未识别到可自动启动的开发或测试命令")
+                    Panel(title: FizzL10n.text("运行服务", "Run services"), symbol: "play.circle") {
+                        Text(FizzL10n.text("暂未识别到可自动启动的开发或测试命令", "No development or test command found to run automatically."))
                             .font(FizzTypography.body)
                             .foregroundStyle(.secondary)
                     }
@@ -79,16 +80,16 @@ struct RunTabView: View {
             testLogExists = false
         }
         .alert(
-            "首次联网安装依赖确认",
+            FizzL10n.text("首次联网安装依赖确认", "Allow the first dependency download?"),
             isPresented: Binding(
                 get: { pendingInstallCommand != nil },
                 set: { if !$0 { pendingInstallCommand = nil } }
             )
         ) {
-            Button("取消", role: .cancel) {
+            Button(FizzL10n.text("取消", "Cancel"), role: .cancel) {
                 pendingInstallCommand = nil
             }
-            Button("确认安装") {
+            Button(FizzL10n.text("确认安装", "Install")) {
                 guard let command = pendingInstallCommand else { return }
                 pendingInstallCommand = nil
                 DoctorPreferences.setConfirmedFirstInstall(true)
@@ -96,20 +97,20 @@ struct RunTabView: View {
             }
         } message: {
             if let command = pendingInstallCommand {
-                Text("将运行 `\(command)` 并联网下载项目依赖，下方会实时显示安装过程并可随时停止。之后同类一键安装不再弹窗。")
+                Text(FizzL10n.text("将运行 `\(command)` 并联网下载项目依赖，下方会实时显示安装过程并可随时停止。之后同类一键安装不再弹窗。", "This runs \(command) to download the project’s dependencies. Watch the log below or stop the install at any time. Future one-click installs won’t ask again."))
             }
         }
         .alert(
-            "确认关闭占用端口的程序？",
+            FizzL10n.text("确认关闭占用端口的程序？", "Stop the program using this port?"),
             isPresented: Binding(
                 get: { pendingPortConflict != nil },
                 set: { if !$0 { pendingPortConflict = nil } }
             )
         ) {
-            Button("取消", role: .cancel) {
+            Button(FizzL10n.text("取消", "Cancel"), role: .cancel) {
                 pendingPortConflict = nil
             }
-            Button("关闭占用进程", role: .destructive) {
+            Button(FizzL10n.text("关闭占用进程", "Stop process"), role: .destructive) {
                 guard let conflict = pendingPortConflict else { return }
                 pendingPortConflict = nil
                 Task {
@@ -124,18 +125,14 @@ struct RunTabView: View {
             }
         } message: {
             if let conflict = pendingPortConflict {
-                Text("端口 :\(conflict.port)\n\(conflict.details)\n只向以上进程发送 SIGTERM。")
+                Text(FizzL10n.text("端口 :\(conflict.port)\n\(conflict.details)\n只向以上进程发送 SIGTERM。", "Port \(conflict.port)\n\(conflict.details)\nOnly the listed processes will receive SIGTERM."))
             }
         }
     }
 
     private func doctorIssuesPanel(_ report: DoctorProjectReport) -> some View {
-        let dir = URL(fileURLWithPath: project.path)
-        let installCmd = DoctorService.detectInstallCommand(in: dir)
-        let installState = actions.installRun(for: project, command: installCmd)
-
-        return Panel(
-            title: report.issues.isEmpty ? "已忽略的体检项" : "开始之前有 \(report.issues.count) 个问题",
+        Panel(
+            title: report.issues.isEmpty ? FizzL10n.text("已忽略的体检项", "Ignored checks") : FizzL10n.text("开始之前有 \(report.issues.count) 个问题", "\(report.issues.count) \(report.issues.count == 1 ? "issue" : "issues") to review before running"),
             symbol: report.issues.isEmpty ? "checkmark.circle" : "exclamationmark.triangle.fill"
         ) {
             VStack(alignment: .leading, spacing: FizzSpacing.grid) {
@@ -144,7 +141,7 @@ struct RunTabView: View {
                         FizzStatusDot(tint: issue.severity == .critical ? FizzTheme.statusDanger : FizzTheme.statusWarning)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(issue.title)
+                            Text(issue.title(for: copyMode))
                                 .font(FizzTypography.cardTitle)
                             Text(issue.detail)
                                 .font(FizzTypography.caption)
@@ -156,11 +153,11 @@ struct RunTabView: View {
                         doctorFixButton(issue: issue)
                     }
 
-                    if case .installDependencies = issue.fixAction,
-                       let installState,
+                    if case .installDependencies(let command) = issue.fixAction,
+                       let installState = actions.installRun(for: project, command: command),
                        (!installState.output.isEmpty || installState.status == .running) {
                         ScrollView {
-                            Text(installState.output.isEmpty ? "正在执行 \(installState.script.command)…" : LogTailReader.tail(installState.output, maxLines: 40))
+                            Text(installState.output.isEmpty ? FizzL10n.text("正在执行 \(installState.script.command)…", "Running \(installState.script.command)…") : LogTailReader.tail(installState.output, maxLines: 40))
                                 .font(FizzTypography.monoSmall)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -186,7 +183,7 @@ struct RunTabView: View {
         case .installDependencies(let command):
             let isRunning = actions.installRun(for: project, command: command)?.status == .running
             FizzActionButton(
-                title: isRunning ? "停止" : "安装依赖",
+                title: isRunning ? FizzL10n.text("停止", "Stop") : FizzL10n.text("安装依赖", "Install dependencies"),
                 height: .compact,
                 prominence: isRunning ? .secondary : .primary
             ) {
@@ -200,21 +197,21 @@ struct RunTabView: View {
             }
 
         case .createEnvFromExample:
-            FizzActionButton(title: "生成 .env", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("生成 .env", "Create .env"), height: .compact) {
                 Task {
                     if let url = DoctorService.createEnvFromExample(in: dir) {
                         SystemActions.open(url.path)
-                        ToastCenter.shared.show("已生成 .env", symbol: "doc.badge.plus", tint: FizzTheme.statusSuccess)
+                        ToastCenter.shared.show(FizzL10n.text("已生成 .env", "Created .env"), symbol: "doc.badge.plus", tint: FizzTheme.statusSuccess)
                     }
                     await store.refreshDoctor(for: project, scope: .focused)
                 }
             }
 
         case .addEnvToGitignore:
-            FizzActionButton(title: "把 .env 加入忽略", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("把 .env 加入忽略", "Ignore .env"), height: .compact) {
                 Task {
                     if LightweightProjectCheckService.addEnvFilesToGitignore(in: dir) {
-                        ToastCenter.shared.show("已把 .env 加入忽略列表", symbol: "checkmark.shield.fill", tint: FizzTheme.statusSuccess)
+                        ToastCenter.shared.show(FizzL10n.text("已把 .env 加入忽略列表", "Added .env to the ignore list"), symbol: "checkmark.shield.fill", tint: FizzTheme.statusSuccess)
                     }
                     await store.refreshGit(for: project.path)
                     await store.refreshDoctor(for: project, scope: .focused)
@@ -222,7 +219,7 @@ struct RunTabView: View {
             }
 
         case .resolvePortConflict(let conflict):
-            FizzActionButton(title: "核对占用进程…", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("核对占用进程…", "Review process…"), height: .compact) {
                 pendingPortConflict = conflict
             }
             .disabled(!conflict.canStop)
@@ -231,17 +228,17 @@ struct RunTabView: View {
             EnableVersionProtectionButton(project: project)
 
         case .inspectTrackedSecrets(let files):
-            FizzActionButton(title: "查看文件", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("查看文件", "View file"), height: .compact) {
                 if let first = files.first {
                     SystemActions.open("\(project.path)/\(first)")
                 }
             }
 
         case .copyShellCommand(let command):
-            FizzActionButton(title: "复制切换命令", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("复制切换命令", "Copy command"), height: .compact) {
                 SystemActions.copy(
                     command,
-                    feedback: "运行版本切换命令已复制",
+                    feedback: FizzL10n.text("运行版本切换命令已复制", "Copied runtime switch command"),
                     microViz: .compact(state: .done)
                 )
             }

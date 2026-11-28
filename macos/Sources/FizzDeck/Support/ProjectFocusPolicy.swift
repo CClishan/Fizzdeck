@@ -39,12 +39,11 @@ enum ProjectFocusPolicy {
         idleDays: Int = defaultIdleDays,
         now: Date = Date()
     ) -> FocusPartition {
-        let activeCutoff = now.addingTimeInterval(-Double(autoActiveDays) * 24 * 60 * 60)
         let idleCutoff = now.addingTimeInterval(-Double(idleDays) * 24 * 60 * 60)
 
         let manual = projects
             .filter(\.starred)
-            .sorted { latestActivityDate(for: $0) > latestActivityDate(for: $1) }
+            .sorted(by: moreRecentlyActive)
             .map { FocusedProjectEntry(project: $0, reason: .manual) }
 
         let manualPaths = Set(manual.map(\.id))
@@ -53,10 +52,10 @@ enum ProjectFocusPolicy {
             .filter { !manualPaths.contains($0.path) }
             .filter { project in
                 if project.port == .running { return true }
-                guard let latest = optionalLatestActivityDate(for: project) else { return false }
-                return latest >= activeCutoff
+                guard let expiry = autoFocusExpiry(for: project, days: autoActiveDays) else { return false }
+                return expiry >= now
             }
-            .sorted { latestActivityDate(for: $0) > latestActivityDate(for: $1) }
+            .sorted(by: moreRecentlyActive)
 
         let remainingSlots = max(0, maxFocused - manual.count)
         let selectedAuto = autoCandidates
@@ -112,7 +111,14 @@ enum ProjectFocusPolicy {
         }
     }
 
-    private static func latestActivityDate(for project: RepoProject) -> Date {
-        optionalLatestActivityDate(for: project) ?? .distantPast
+    static func autoFocusExpiry(for project: RepoProject, days: Int = defaultAutoActiveDays) -> Date? {
+        guard !project.starred, project.port != .running else { return nil }
+        return optionalLatestActivityDate(for: project)?.addingTimeInterval(Double(days) * 24 * 60 * 60)
+    }
+
+    private static func moreRecentlyActive(_ lhs: RepoProject, _ rhs: RepoProject) -> Bool {
+        let left = optionalLatestActivityDate(for: lhs) ?? .distantPast
+        let right = optionalLatestActivityDate(for: rhs) ?? .distantPast
+        return left == right ? lhs.path < rhs.path : left > right
     }
 }

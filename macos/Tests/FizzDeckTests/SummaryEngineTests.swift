@@ -3,7 +3,7 @@ import XCTest
 @testable import FizzDeck
 
 @MainActor
-final class SummaryEngineTests: XCTestCase {
+final class SummaryEngineTests: ChineseInterfaceTestCase {
     private func makeTempDirectory(name: String) throws -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("fizzdeck-summary-\(name)-\(UUID().uuidString)", isDirectory: true)
@@ -126,6 +126,42 @@ final class SummaryEngineTests: XCTestCase {
         let preview = SummaryPromptBuilder.sampleRedactedPromptPreview()
         XCTAssertFalse(SecretRedactor.containsSecret(preview))
         XCTAssertLessThanOrEqual(preview.count, SummaryPromptBuilder.maxPromptCharacters)
+    }
+
+    func testSummaryLanguageSeparatesCachesWithoutChangingSessionIdentity() throws {
+        let dir = try makeTempDirectory(name: "languages")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        SummaryPreferences.setEnabled(true, in: defaults)
+        let engine = SummaryEngine(cacheDirectory: dir, usageFile: dir.appendingPathComponent("usage.json"), defaults: defaults)
+        let session = SessionRecord(tool: "codex", id: "same-session", cwd: nil, startedAt: nil, modified: Date(),
+                                    firstUser: "保留任务原文")
+        for (language, headline) in [(FizzLanguage.chinese, "中文摘要"), (.english, "English summary")] {
+            FizzL10n.$languageOverride.withValue(language) {
+                let fallback = engine.cachedOrRuleBasedSessionSummary(for: session, projectName: "项目")
+                XCTAssertEqual(fallback.headline, "保留任务原文")
+                SummaryCacheStore.saveSession(.init(sessionStableID: session.stableID, headline: headline, blockerOrNext: nil,
+                    isAIGenerated: true, generatedAt: Date(), fingerprint: fallback.fingerprint), directory: dir)
+                XCTAssertEqual(engine.cachedOrRuleBasedSessionSummary(for: session, projectName: "项目").headline, headline)
+            }
+        }
+        FizzL10n.$languageOverride.withValue(.chinese) {
+            XCTAssertEqual(engine.cachedOrRuleBasedSessionSummary(for: session, projectName: "项目").headline, "中文摘要")
+        }
+    }
+
+    func testExistingProviderErrorFollowsInterfaceLanguage() async {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        SummaryPreferences.setProviderKind(.localModel, in: defaults)
+        defaults.set("invalid", forKey: SummaryPreferences.localBaseURLKey)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let engine = SummaryEngine(cacheDirectory: dir, usageFile: dir.appendingPathComponent("usage.json"), defaults: defaults)
+        _ = await FizzL10n.$languageOverride.withValue(.chinese) { await engine.testConnection() }
+        FizzL10n.$languageOverride.withValue(.english) {
+            XCTAssertEqual(engine.lastError, "Invalid endpoint. Check the base URL.")
+        }
     }
 
     func testSummaryEngineCacheHitInvalidationAndSilentFallback() async throws {

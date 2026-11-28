@@ -33,14 +33,18 @@ enum SystemActions {
         )
     }
 
-    static func copy(
-        _ value: String,
-        feedback: String? = "已复制到剪贴板",
-        microViz: ToastMicroViz? = nil
-    ) {
+    static func writeClipboard(_ value: String) -> Bool {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(value, forType: .string)
+        return pasteboard.setString(value, forType: .string)
+    }
+
+    static func copy(
+        _ value: String,
+        feedback: String? = FizzL10n.text("已复制到剪贴板", "Copied to clipboard"),
+        microViz: ToastMicroViz? = nil
+    ) {
+        guard writeClipboard(value) else { return }
         if let feedback {
             Task { @MainActor in
                 ToastCenter.shared.show(
@@ -56,14 +60,14 @@ enum SystemActions {
     @MainActor
     static func promptForGroupName(defaultValue: String = "") -> String? {
         let alert = NSAlert()
-        alert.messageText = "移动到分组"
-        alert.informativeText = "输入已有分组名，或新建一个分组。"
-        alert.addButton(withTitle: "移动")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = FizzL10n.text("移动到分组", "Move to Group")
+        alert.informativeText = FizzL10n.text("输入已有分组名，或新建一个分组。", "Enter an existing group name or create a new one.")
+        alert.addButton(withTitle: FizzL10n.text("移动", "Move"))
+        alert.addButton(withTitle: FizzL10n.text("取消", "Cancel"))
 
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
         field.stringValue = defaultValue
-        field.placeholderString = "分组名称"
+        field.placeholderString = FizzL10n.text("分组名称", "Group name")
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
 

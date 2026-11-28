@@ -57,16 +57,16 @@ struct DoctorWorkspaceView: View {
             await refreshAll(force: false)
         }
         .alert(
-            "首次联网安装依赖确认",
+            FizzL10n.text("首次联网安装依赖确认", "Allow the first dependency download?"),
             isPresented: Binding(
                 get: { pendingInstallTarget != nil },
                 set: { if !$0 { pendingInstallTarget = nil } }
             )
         ) {
-            Button("取消", role: .cancel) {
+            Button(FizzL10n.text("取消", "Cancel"), role: .cancel) {
                 pendingInstallTarget = nil
             }
-            Button("确认安装") {
+            Button(FizzL10n.text("确认安装", "Install")) {
                 guard let target = pendingInstallTarget else { return }
                 pendingInstallTarget = nil
                 DoctorPreferences.setConfirmedFirstInstall(true)
@@ -75,27 +75,27 @@ struct DoctorWorkspaceView: View {
             }
         } message: {
             if let target = pendingInstallTarget {
-                Text("将在「\(target.project.displayName)」目录运行 `\(target.command)` 并联网下载依赖，之后可在运行页日志区实时查看或随时停止。以后同类一键修复将不再弹窗。")
+                Text(FizzL10n.text("将在「\(target.project.displayName)」目录运行 `\(target.command)` 并联网下载依赖，之后可在运行页日志区实时查看或随时停止。以后同类一键修复将不再弹窗。", "This runs \(target.command) in “\(target.project.displayName)” and downloads its dependencies. Watch the log or stop the installation on the Run tab. Future one-click installs won’t ask again."))
             }
         }
         .alert(
-            "将可清理目录移到废纸篓？",
+            FizzL10n.text("将可清理目录移到废纸篓？", "Move these folders to the Trash?"),
             isPresented: Binding(
                 get: { pendingTrashProject != nil },
                 set: { if !$0 { pendingTrashProject = nil } }
             )
         ) {
-            Button("取消", role: .cancel) {
+            Button(FizzL10n.text("取消", "Cancel"), role: .cancel) {
                 pendingTrashProject = nil
             }
-            Button("移到废纸篓", role: .destructive) {
+            Button(FizzL10n.text("移到废纸篓", "Move to Trash"), role: .destructive) {
                 guard let project = pendingTrashProject else { return }
                 pendingTrashProject = nil
                 Task { await trashCleanup(for: project) }
             }
         } message: {
             if let project = pendingTrashProject {
-                Text("将把「\(project.displayName)」的 \(project.cleanup.items.count) 个缓存/构建目录（共 \(Format.bytes(project.cleanup.reusableBytes))）移到系统废纸篓，需要时仍可在废纸篓放回或重新生成。")
+                Text(FizzL10n.text("将把「\(project.displayName)」的 \(project.cleanup.items.count) 个缓存/构建目录（共 \(Format.bytes(project.cleanup.reusableBytes))）移到系统废纸篓，需要时仍可在废纸篓放回或重新生成。", "Move \(project.cleanup.items.count) cache or build \(project.cleanup.items.count == 1 ? "folder" : "folders") from “\(project.displayName)” to the Trash (\(Format.bytes(project.cleanup.reusableBytes))). You can put them back or regenerate them later."))
             }
         }
     }
@@ -104,17 +104,17 @@ struct DoctorWorkspaceView: View {
         let focused = partition.focused
         let summary: String
         if focused.isEmpty {
-            summary = "还没有关注或近期活跃项目，先关注几个在做的项目吧"
+            summary = FizzL10n.text("还没有关注或近期活跃项目，先关注几个在做的项目吧", "No followed or recently active projects. Follow a project you’re working on to see it here.")
         } else {
             let healthy = focused.count { store.doctorReports[$0.id]?.severity == .healthy }
             let attention = focused.count { (store.doctorReports[$0.id]?.actionableCount ?? 0) > 0 }
-            summary = "关注的 \(focused.count) 个项目：\(healthy) 个状态良好，\(attention) 个需要处理"
+            summary = FizzL10n.text("关注的 \(focused.count) 个项目：\(healthy) 个状态良好，\(attention) 个需要处理", "Focused projects: \(focused.count) · Healthy: \(healthy) · Need attention: \(attention)")
         }
-        let checkedAt = store.lastDoctorCheckAt.map { " · 上次检查 \(Format.relative($0))" } ?? ""
+        let checkedAt = store.lastDoctorCheckAt.map { FizzL10n.text(" · 上次检查 \(Format.relative($0))", " · Last checked \(Format.relative($0))") } ?? ""
 
-        return FizzPageHeader(title: "体检", subtitle: summary + checkedAt) {
+        return FizzPageHeader(title: FizzL10n.text("体检", "Doctor"), subtitle: summary + checkedAt) {
             FizzActionButton(
-                title: store.isRunningDoctor ? "检查中…" : "重新检查",
+                title: store.isRunningDoctor ? FizzL10n.text("检查中…", "Checking…") : FizzL10n.text("重新检查", "Check again"),
                 symbol: "arrow.clockwise", prominence: .primary, keyboardNavigation: true
             ) {
                 Task { await refreshAll() }
@@ -125,9 +125,9 @@ struct DoctorWorkspaceView: View {
 
     private var focusedSection: some View {
         let focus = partition
-        return Panel(title: "关注项目（随时能跑起来）", symbol: "stethoscope") {
+        return Panel(title: FizzL10n.text("关注项目（随时能跑起来）", "Focused projects"), symbol: "stethoscope") {
             if focus.focused.isEmpty {
-                Text("当你在做项目时，这里会自动盯住「缺依赖」「端口占用」「密钥风险」和「没开版本保护」。")
+                Text(FizzL10n.text("当你在做项目时，这里会自动盯住「缺依赖」「端口占用」「密钥风险」和「没开版本保护」。", "Doctor checks your active projects for missing dependencies, port conflicts, exposed secrets and missing version protection."))
                     .font(FizzTypography.body)
                     .foregroundStyle(.secondary)
             } else {
@@ -141,7 +141,7 @@ struct DoctorWorkspaceView: View {
                     }
 
                     if focus.overflowActiveCount > 0 {
-                        Text("还有 \(focus.overflowActiveCount) 个近期活跃项目未列入关注上限")
+                        Text(FizzL10n.text("还有 \(focus.overflowActiveCount) 个近期活跃项目未列入关注上限", "\(focus.overflowActiveCount) more recently active \(focus.overflowActiveCount == 1 ? "project is" : "projects are") outside the focus limit."))
                             .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -151,7 +151,7 @@ struct DoctorWorkspaceView: View {
             }
         } accessory: {
             if focus.overflowActiveCount > 0 {
-                FizzActionButton(title: "查看项目库", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("查看项目库", "Open library"), height: .compact) {
                     store.openLibrary()
                 }
             }
@@ -166,14 +166,14 @@ struct DoctorWorkspaceView: View {
         let hasCloudUpdate = project.behind > 0 && !store.doctorExemptions(for: project).contains(.cloudBehind)
         let exemptibleKinds = store.exemptibleIssues(for: project)
         let statusText: String = if let topIssue {
-            topIssue.title
+            topIssue.title(for: copyMode)
         } else if report == nil {
-            "尚未检查"
+            FizzL10n.text("尚未检查", "Not checked yet")
         } else {
-            hasCloudUpdate ? "云端有新提交" : "未发现问题"
+            hasCloudUpdate ? FizzL10n.text("云端有新提交", "Updates available") : FizzL10n.text("未发现问题", "No issues found")
         }
 
-        return HStack(spacing: FizzSpacing.grid) {
+        let identity = HStack(spacing: FizzSpacing.grid) {
             FizzStatusDot(tint: severityColor(severity))
 
             ProjectBadgeIcon(project: project, size: 24, framed: false)
@@ -185,45 +185,54 @@ struct DoctorWorkspaceView: View {
                 Text(statusText)
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
+        }
 
-            Spacer(minLength: FizzSpacing.row)
+        let controls = HStack(spacing: 6) {
+            DoctorTrialMenu(project: project)
 
-            HStack(spacing: 6) {
-                DoctorTrialMenu(project: project)
-
-                if fix != nil || hasCloudUpdate || !exemptibleKinds.isEmpty {
-                    FizzMenuButton(title: "\(project.displayName)的更多操作") {
-                        if fix != nil || hasCloudUpdate {
-                            Button("打开运行页", systemImage: "play.circle") {
-                                store.openProject(project, tab: .run)
-                            }
+            if fix != nil || hasCloudUpdate || !exemptibleKinds.isEmpty {
+                FizzMenuButton(title: FizzL10n.text("\(project.displayName)的更多操作", "More actions for \(project.displayName)")) {
+                    if fix != nil || hasCloudUpdate {
+                        Button(FizzL10n.text("打开运行页", "Open Run tab"), systemImage: "play.circle") {
+                            store.openProject(project, tab: .run)
                         }
-                        if !exemptibleKinds.isEmpty {
-                            Section("体检豁免") {
-                                DoctorExemptionItems(project: project, kinds: exemptibleKinds)
-                            }
+                    }
+                    if !exemptibleKinds.isEmpty {
+                        Section(FizzL10n.text("体检豁免", "Ignored checks")) {
+                            DoctorExemptionItems(project: project, kinds: exemptibleKinds)
                         }
                     }
                 }
+            }
 
-                if hasCloudUpdate {
-                    FizzActionButton(title: "云端领先 \(project.behind)", height: .compact) {
-                        store.openProject(project, tab: .version)
-                    }
-                    .accessibilityLabel("云端领先 \(project.behind) 个提交，查看版本")
+            if hasCloudUpdate {
+                FizzActionButton(title: FizzL10n.text("云端领先 \(project.behind)", "Updates: \(project.behind)"), height: .compact) {
+                    store.openProject(project, tab: .version)
                 }
+                .accessibilityLabel(FizzL10n.text("云端领先 \(project.behind) 个提交，查看版本", "Remote ahead by \(project.behind) \(project.behind == 1 ? "commit" : "commits"). View versions."))
+            }
 
-                if let fix {
-                    issueQuickButton(fix: fix, for: project)
-                } else if !hasCloudUpdate {
-                    FizzIconButton(title: "打开 \(project.displayName) 运行页", symbol: "chevron.right", height: .compact) {
-                        store.openProject(project, tab: .run)
-                    }
+            if let fix {
+                issueQuickButton(fix: fix, for: project)
+            } else if !hasCloudUpdate {
+                FizzIconButton(title: FizzL10n.text("打开 \(project.displayName) 运行页", "Open the Run tab for \(project.displayName)"), symbol: "chevron.right", height: .compact) {
+                    store.openProject(project, tab: .run)
                 }
             }
-            .fixedSize(horizontal: true, vertical: false)
+        }
+
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: FizzSpacing.grid) {
+                identity
+                Spacer(minLength: FizzSpacing.row)
+                controls.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: FizzSpacing.row) {
+                identity
+                controls
+            }
         }
         .padding(.vertical, FizzSpacing.row)
     }
@@ -233,7 +242,7 @@ struct DoctorWorkspaceView: View {
         switch fix {
         case .installDependencies(let command):
             let isInstalling = actions.installRun(for: project, command: command)?.status == .running
-            FizzActionButton(title: isInstalling ? "查看安装" : "安装依赖", height: .compact) {
+            FizzActionButton(title: isInstalling ? FizzL10n.text("查看安装", "View install") : FizzL10n.text("安装依赖", "Install dependencies"), height: .compact) {
                 if isInstalling {
                     store.openProject(project, tab: .run)
                 } else if DoctorPreferences.hasConfirmedFirstInstall() {
@@ -244,20 +253,20 @@ struct DoctorWorkspaceView: View {
                 }
             }
         case .createEnvFromExample:
-            FizzActionButton(title: "生成 .env", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("生成 .env", "Create .env"), height: .compact) {
                 Task {
                     if let url = DoctorService.createEnvFromExample(in: URL(fileURLWithPath: project.path)) {
                         SystemActions.open(url.path)
-                        ToastCenter.shared.show("已根据模板生成 .env", symbol: "doc.badge.plus", tint: FizzTheme.statusSuccess)
+                        ToastCenter.shared.show(FizzL10n.text("已根据模板生成 .env", "Created .env from the template"), symbol: "doc.badge.plus", tint: FizzTheme.statusSuccess)
                     }
                     await store.refreshDoctor(for: project, scope: .focused)
                 }
             }
         case .addEnvToGitignore:
-            FizzActionButton(title: "加入忽略", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("加入忽略", "Ignore .env"), height: .compact) {
                 Task {
                     if LightweightProjectCheckService.addEnvFilesToGitignore(in: URL(fileURLWithPath: project.path)) {
-                        ToastCenter.shared.show("已把 .env 加入忽略列表", symbol: "checkmark.shield.fill", tint: FizzTheme.statusSuccess)
+                        ToastCenter.shared.show(FizzL10n.text("已把 .env 加入忽略列表", "Added .env to the ignore list"), symbol: "checkmark.shield.fill", tint: FizzTheme.statusSuccess)
                     }
                     await store.refreshGit(for: project.path)
                     await store.refreshDoctor(for: project, scope: .focused)
@@ -266,28 +275,28 @@ struct DoctorWorkspaceView: View {
         case .initGitRepository:
             EnableVersionProtectionButton(project: project)
         case .resolvePortConflict:
-            FizzActionButton(title: "去处理", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("去处理", "Review"), height: .compact) {
                 store.openProject(project, tab: .run)
             }
         case .inspectTrackedSecrets:
-            FizzActionButton(title: "去处理", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("去处理", "Review"), height: .compact) {
                 store.openProject(project, tab: .version)
             }
         case .copyShellCommand(let command):
-            FizzActionButton(title: "复制切换命令", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("复制切换命令", "Copy command"), height: .compact) {
                 SystemActions.copy(
                     command,
-                    feedback: "运行版本切换命令已复制",
+                    feedback: FizzL10n.text("运行版本切换命令已复制", "Copied runtime switch command"),
                     microViz: .compact(state: .done)
                 )
             }
-            .accessibilityLabel("复制运行时版本切换命令")
+            .accessibilityLabel(FizzL10n.text("复制运行时版本切换命令", "Copy the command to switch runtime versions"))
         }
     }
 
     private var idleCleanupSection: some View {
         Panel(
-            title: "闲置整理与腾空间",
+            title: FizzL10n.text("闲置整理与腾空间", "Free up space"),
             symbol: "archivebox"
         ) {
             VStack(alignment: .leading, spacing: FizzSpacing.grid) {
@@ -298,10 +307,10 @@ struct DoctorWorkspaceView: View {
                                 FizzIcon(.sm, symbol: "exclamationmark.shield.fill")
                                     .foregroundStyle(.secondary)
                                     .accessibilityHidden(true)
-                                Text("闲置项目「\(entry.project.displayName)」存在密钥或未忽略 .env 风险")
+                                Text(FizzL10n.text("闲置项目「\(entry.project.displayName)」存在密钥或未忽略 .env 风险", "Idle project “\(entry.project.displayName)” may contain a secret or an unignored .env file."))
                                     .font(FizzTypography.caption(.medium))
                                 Spacer()
-                                FizzActionButton(title: "去处理", height: .compact) {
+                                FizzActionButton(title: FizzL10n.text("去处理", "Review"), height: .compact) {
                                     store.openProject(entry.project, tab: .version)
                                 }
                             }
@@ -313,11 +322,11 @@ struct DoctorWorkspaceView: View {
                 }
 
                 if cleanableProjects.isEmpty {
-                    Text("没有命中依赖、缓存或构建产物的可腾空间目录。")
+                    Text(FizzL10n.text("没有命中依赖、缓存或构建产物的可腾空间目录。", "No dependency folders, caches or build output to clean up."))
                         .font(FizzTypography.body)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("默认「移到废纸篓」（可随时在系统废纸篓放回或重新安装恢复）；共发现 \(cleanableProjects.count) 个项目、可腾出 \(Format.bytes(totalReusableBytes))。")
+                    Text(FizzL10n.text("默认「移到废纸篓」（可随时在系统废纸篓放回或重新安装恢复）；共发现 \(cleanableProjects.count) 个项目、可腾出 \(Format.bytes(totalReusableBytes))。", "Reclaim \(Format.bytes(totalReusableBytes)) across \(cleanableProjects.count) \(cleanableProjects.count == 1 ? "project" : "projects"). Folders go to the Trash; you can put them back or reinstall them."))
                         .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
 
@@ -333,7 +342,7 @@ struct DoctorWorkspaceView: View {
                                     Text(project.displayName)
                                         .font(FizzTypography.cardTitle)
                                         .lineLimit(1)
-                                    Text("\(project.cleanup.items.count) 个目录 · \(project.cleanup.items.map(\.label).prefix(3).joined(separator: ", "))")
+                                    Text(FizzL10n.text("\(project.cleanup.items.count) 个目录 · \(project.cleanup.items.map(\.label).prefix(3).joined(separator: ", "))", "\(project.cleanup.items.count) \(project.cleanup.items.count == 1 ? "folder" : "folders") · \(project.cleanup.items.map(\.label).prefix(3).joined(separator: ", "))"))
                                         .font(FizzTypography.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
@@ -347,16 +356,16 @@ struct DoctorWorkspaceView: View {
 
                                 HStack(spacing: 6) {
                                     if copyMode == .pro {
-                                        FizzIconButton(title: "复制清理命令", symbol: "doc.on.doc", height: .compact) {
+                                        FizzIconButton(title: FizzL10n.text("复制清理命令", "Copy cleanup command"), symbol: "doc.on.doc", height: .compact) {
                                             SystemActions.copy(
                                                 "# \(project.displayName)\n\(project.cleanup.removalCommand)",
                                                 microViz: .compact(state: .done)
                                             )
-                                            ToastCenter.shared.show("已复制清理命令", symbol: "doc.on.doc", tint: Color.secondary, subtitle: project.displayName)
+                                            ToastCenter.shared.show(FizzL10n.text("已复制清理命令", "Copied cleanup command"), symbol: "doc.on.doc", tint: Color.secondary, subtitle: project.displayName)
                                         }
                                     }
 
-                                    FizzActionButton(title: "移到废纸篓", height: .compact, role: .destructive) {
+                                    FizzActionButton(title: FizzL10n.text("移到废纸篓", "Move to Trash"), height: .compact, role: .destructive) {
                                         pendingTrashProject = project
                                     }
                                 }
@@ -374,41 +383,41 @@ struct DoctorWorkspaceView: View {
             }
         } accessory: {
             if !cleanableProjects.isEmpty {
-                TagChip(text: "可省 \(Format.bytes(totalReusableBytes))", tint: FizzTheme.statusWarning, compact: true)
+                TagChip(text: FizzL10n.text("可省 \(Format.bytes(totalReusableBytes))", "Reclaim \(Format.bytes(totalReusableBytes))"), tint: FizzTheme.statusWarning, compact: true)
             }
         }
     }
 
     private var machineEnvironmentSection: some View {
-        Panel(title: "本机环境", symbol: "desktopcomputer") {
+        Panel(title: FizzL10n.text("本机环境", "Local environment"), symbol: "desktopcomputer") {
             if let env = store.machineEnv {
                 VStack(alignment: .leading, spacing: FizzSpacing.grid) {
                     FlowLayout(spacing: FizzSpacing.row) {
                         TagChip(
-                            text: env.gitInstalled ? "✓ Git 已就绪" : "⚠ 缺少 Git",
+                            text: env.gitInstalled ? FizzL10n.text("✓ Git 已就绪", "✓ Git ready") : FizzL10n.text("⚠ 缺少 Git", "⚠ Git missing"),
                             tint: env.gitInstalled ? FizzTheme.statusSuccess : FizzTheme.statusDanger,
                             compact: true
                         )
                         TagChip(
-                            text: env.nodeVersion.map { "✓ Node \($0)" } ?? "○ 未检测到 Node",
+                            text: env.nodeVersion.map { "✓ Node \($0)" } ?? FizzL10n.text("○ 未检测到 Node", "○ Node not found"),
                             tint: env.nodeVersion != nil ? FizzTheme.statusSuccess : .secondary,
                             compact: true
                         )
                         TagChip(
-                            text: env.pythonVersion.map { "✓ Python \($0)" } ?? "○ 未检测到 Python",
+                            text: env.pythonVersion.map { "✓ Python \($0)" } ?? FizzL10n.text("○ 未检测到 Python", "○ Python not found"),
                             tint: env.pythonVersion != nil ? FizzTheme.statusSuccess : .secondary,
                             compact: true
                         )
                         ForEach(env.cliTools) { tool in
                             TagChip(
-                                text: tool.available ? "✓ \(tool.title)" : "○ \(tool.title) 未安装",
+                                text: tool.available ? "✓ \(tool.title)" : FizzL10n.text("○ \(tool.title) 未安装", "○ \(tool.title) not installed"),
                                 tint: tool.available ? FizzTheme.statusSuccess : .secondary,
                                 compact: true
                             )
                         }
                         if let disk = env.disk {
                             TagChip(
-                                text: "磁盘剩余 \(Format.bytes(disk.free))",
+                                text: FizzL10n.text("磁盘剩余 \(Format.bytes(disk.free))", "\(Format.bytes(disk.free)) free"),
                                 tint: disk.free < 10_000_000_000 ? FizzTheme.statusWarning : .secondary,
                                 compact: true
                             )
@@ -421,10 +430,10 @@ struct DoctorWorkspaceView: View {
                                 FizzIcon(.sm, symbol: "exclamationmark.triangle.fill")
                                     .foregroundStyle(.secondary)
                                     .accessibilityHidden(true)
-                                Text("Git 还没设置你的名字和邮箱（首次「存个版本」时需要）")
+                                Text(FizzL10n.text("Git 还没设置你的名字和邮箱（首次「存个版本」时需要）", "Set your Git name and email before saving your first version."))
                                     .font(FizzTypography.caption(.medium))
                                 Spacer()
-                                FizzActionButton(title: showGitIdentityForm ? "收起" : "去设置", height: .compact) {
+                                FizzActionButton(title: showGitIdentityForm ? FizzL10n.text("收起", "Collapse") : FizzL10n.text("去设置", "Set up"), height: .compact) {
                                     gitNameDraft = env.gitUserName ?? ""
                                     gitEmailDraft = env.gitUserEmail ?? ""
                                     showGitIdentityForm.toggle()
@@ -433,11 +442,11 @@ struct DoctorWorkspaceView: View {
 
                             if showGitIdentityForm {
                                 HStack(spacing: FizzSpacing.row) {
-                                    TextField("你的名字（如 Zhang San）", text: $gitNameDraft)
+                                    TextField(FizzL10n.text("你的名字（如 Zhang San）", "Your name (e.g. Alex Chen)"), text: $gitNameDraft)
                                         .textFieldStyle(.roundedBorder)
-                                    TextField("你的邮箱（如 you@example.com）", text: $gitEmailDraft)
+                                    TextField(FizzL10n.text("你的邮箱（如 you@example.com）", "Your email (e.g. you@example.com)"), text: $gitEmailDraft)
                                         .textFieldStyle(.roundedBorder)
-                                    FizzActionButton(title: isSavingIdentity ? "保存中…" : "保存", height: .compact, prominence: .primary) {
+                                    FizzActionButton(title: isSavingIdentity ? FizzL10n.text("保存中…", "Saving…") : FizzL10n.text("保存", "Save"), height: .compact, prominence: .primary) {
                                         Task {
                                             isSavingIdentity = true
                                             defer { isSavingIdentity = false }
@@ -468,7 +477,7 @@ struct DoctorWorkspaceView: View {
                 HStack(spacing: FizzSpacing.row) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("正在检查本机工具链…")
+                    Text(FizzL10n.text("正在检查本机工具链…", "Checking local tools…"))
                         .font(FizzTypography.body)
                         .foregroundStyle(.secondary)
                 }
@@ -488,10 +497,10 @@ struct DoctorWorkspaceView: View {
             ToastCenter.shared.show(err, symbol: "exclamationmark.triangle.fill", tint: FizzTheme.statusWarning)
         } else {
             ToastCenter.shared.show(
-                "已移入废纸篓（\(Format.bytes(result.freedBytes))）",
+                FizzL10n.text("已移入废纸篓（\(Format.bytes(result.freedBytes))）", "Moved to Trash (\(Format.bytes(result.freedBytes)))"),
                 symbol: "trash.fill",
                 tint: FizzTheme.statusSuccess,
-                subtitle: "\(project.displayName) · 清理了 \(result.trashedCount) 个目录"
+                subtitle: FizzL10n.text("\(project.displayName) · 清理了 \(result.trashedCount) 个目录", "\(project.displayName) · Cleared \(result.trashedCount) \(result.trashedCount == 1 ? "folder" : "folders")")
             )
         }
         await store.rescanProjects([project])
@@ -514,7 +523,7 @@ struct DoctorExemptionMenu: View {
     var body: some View {
         let kinds = store.exemptibleIssues(for: project)
         if !kinds.isEmpty {
-            FizzMenuButton(title: "\(project.displayName)的体检豁免") {
+            FizzMenuButton(title: FizzL10n.text("\(project.displayName)的体检豁免", "Ignored checks for \(project.displayName)")) {
                 DoctorExemptionItems(project: project, kinds: kinds)
             }
         }
@@ -530,7 +539,7 @@ private struct DoctorExemptionItems: View {
         let exemptions = store.doctorExemptions(for: project)
         ForEach(kinds, id: \.self) { kind in
             let exempt = exemptions.contains(kind)
-            Button("\(exempt ? "恢复" : "忽略")：\(kind.exemptionTitle)") {
+            Button(FizzL10n.text("\(exempt ? "恢复" : "忽略")：\(kind.exemptionTitle)", "\(exempt ? "Reinstate" : "Ignore"): \(kind.exemptionTitle)")) {
                 store.setDoctorExemption(kind, exempt: !exempt, for: project)
             }
         }

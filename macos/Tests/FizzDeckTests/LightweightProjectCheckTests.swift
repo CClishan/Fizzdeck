@@ -1,7 +1,7 @@
 import XCTest
 @testable import FizzDeck
 
-final class LightweightProjectCheckTests: XCTestCase {
+final class LightweightProjectCheckTests: ChineseInterfaceTestCase {
     private func makeTempDir() throws -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("FizzDeckL0-\(UUID().uuidString)", isDirectory: true)

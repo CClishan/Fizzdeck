@@ -10,7 +10,7 @@ struct AppSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            FizzSheetHeader(title: "设置") { dismissWindow() }
+            FizzSheetHeader(title: FizzL10n.text("设置", "Settings")) { dismissWindow() }
                 .padding(.horizontal, FizzSpacing.page)
                 .padding(.vertical, FizzSpacing.grid)
             Divider()
@@ -19,12 +19,13 @@ struct AppSettingsView: View {
 
             Divider()
             FizzSheetFooter {
-                FizzActionButton(title: "完成", prominence: .primary, keyboardNavigation: true) { dismissWindow() }
+                FizzActionButton(title: FizzL10n.text("完成", "Done"), prominence: .primary, keyboardNavigation: true) { dismissWindow() }
             }
             .padding(.horizontal, FizzSpacing.page)
             .padding(.vertical, FizzSpacing.grid)
         }
         .frame(width: 720, height: 500)
+        .navigationTitle(FizzL10n.text("设置", "Settings"))
         .background(FizzTheme.page)
         .preferredColorScheme(appearance.colorScheme)
         .animation(FizzMotion.resolved(reduceMotion, FizzMotion.spring), value: page)
@@ -78,10 +79,10 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .general: "通用"
-        case .sessions: "会话与终端"
-        case .aiAndMarks: "AI 与标记"
-        case .about: "关于"
+        case .general: FizzL10n.text("通用", "General")
+        case .sessions: FizzL10n.text("会话与终端", "Sessions & Terminal")
+        case .aiAndMarks: FizzL10n.text("AI 与标记", "AI & Checkpoints")
+        case .about: FizzL10n.text("关于", "About")
         }
     }
 
@@ -140,6 +141,7 @@ private struct SettingsNavigationRow: View {
 }
 
 private struct GeneralSettingsPage: View {
+    @AppStorage("fizzdeck.language") private var language: FizzLanguage = .system
     @AppStorage(AppearancePreferences.key) private var appearance: AppAppearance = .system
     @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     @State private var loginState = LoginItemService.state
@@ -151,10 +153,25 @@ private struct GeneralSettingsPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: FizzSpacing.section) {
                 SettingsCard {
+                    SettingsPickerRow(symbol: "globe", title: FizzL10n.text("界面语言", "Interface language")) {
+                        Picker(FizzL10n.text("界面语言", "Interface language"), selection: $language) {
+                            ForEach(FizzLanguage.allCases) { choice in
+                                Text(verbatim: choice.title).tag(choice)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .fixedSize()
+                        .onChange(of: language) { _, choice in FizzL10n.use(choice) }
+                    }
+
+                    Divider().padding(.leading, 34)
+
                     SettingsPickerRow(
                         symbol: "circle.lefthalf.filled",
-                        title: "外观",
-                        detail: "跟随系统，或固定浅色 / 低饱和炭黑暗色。"
+                        title: FizzL10n.text("外观", "Appearance"),
+                        detail: FizzL10n.text("跟随系统，或固定浅色 / 低饱和炭黑暗色。", "Match your Mac or choose Light or Dark.")
                     ) {
                         Picker("", selection: appearanceBinding) {
                             ForEach(AppAppearance.allCases) { item in
@@ -172,8 +189,8 @@ private struct GeneralSettingsPage: View {
 
                     SettingsPickerRow(
                         symbol: "text.bubble",
-                        title: "界面术语",
-                        detail: "默认使用人话描述版本与运行状态，悬停可看对应专业术语；熟悉 Git 可切换专业模式。"
+                        title: FizzL10n.text("界面术语", "Terminology"),
+                        detail: FizzL10n.text("默认使用人话描述版本与运行状态，悬停可看对应专业术语；熟悉 Git 可切换专业模式。", "Use plain language or Git terms. Hover over a label to see its Git equivalent.")
                     ) {
                         Picker("", selection: $copyMode) {
                             ForEach(CopyMode.allCases) { mode in
@@ -192,7 +209,7 @@ private struct GeneralSettingsPage: View {
                         SettingsIcon(symbol: "power")
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("登录时启动")
+                            Text(FizzL10n.text("登录时启动", "Open at login"))
                                 .font(FizzTypography.body(.medium))
                             Text(loginDetail)
                                 .font(FizzTypography.caption)
@@ -202,7 +219,7 @@ private struct GeneralSettingsPage: View {
                         Spacer(minLength: FizzSpacing.grid)
 
                         if loginState == .requiresApproval {
-                            FizzActionButton(title: "打开系统设置", height: .compact) {
+                            FizzActionButton(title: FizzL10n.text("打开系统设置", "Open System Settings"), height: .compact) {
                                 LoginItemService.openSettings()
                             }
                         }
@@ -210,6 +227,7 @@ private struct GeneralSettingsPage: View {
                         Toggle("", isOn: loginBinding)
                             .labelsHidden()
                             .toggleStyle(.switch)
+                            .accessibilityLabel(FizzL10n.text("登录时启动", "Open at login"))
                             .disabled(loginState == .unavailable)
                     }
 
@@ -223,8 +241,8 @@ private struct GeneralSettingsPage: View {
                 SettingsCard {
                     SettingsPermissionRow(
                         symbol: "bell",
-                        title: "通知",
-                        detail: "显示待处理提醒和失败结果。",
+                        title: FizzL10n.text("通知", "Notifications"),
+                        detail: FizzL10n.text("显示待处理提醒和失败结果。", "Show reminders and let you know when something fails."),
                         status: notificationStatusText,
                         statusColor: notificationStatusColor,
                         actionTitle: notificationActionTitle
@@ -237,11 +255,11 @@ private struct GeneralSettingsPage: View {
 
                     SettingsPermissionRow(
                         symbol: "lock.shield",
-                        title: "完整磁盘访问",
-                        detail: "用于扫描受保护目录中的项目。",
+                        title: FizzL10n.text("完整磁盘访问", "Full Disk Access"),
+                        detail: FizzL10n.text("用于扫描受保护目录中的项目。", "Scan projects in protected folders."),
                         status: fullDiskAccessStatus,
                         statusColor: fullDiskAccessColor,
-                        actionTitle: "打开设置"
+                        actionTitle: FizzL10n.text("打开设置", "Open Settings")
                     ) {
                         SystemPermissionService.openFullDiskAccessSettings()
                     }
@@ -268,9 +286,7 @@ private struct GeneralSettingsPage: View {
                 do {
                     try LoginItemService.setEnabled(enabled)
                     loginState = LoginItemService.state
-                    loginError = loginState == .requiresApproval
-                        ? "登录项已登记，需要在系统设置中允许。"
-                        : nil
+                    loginError = nil
                 } catch {
                     loginState = LoginItemService.state
                     loginError = error.localizedDescription
@@ -292,22 +308,22 @@ private struct GeneralSettingsPage: View {
     private var loginDetail: String {
         switch loginState {
         case .enabled:
-            return "FizzDeck 会随 macOS 登录启动。"
+            return FizzL10n.text("FizzDeck 会随 macOS 登录启动。", "FizzDeck opens when you log in to your Mac.")
         case .requiresApproval:
-            return "登录项已登记，等待系统允许。"
+            return FizzL10n.text("登录项已登记，等待系统允许。", "Waiting for approval in System Settings.")
         case .disabled:
-            return "不会随 macOS 自动启动。"
+            return FizzL10n.text("不会随 macOS 自动启动。", "FizzDeck stays closed when you log in.")
         case .unavailable:
-            return "暂时无法读取登录项状态。"
+            return FizzL10n.text("暂时无法读取登录项状态。", "The login item status is unavailable.")
         }
     }
 
     private var notificationStatusText: String {
         switch notificationPermission {
-        case .allowed: "已允许"
-        case .denied: "已拒绝"
-        case .notDetermined: "未设置"
-        case .unknown: "未知"
+        case .allowed: FizzL10n.text("已允许", "Allowed")
+        case .denied: FizzL10n.text("已拒绝", "Denied")
+        case .notDetermined: FizzL10n.text("未设置", "Not set")
+        case .unknown: FizzL10n.text("未知", "Unknown")
         }
     }
 
@@ -322,16 +338,16 @@ private struct GeneralSettingsPage: View {
     private var notificationActionTitle: String? {
         switch notificationPermission {
         case .allowed: nil
-        case .notDetermined: "允许"
-        case .denied, .unknown: "打开设置"
+        case .notDetermined: FizzL10n.text("允许", "Allow")
+        case .denied, .unknown: FizzL10n.text("打开设置", "Open Settings")
         }
     }
 
     private var fullDiskAccessStatus: String {
         switch fullDiskAccess {
-        case true: "已授权"
-        case false: "未授权"
-        case nil: "需确认"
+        case true: FizzL10n.text("已授权", "Granted")
+        case false: FizzL10n.text("未授权", "Not granted")
+        case nil: FizzL10n.text("需确认", "Unconfirmed")
         }
     }
 
@@ -373,8 +389,8 @@ private struct SessionsSettingsPage: View {
                 SettingsCard {
                     SettingsPickerRow(
                         symbol: "terminal",
-                        title: "默认终端",
-                        detail: "打开项目目录和继续会话时使用，只显示已安装项。"
+                        title: FizzL10n.text("默认终端", "Default terminal"),
+                        detail: FizzL10n.text("打开项目目录和继续会话时使用，只显示已安装项。", "Open project folders and resume sessions in an installed terminal.")
                     ) {
                         Picker("", selection: terminalBinding) {
                             ForEach(availableTerminals) { terminal in
@@ -392,11 +408,11 @@ private struct SessionsSettingsPage: View {
 
                     SettingsPermissionRow(
                         symbol: "hand.raised",
-                        title: "自动化权限",
+                        title: FizzL10n.text("自动化权限", "Automation"),
                         detail: automationDetail,
                         status: automationStatusText,
                         statusColor: automationStatusColor,
-                        actionTitle: preferredTerminal == .warp ? nil : "打开设置"
+                        actionTitle: preferredTerminal == .warp ? nil : FizzL10n.text("打开设置", "Open Settings")
                     ) {
                         SystemPermissionService.openAutomationSettings()
                     }
@@ -405,8 +421,8 @@ private struct SessionsSettingsPage: View {
                 SettingsCard {
                     SettingsPickerRow(
                         symbol: "arrow.uturn.backward",
-                        title: "Codex 默认继续方式",
-                        detail: "自动会优先 CLI；也可固定使用 CLI 或 Codex Desktop。"
+                        title: FizzL10n.text("Codex 默认继续方式", "Resume Codex in"),
+                        detail: FizzL10n.text("自动会优先 CLI；也可固定使用 CLI 或 Codex Desktop。", "Automatic tries the CLI first. You can also choose Codex Desktop.")
                     ) {
                         Picker("", selection: codexTargetBinding) {
                             ForEach(ResumeTarget.allCases) { target in
@@ -457,16 +473,16 @@ private struct SessionsSettingsPage: View {
 
     private var automationDetail: String {
         preferredTerminal == .warp
-            ? "Warp 通过 URL 打开目录，不需要自动化权限。"
-            : "用于定位终端标签页和自动恢复会话；仅在需要时由 macOS 询问。"
+            ? FizzL10n.text("Warp 通过 URL 打开目录，不需要自动化权限。", "Warp opens folders by URL and doesn’t need Automation access.")
+            : FizzL10n.text("用于定位终端标签页和自动恢复会话；仅在需要时由 macOS 询问。", "macOS asks for access when FizzDeck needs to find a terminal tab or resume a session.")
     }
 
     private var automationStatusText: String {
-        if preferredTerminal == .warp { return "无需授权" }
+        if preferredTerminal == .warp { return FizzL10n.text("无需授权", "Not required") }
         switch automationPermission {
-        case .granted: return "已允许"
-        case .denied: return "上次被拒"
-        case .unknown: return "按需授权"
+        case .granted: return FizzL10n.text("已允许", "Allowed")
+        case .denied: return FizzL10n.text("上次被拒", "Previously denied")
+        case .unknown: return FizzL10n.text("按需授权", "Ask when needed")
         }
     }
 
@@ -504,7 +520,7 @@ private struct AboutSettingsPage: View {
 
                     Text("FizzDeck")
                         .font(FizzTypography.pageTitle)
-                    Text("版本 \(AppVersion.display)")
+                    Text(FizzL10n.text("版本 \(AppVersion.display)", "Version \(AppVersion.display)"))
                         .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -517,7 +533,7 @@ private struct AboutSettingsPage: View {
                             SettingsIcon(symbol: "arrow.triangle.2.circlepath")
 
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("检查更新")
+                                Text(FizzL10n.text("检查更新", "Software Update"))
                                     .font(FizzTypography.body(.medium))
                                 Text(updateStatusText)
                                     .font(FizzTypography.caption)
@@ -554,7 +570,7 @@ private struct AboutSettingsPage: View {
                 SettingsCard {
                     AboutLinkRow(
                         symbol: "house",
-                        title: "主页",
+                        title: FizzL10n.text("主页", "Website"),
                         value: "koroo.top/fizzdeck",
                         url: URL(string: "https://koroo.top/fizzdeck")!
                     )
@@ -564,7 +580,7 @@ private struct AboutSettingsPage: View {
 
                     AboutLinkRow(
                         symbol: "at",
-                        title: "关注 @koroo",
+                        title: FizzL10n.text("关注 @koroo", "Follow @koroo"),
                         value: "koroo.top",
                         url: URL(string: "https://koroo.top")!
                     )
@@ -592,13 +608,13 @@ private struct AboutSettingsPage: View {
             }
         }
         .alert(
-            "无法自动安装",
+            FizzL10n.text("无法自动安装", "Couldn’t install the update"),
             isPresented: Binding(
                 get: { updater.notice != nil },
                 set: { if !$0 { updater.clearNotice() } }
             )
         ) {
-            Button("好") {
+            Button(FizzL10n.text("好", "OK")) {
                 updater.clearNotice()
             }
         } message: {
@@ -614,32 +630,32 @@ private struct AboutSettingsPage: View {
         case .checking, .verifying, .installing:
             ProgressView().controlSize(.small)
         case .available(let release):
-            FizzActionButton(title: "前往 Release", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("前往 Release", "View Release"), height: .compact) {
                 openURL(release.pageURL)
             }
 
-            FizzActionButton(title: "下载更新", height: .compact, prominence: .primary) {
+            FizzActionButton(title: FizzL10n.text("下载更新", "Download Update"), height: .compact, prominence: .primary) {
                 updater.startDownload()
             }
             .disabled(release.dmgAsset == nil)
-            .help(release.dmgAsset == nil ? "这个版本没有可用的 arm64 DMG" : "下载更新")
+            .help(release.dmgAsset == nil ? FizzL10n.text("这个版本没有可用的 arm64 DMG", "This release has no Apple silicon disk image.") : FizzL10n.text("下载更新", "Download Update"))
         case .downloading:
-            FizzActionButton(title: "取消下载", height: .compact) {
+            FizzActionButton(title: FizzL10n.text("取消下载", "Cancel Download"), height: .compact) {
                 updater.cancelDownload()
             }
         case .readyToInstall:
-            FizzActionButton(title: "安装并重启", height: .compact, prominence: .primary) {
+            FizzActionButton(title: FizzL10n.text("安装并重启", "Install and Restart"), height: .compact, prominence: .primary) {
                 Task { await updater.installAndRestart() }
             }
         case .failed:
-            FizzActionButton(title: "重新检查", height: .compact, prominence: .primary) {
+            FizzActionButton(title: FizzL10n.text("重新检查", "Check Again"), height: .compact, prominence: .primary) {
                 Task { await updater.check() }
             }
         }
     }
 
     private var checkButton: some View {
-        FizzActionButton(title: "立即检查", height: .compact, prominence: .primary) {
+        FizzActionButton(title: FizzL10n.text("立即检查", "Check Now"), height: .compact, prominence: .primary) {
             Task { await updater.check() }
         }
     }
@@ -647,21 +663,21 @@ private struct AboutSettingsPage: View {
     private var updateStatusText: String {
         switch updater.state {
         case .idle:
-            "手动检查是否有新版本。"
+            FizzL10n.text("手动检查是否有新版本。", "Check for a new version of FizzDeck.")
         case .checking:
-            "正在连接 GitHub…"
+            FizzL10n.text("正在连接 GitHub…", "Connecting to GitHub…")
         case .upToDate:
-            "已是最新版本。"
+            FizzL10n.text("已是最新版本。", "FizzDeck is up to date.")
         case .available(let release):
-            "发现新版本 v\(release.version)，可下载并自动校验。"
+            FizzL10n.text("发现新版本 v\(release.version)，可下载并自动校验。", "Version \(release.version) is available. FizzDeck verifies the download before installing.")
         case .downloading(_, let received, let total):
-            "正在下载更新 · \(Format.bytes(received)) / \(Format.bytes(total))"
+            FizzL10n.text("正在下载更新 · \(Format.bytes(received)) / \(Format.bytes(total))", "Downloading update · \(Format.bytes(received)) of \(Format.bytes(total))")
         case .verifying:
-            "正在校验 SHA-256、应用标识与签名…"
+            FizzL10n.text("正在校验 SHA-256、应用标识与签名…", "Verifying the checksum, app identity, and signature…")
         case .readyToInstall:
-            "更新已通过校验，可以安装并重启。"
+            FizzL10n.text("更新已通过校验，可以安装并重启。", "Update verified. Ready to install and restart.")
         case .installing:
-            "正在替换应用并重启…"
+            FizzL10n.text("正在替换应用并重启…", "Installing the update and restarting…")
         case .failed(let message):
             message
         }
@@ -750,7 +766,7 @@ private struct SettingsPickerRow<Content: View>: View {
     init(
         symbol: String,
         title: String,
-        detail: String,
+        detail: String = "",
         @ViewBuilder picker: () -> Content
     ) {
         self.symbol = symbol
@@ -766,14 +782,16 @@ private struct SettingsPickerRow<Content: View>: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(FizzTypography.body(.medium))
-                Text(detail)
-                    .font(FizzTypography.caption)
-                    .foregroundStyle(.secondary)
+                if !detail.isEmpty {
+                    Text(detail)
+                        .font(FizzTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer(minLength: FizzSpacing.grid)
 
-            picker
+            picker.accessibilityLabel(title)
         }
     }
 }
@@ -838,7 +856,7 @@ private struct AIAndMarksSettingsPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: FizzSpacing.section) {
-                Text("AI 与标记")
+                Text(FizzL10n.text("AI 与标记", "AI & Checkpoints"))
                     .font(FizzTypography.pageTitle)
 
                 marksSection
@@ -857,6 +875,10 @@ private struct AIAndMarksSettingsPage: View {
             hasStoredAPIKey = !(KeychainStore.load(account: SummaryPreferences.keychainAccount) ?? "").isEmpty
             summaryEngine.refreshUsageTotals()
         }
+        .onChange(of: FizzL10n.isEnglish) {
+            testFeedback = nil
+            keySavedFeedback = nil
+        }
         .sheet(isPresented: $showingConsentSheet) {
             SummaryConsentSheet(
                 onCancel: {
@@ -869,22 +891,22 @@ private struct AIAndMarksSettingsPage: View {
             )
         }
         .sheet(isPresented: $showingPromptPreview) {
-            PromptPreviewSheet(sampleText: SummaryPromptBuilder.sampleRedactedPromptPreview())
+            PromptPreviewSheet()
         }
     }
 
     private var marksSection: some View {
         SettingsCard {
-            Text("隐形标记与版本安全")
+            Text(FizzL10n.text("隐形标记与版本安全", "Checkpoints and version history"))
                 .font(FizzTypography.cardTitle)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "bookmark.circle")
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("AI 完成或出错时自动做一次轻量记录点")
+                    Text(FizzL10n.text("AI 完成或出错时自动做一次轻量记录点", "Create a checkpoint when AI finishes or fails"))
                         .font(FizzTypography.body(.medium))
-                    Text("默认使用 Git 原生对象留档，不会写入项目代码目录，也不影响提交记录。")
+                    Text(FizzL10n.text("默认使用 Git 原生对象留档，不会写入项目代码目录，也不影响提交记录。", "Checkpoints use Git objects without changing your project files or commit history."))
                         .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -892,6 +914,7 @@ private struct AIAndMarksSettingsPage: View {
                 Toggle("", isOn: $implicitMarksEnabled)
                     .labelsHidden()
                     .toggleStyle(.switch)
+                    .accessibilityLabel(FizzL10n.text("自动记录对话标记", "Create session checkpoints"))
             }
 
             Divider()
@@ -900,9 +923,9 @@ private struct AIAndMarksSettingsPage: View {
             HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "checkmark.bubble")
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("自动弹出「建议存个版本」提示")
+                    Text(FizzL10n.text("自动弹出「建议存个版本」提示", "Remind me to save a version"))
                         .font(FizzTypography.body(.medium))
-                    Text("关闭后仍可在进展卡片和顶部按钮手动存个版本。")
+                    Text(FizzL10n.text("关闭后仍可在进展卡片和顶部按钮手动存个版本。", "You can always save a version from the progress card or toolbar."))
                         .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -913,6 +936,7 @@ private struct AIAndMarksSettingsPage: View {
                 ))
                 .labelsHidden()
                 .toggleStyle(.switch)
+                .accessibilityLabel(FizzL10n.text("建议存个版本", "Remind me to save a version"))
             }
         }
     }
@@ -922,9 +946,9 @@ private struct AIAndMarksSettingsPage: View {
             HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "sparkles")
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("启用 AI 智能总结（实验性 · 默认关闭）")
+                    Text(FizzL10n.text("启用 AI 智能总结（实验性 · 默认关闭）", "AI summaries (experimental)"))
                         .font(FizzTypography.body(.medium))
-                    Text("用更通俗的语言概括每次对话成果与项目进度；未开启或调用失败时自动使用本地规则摘要。")
+                    Text(FizzL10n.text("用更通俗的语言概括每次对话成果与项目进度；未开启或调用失败时自动使用本地规则摘要。", "Summarize sessions and project progress in plain language. Local summaries are used when AI is off or unavailable."))
                         .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -941,6 +965,7 @@ private struct AIAndMarksSettingsPage: View {
                 ))
                 .labelsHidden()
                 .toggleStyle(.switch)
+                .accessibilityLabel(FizzL10n.text("启用 AI 智能总结", "Enable AI summaries"))
             }
 
             Divider()
@@ -949,14 +974,14 @@ private struct AIAndMarksSettingsPage: View {
             HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "eye.slash")
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("仅发送最小脱敏字段，绝不上传源码与完整对话")
+                    Text(FizzL10n.text("仅发送最小脱敏字段，绝不上传源码与完整对话", "Only redacted details are sent"))
                         .font(FizzTypography.body(.medium))
-                    Text("只包含项目名、文件名、变动计数与脱敏后的一句话意图。")
+                    Text(FizzL10n.text("只包含项目名、文件名、变动计数与脱敏后的一句话意图。", "Includes project and file names, change counts, and a short redacted task description. No source code or full chats."))
                         .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: FizzSpacing.grid)
-                FizzActionButton(title: "查看发送示例", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("查看发送示例", "View Example"), height: .compact) {
                     showingPromptPreview = true
                 }
             }
@@ -967,8 +992,8 @@ private struct AIAndMarksSettingsPage: View {
         SettingsCard {
             SettingsPickerRow(
                 symbol: "cpu",
-                title: "总结引擎",
-                detail: "优先推荐使用本机已登录的 Agent CLI，无需额外填写密钥。"
+                title: FizzL10n.text("总结引擎", "Summary provider"),
+                detail: FizzL10n.text("优先推荐使用本机已登录的 Agent CLI，无需额外填写密钥。", "Use a CLI you’re already signed in to. No API key is needed.")
             ) {
                 Picker("", selection: $providerKind) {
                     ForEach(SummaryProviderKind.allCases) { item in
@@ -988,8 +1013,8 @@ private struct AIAndMarksSettingsPage: View {
             case .agentCLI:
                 SettingsPickerRow(
                     symbol: "terminal",
-                    title: "CLI 工具",
-                    detail: "所有汇总都在 ~/.repodeck/llm-workdir 中隔离运行，不会污染项目对话记录。"
+                    title: FizzL10n.text("CLI 工具", "CLI tool"),
+                    detail: FizzL10n.text("所有汇总都在 ~/.repodeck/llm-workdir 中隔离运行，不会污染项目对话记录。", "Summaries run in ~/.repodeck/llm-workdir, outside your project’s session history.")
                 ) {
                     Picker("", selection: $agentCLI) {
                         ForEach(AgentCLIKind.allCases) { item in
@@ -1003,34 +1028,34 @@ private struct AIAndMarksSettingsPage: View {
                 }
             case .openAICompatible:
                 VStack(alignment: .leading, spacing: FizzSpacing.row) {
-                    TextField("Base URL（如 https://api.openai.com/v1）", text: $apiBaseURL)
+                    TextField(FizzL10n.text("Base URL（如 https://api.openai.com/v1）", "Base URL (e.g. https://api.openai.com/v1)"), text: $apiBaseURL)
                         .textFieldStyle(.roundedBorder)
-                    TextField("模型名称（如 gpt-4o-mini / deepseek-chat）", text: $apiModel)
+                    TextField(FizzL10n.text("模型名称（如 gpt-4o-mini / deepseek-chat）", "Model (e.g. gpt-4o-mini or deepseek-chat)"), text: $apiModel)
                         .textFieldStyle(.roundedBorder)
 
                     HStack(spacing: FizzSpacing.row) {
                         SecureField(
-                            hasStoredAPIKey ? "已保存在钥匙串中（输入新 Key 可覆盖）" : "填入 API Key（存入 macOS 钥匙串）",
+                            hasStoredAPIKey ? FizzL10n.text("已保存在钥匙串中（输入新 Key 可覆盖）", "Key saved in Keychain. Enter a new key to replace it.") : FizzL10n.text("填入 API Key（存入 macOS 钥匙串）", "API key (stored in Keychain)"),
                             text: $apiKeyDraft
                         )
                         .textFieldStyle(.roundedBorder)
 
                         if hasStoredAPIKey {
-                            FizzActionButton(title: "清除", height: .compact, role: .destructive) {
+                            FizzActionButton(title: FizzL10n.text("清除", "Clear"), height: .compact, role: .destructive) {
                                 KeychainStore.delete(account: SummaryPreferences.keychainAccount)
                                 hasStoredAPIKey = false
-                                keySavedFeedback = "已从钥匙串移除"
+                                keySavedFeedback = FizzL10n.text("已从钥匙串移除", "Key removed from Keychain.")
                             }
                         }
 
-                        FizzActionButton(title: "保存 Key", height: .compact, prominence: .primary) {
+                        FizzActionButton(title: FizzL10n.text("保存 Key", "Save Key"), height: .compact, prominence: .primary) {
                             let ok = KeychainStore.save(
                                 account: SummaryPreferences.keychainAccount,
                                 secret: apiKeyDraft
                             )
                             hasStoredAPIKey = !(KeychainStore.load(account: SummaryPreferences.keychainAccount) ?? "").isEmpty
                             apiKeyDraft = ""
-                            keySavedFeedback = ok ? "已存入系统钥匙串" : "保存失败，请检查钥匙串权限"
+                            keySavedFeedback = ok ? FizzL10n.text("已存入系统钥匙串", "Key saved to Keychain.") : FizzL10n.text("保存失败，请检查钥匙串权限", "Couldn’t save the key. Check Keychain access.")
                         }
                         .disabled(apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
@@ -1044,9 +1069,9 @@ private struct AIAndMarksSettingsPage: View {
                 .padding(.leading, 34)
             case .localModel:
                 VStack(alignment: .leading, spacing: FizzSpacing.row) {
-                    TextField("本地服务地址（如 http://127.0.0.1:11434/v1）", text: $localBaseURL)
+                    TextField(FizzL10n.text("本地服务地址（如 http://127.0.0.1:11434/v1）", "Local server URL (e.g. http://127.0.0.1:11434/v1)"), text: $localBaseURL)
                         .textFieldStyle(.roundedBorder)
-                    TextField("本地模型名称（如 qwen2.5:7b）", text: $localModel)
+                    TextField(FizzL10n.text("本地模型名称（如 qwen2.5:7b）", "Local model (e.g. qwen2.5:7b)"), text: $localModel)
                         .textFieldStyle(.roundedBorder)
                 }
                 .padding(.leading, 34)
@@ -1063,25 +1088,27 @@ private struct AIAndMarksSettingsPage: View {
                             .font(FizzTypography.body)
                             .fizzStatus(testSucceeded ? FizzTheme.statusSuccess : FizzTheme.statusWarning)
                     } else {
-                        Text("发送极短的「回复 OK」测试，验证配置是否畅通。")
+                        Text(FizzL10n.text("发送极短的「回复 OK」测试，验证配置是否畅通。", "Send a short prompt to check the connection."))
                             .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 Spacer(minLength: FizzSpacing.grid)
-                FizzActionButton(title: isTestingConnection ? "测试中…" : "测试连接", height: .compact) {
+                FizzActionButton(title: isTestingConnection ? FizzL10n.text("测试中…", "Testing…") : FizzL10n.text("测试连接", "Test Connection"), height: .compact) {
                     Task {
                         guard canUseSummary, !isTestingConnection else { return }
                         isTestingConnection = true
                         defer { isTestingConnection = false }
+                        let wasEnglish = FizzL10n.isEnglish
                         let result = await summaryEngine.testConnection()
+                        guard wasEnglish == FizzL10n.isEnglish else { return }
                         switch result {
                         case .success(let text):
                             testSucceeded = true
                             testFeedback = text
                         case .failure(let err):
                             testSucceeded = false
-                            testFeedback = err.errorDescription ?? "连接失败"
+                            testFeedback = err.errorDescription ?? FizzL10n.text("连接失败", "Connection failed")
                         }
                     }
                 }
@@ -1095,16 +1122,16 @@ private struct AIAndMarksSettingsPage: View {
             HStack(spacing: FizzSpacing.grid) {
                 SettingsIcon(symbol: "chart.pie")
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("近 30 天 FizzDeck 自身汇总消耗")
+                    Text(FizzL10n.text("近 30 天 FizzDeck 自身汇总消耗", "FizzDeck summary usage · last 30 days"))
                         .font(FizzTypography.body(.medium))
                     let usage = summaryEngine.monthlySelfUsage
-                    let costText = usage.hasCostData ? (Format.cost(usage.estimatedCostUSD, estimated: true) ?? "$0") : "计入本地/CLI"
-                    Text("共 \(usage.callCount) 次调用 · \(Format.tokens(usage.totalTokens)) · \(costText)")
+                    let costText = usage.hasCostData ? (Format.cost(usage.estimatedCostUSD, estimated: true) ?? "$0") : FizzL10n.text("计入本地/CLI", "Local or CLI usage")
+                    Text(FizzL10n.text("共 \(usage.callCount) 次调用 · \(Format.tokens(usage.totalTokens)) · \(costText)", "\(SessionSummaryText.englishCount(usage.callCount, "call")) · \(Format.tokens(usage.totalTokens, locale: FizzL10n.locale)) tokens · \(costText)"))
                         .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: FizzSpacing.grid)
-                FizzActionButton(title: "清空摘要缓存", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("清空摘要缓存", "Clear Summary Cache"), height: .compact) {
                     summaryEngine.clearCache()
                 }
             }
@@ -1114,7 +1141,7 @@ private struct AIAndMarksSettingsPage: View {
                     .padding(.leading, 34)
                 HStack(spacing: FizzSpacing.grid) {
                     SettingsIcon(symbol: "exclamationmark.circle")
-                    Text("最近一次静默回退原因：\(lastError)")
+                    Text(FizzL10n.text("最近一次静默回退原因：\(lastError)", "Last fallback: \(lastError)"))
                         .font(FizzTypography.caption)
                         .fizzStatus(FizzTheme.statusWarning)
                         .textSelection(.enabled)
@@ -1131,20 +1158,20 @@ private struct SummaryConsentSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            FizzSheetHeader(title: "开启 AI 智能总结前确认", onClose: cancel)
+            FizzSheetHeader(title: FizzL10n.text("开启 AI 智能总结前确认", "Enable AI summaries?"), onClose: cancel)
                 .padding(.horizontal, FizzSpacing.page)
                 .padding(.vertical, FizzSpacing.panel)
 
             Divider()
 
             VStack(alignment: .leading, spacing: FizzSpacing.grid) {
-                Text("开启后，FizzDeck 会调用你选择的模型把对话和改动翻译成更易懂的大白话：")
+                Text(FizzL10n.text("开启后，FizzDeck 会调用你选择的模型把对话和改动翻译成更易懂的大白话：", "FizzDeck will use your chosen model to summarize sessions and changes."))
                     .foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: FizzSpacing.row) {
-                    Label("仅发送项目名、文件名、变更计数和脱敏后的起始意图", systemImage: "checkmark.circle")
-                    Label("绝不发送完整代码、环境变量或完整聊天记录", systemImage: "checkmark.circle")
-                    Label("自动过滤常见密钥与令牌；调用失败会静默回退到本地规则摘要", systemImage: "checkmark.circle")
+                    Label(FizzL10n.text("仅发送项目名、文件名、变更计数和脱敏后的起始意图", "Sends project and file names, change counts, and a redacted task description."), systemImage: "checkmark.circle")
+                    Label(FizzL10n.text("绝不发送完整代码、环境变量或完整聊天记录", "Never sends full source code, environment variables, or chat histories."), systemImage: "checkmark.circle")
+                    Label(FizzL10n.text("自动过滤常见密钥与令牌；调用失败会静默回退到本地规则摘要", "Filters common keys and tokens. Uses a local summary if the request fails."), systemImage: "checkmark.circle")
                 }
             }
             .font(FizzTypography.body)
@@ -1154,10 +1181,10 @@ private struct SummaryConsentSheet: View {
             Divider()
 
             FizzSheetFooter {
-                FizzActionButton(title: "暂不开启", role: .cancel, action: cancel)
+                FizzActionButton(title: FizzL10n.text("暂不开启", "Not Now"), role: .cancel, action: cancel)
                     .keyboardShortcut(.cancelAction)
 
-                FizzActionButton(title: "我已知晓并开启", prominence: .primary) {
+                FizzActionButton(title: FizzL10n.text("我已知晓并开启", "Enable AI Summaries"), prominence: .primary) {
                     onAccept()
                     dismiss()
                 }
@@ -1176,18 +1203,17 @@ private struct SummaryConsentSheet: View {
 
 private struct PromptPreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let sampleText: String
 
     var body: some View {
         VStack(spacing: 0) {
-            FizzSheetHeader(title: "实际发送内容示例（已脱敏）") { dismiss() }
+            FizzSheetHeader(title: FizzL10n.text("实际发送内容示例（已脱敏）", "Example of a redacted request")) { dismiss() }
                 .padding(.horizontal, FizzSpacing.page)
                 .padding(.vertical, FizzSpacing.panel)
 
             Divider()
 
             ScrollView {
-                Text(sampleText)
+                Text(verbatim: SummaryPromptBuilder.sampleRedactedPromptPreview())
                     .font(FizzTypography.mono)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
@@ -1203,7 +1229,7 @@ private struct PromptPreviewSheet: View {
             Divider()
 
             FizzSheetFooter {
-                FizzActionButton(title: "关闭", prominence: .primary, role: .cancel) { dismiss() }
+                FizzActionButton(title: FizzL10n.text("关闭", "Close"), prominence: .primary, role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
             .padding(.horizontal, FizzSpacing.page)

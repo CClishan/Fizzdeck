@@ -14,15 +14,15 @@ enum ManagedPreviewStop {
         confirm: (PreviewProject, PortOccupant) async -> Bool
     ) async -> Outcome {
         guard let conflict = await PortConflictService.inspect(port: project.port) else {
-            return .portFree("端口 \(project.port) 没有监听进程")
+            return .portFree(FizzL10n.text("端口 \(project.port) 没有监听进程", "No process is listening on port \(project.port)"))
         }
         if let note = conflict.note { return .reviewInDoctor(note) }
         guard isCurrent(), let launch, launch.isRunning, let root = ListenerIdentity.read(launch.processIdentifier) else {
-            return .reviewInDoctor("无法将 :\(project.port) 的监听归属到本项目的启动进程")
+            return .reviewInDoctor(FizzL10n.text("无法将 :\(project.port) 的监听归属到本项目的启动进程", "Couldn’t link the listener on :\(project.port) to this project’s launch process"))
         }
         let owned = conflict.occupants.filter { $0.canStop && project.owns(listener: $0.pid, launchedBy: root.pid) }
         guard owned.count == 1, let target = owned.first else {
-            return .reviewInDoctor(owned.isEmpty ? "未找到属于本项目的监听 PID" : "本项目有多个监听 PID")
+            return .reviewInDoctor(owned.isEmpty ? FizzL10n.text("未找到属于本项目的监听 PID", "No listener PID belongs to this project") : FizzL10n.text("本项目有多个监听 PID", "Several listener PIDs belong to this project"))
         }
         guard await confirm(project, target) else { return .cancelled }
         // The second socket snapshot can suspend. Check the store and the exact launch again at the signal boundary.
@@ -36,10 +36,10 @@ enum ManagedPreviewStop {
     static func confirm(_ project: PreviewProject, _ target: PortOccupant) async -> Bool {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "停止「\(project.title)」的开发服务？"
-        alert.informativeText = "端口 :\(project.port)\n\(target.details)\n仅向此 PID 发送 SIGTERM。"
-        alert.addButton(withTitle: "取消")
-        alert.addButton(withTitle: "停止 PID \(target.pid)").hasDestructiveAction = true
+        alert.messageText = FizzL10n.text("停止「\(project.title)」的开发服务？", "Stop the development service for “\(project.title)”?")
+        alert.informativeText = FizzL10n.text("端口 :\(project.port)\n\(target.details)\n仅向此 PID 发送 SIGTERM。", "Port :\(project.port)\n\(target.details)\nOnly this PID will receive SIGTERM.")
+        alert.addButton(withTitle: FizzL10n.text("取消", "Cancel"))
+        alert.addButton(withTitle: FizzL10n.text("停止 PID \(target.pid)", "Stop PID \(target.pid)")).hasDestructiveAction = true
         NSApp.activate(ignoringOtherApps: true)
         if let window = NSApp.mainWindow, window.isVisible, !window.isMiniaturized {
             guard window.attachedSheet == nil else { return false }

@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import FizzDeck
 
-final class DashboardMetricsTests: XCTestCase {
+final class DashboardMetricsTests: ChineseInterfaceTestCase {
     private var calendar: Calendar {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -264,6 +264,10 @@ final class DashboardMetricsTests: XCTestCase {
         XCTAssertEqual(segments.count, 6)
         XCTAssertEqual(segments.last?.id, "other")
         XCTAssertEqual(segments.last?.label, "其他")
+        FizzL10n.$languageOverride.withValue(.english) {
+            XCTAssertEqual(segments.last?.id, "other")
+            XCTAssertEqual(segments.last?.label, "Other")
+        }
         XCTAssertEqual(segments.last?.costUSD ?? 0, 3.0, accuracy: 0.001)
     }
 

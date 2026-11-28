@@ -9,8 +9,8 @@ struct ProgressTabView: View {
 
         var title: String {
             switch self {
-            case .timeline: "进度时间线"
-            case .allSessions: "全部会话"
+            case .timeline: FizzL10n.text("进度时间线", "Timeline")
+            case .allSessions: FizzL10n.text("全部会话", "All sessions")
             }
         }
     }
@@ -33,6 +33,11 @@ struct ProgressTabView: View {
         }
     }
 
+    private struct ProjectShare: Identifiable {
+        let id: String
+        let data: WeeklyRecapShareData
+    }
+
     @Environment(RepositoryStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openSettings) private var openSettings
@@ -46,8 +51,10 @@ struct ProgressTabView: View {
     @State private var expandedFileSessions: Set<String> = []
     @State private var highlightedSessionID: String?
     @State private var resumingSessionID: String?
-    @State private var markAvailability: [String: Bool] = [:]
+    @State private var markAvailability = SessionMarkAvailabilityCheck.Results()
     @State private var diffTarget: MarkDiffSheetTarget?
+    @State private var requestedSharePath: String?
+    @State private var projectShare: ProjectShare?
     @State private var isCreatingMark = false
     @State private var isRefreshingAISummary = false
 
@@ -62,8 +69,8 @@ struct ProgressTabView: View {
         let today = calendar.startOfDay(for: Date())
         let yesterday = calendar.date(byAdding: .day, value: -1, to: today)
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_Hans")
-        formatter.dateFormat = "M 月 d 日 EEEE"
+        formatter.locale = FizzL10n.locale
+        formatter.dateFormat = FizzL10n.text("M 月 d 日 EEEE", "EEEE, MMM d")
 
         var grouped: [(key: String, title: String, sessions: [SessionRecord])] = []
         var indexByKey: [String: Int] = [:]
@@ -76,9 +83,9 @@ struct ProgressTabView: View {
             } else {
                 let title: String
                 if calendar.isDate(day, inSameDayAs: today) {
-                    title = "今天"
+                    title = FizzL10n.text("今天", "Today")
                 } else if let yesterday, calendar.isDate(day, inSameDayAs: yesterday) {
-                    title = "昨天"
+                    title = FizzL10n.text("昨天", "Yesterday")
                 } else {
                     title = formatter.string(from: day)
                 }
@@ -90,7 +97,8 @@ struct ProgressTabView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let check = SessionMarkAvailabilityCheck(marks: store.marks(for: project.path), scannedAt: store.scannedAt)
+        return VStack(spacing: 0) {
             modeBar
             if viewMode == .allSessions {
                 SessionsTabView(project: project)
@@ -101,13 +109,31 @@ struct ProgressTabView: View {
         .onChange(of: project.path) {
             expandedFileSessions = []
             highlightedSessionID = nil
-            markAvailability = [:]
+            markAvailability = .init()
+            requestedSharePath = nil
+            projectShare = nil
+        }
+        .task(id: requestedSharePath) {
+            guard let path = requestedSharePath, path == project.path else { return }
+            let data = await Task.detached(priority: .userInitiated) { [project] in
+                WeeklyRecapShareData(project: project)
+            }.value
+            guard !Task.isCancelled, requestedSharePath == path else { return }
+            projectShare = ProjectShare(id: path, data: data)
+            requestedSharePath = nil
         }
         .task(id: project.path) {
-            await loadMarksAndSummaries()
+            await loadSummaries()
         }
-        .onChange(of: store.marks) {
-            Task { await refreshMarkAvailability() }
+        .task(id: check) {
+            let verified = await check.run(reusing: markAvailability)
+            if !Task.isCancelled { markAvailability = verified }
+        }
+        .onChange(of: store.requestedMarkIDForDiff, initial: true) {
+            applyRequestedMarkDiff()
+        }
+        .sheet(item: $projectShare) { share in
+            WeeklyRecapShareSheet(data: share.data, title: FizzL10n.text("项目战报", "Project recap"))
         }
         .sheet(item: $diffTarget) { target in
             MarkDiffRestoreSheet(
@@ -116,7 +142,6 @@ struct ProgressTabView: View {
                 initialSelectedFile: target.initialFile
             ) {
                 await store.refreshGit(for: project.path)
-                await refreshMarkAvailability()
             }
         }
     }
@@ -124,12 +149,16 @@ struct ProgressTabView: View {
     private var modeBar: some View {
         HStack(spacing: FizzSpacing.grid) {
             if viewMode == .allSessions {
-                Text("共 \(project.sessions.sessionCount) 条会话记录（含工作区摘要）")
+                Text(FizzL10n.text("共 \(project.sessions.sessionCount) 条会话记录（含工作区摘要）", "\(project.sessions.sessionCount) session \(project.sessions.sessionCount == 1 ? "record" : "records"), including workspace summaries"))
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            Picker("视图模式", selection: $viewMode) {
+            FizzActionButton(title: FizzL10n.text("分享项目战报", "Share recap"), symbol: "photo.on.rectangle", keyboardNavigation: true) {
+                requestedSharePath = project.path
+            }
+            .disabled(requestedSharePath != nil)
+            Picker(FizzL10n.text("视图模式", "View mode"), selection: $viewMode) {
                 ForEach(ViewMode.allCases) { mode in
                     Text(mode.title).tag(mode)
                 }
@@ -150,7 +179,11 @@ struct ProgressTabView: View {
                     whereWeLeftOffCard
                     ProjectActivityPanel(project: project)
                         .id(project.path)
-                    timelineSection
+                    TimelineView(.everyMinute) { clock in
+                        VStack(alignment: .leading, spacing: FizzSpacing.section) {
+                            timelineSection(now: clock.date)
+                        }
+                    }
                 }
                 .padding([.horizontal, .bottom], FizzSpacing.page)
                 .padding(.top, FizzSpacing.section)
@@ -158,13 +191,9 @@ struct ProgressTabView: View {
             .fizzTracksScrollPastTop()
             .onAppear {
                 applyRequestedSession(proxy: scrollProxy)
-                applyRequestedMarkDiff()
             }
             .onChange(of: store.requestedSessionID) {
                 applyRequestedSession(proxy: scrollProxy)
-            }
-            .onChange(of: store.requestedMarkIDForDiff) {
-                applyRequestedMarkDiff()
             }
         }
     }
@@ -175,10 +204,10 @@ struct ProgressTabView: View {
             copyMode: copyMode
         )
 
-        return Panel(title: "做到哪了", symbol: "sparkles.rectangle.stack") {
+        return Panel(title: FizzL10n.text("做到哪了", "Where you left off"), symbol: "sparkles.rectangle.stack") {
             VStack(alignment: .leading, spacing: FizzSpacing.grid) {
                 TagChip(
-                    text: projectSummary.isAIGenerated ? "✦ AI 总结" : "自动整理",
+                    text: projectSummary.isAIGenerated ? FizzL10n.text("✦ AI 总结", "✦ AI summary") : FizzL10n.text("自动整理", "Automatic summary"),
                     tint: projectSummary.isAIGenerated ? Color.secondary : .secondary,
                     compact: true
                 )
@@ -189,7 +218,7 @@ struct ProgressTabView: View {
                             .font(FizzTypography.cardTitle)
                             .foregroundStyle(.primary)
                         if let suggestion = projectSummary.suggestion, !suggestion.isEmpty {
-                            Text("建议下一步：\(suggestion)")
+                            Text(FizzL10n.text("建议下一步：\(suggestion)", "Suggested next step: \(suggestion)"))
                                 .font(FizzTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -205,9 +234,9 @@ struct ProgressTabView: View {
 
                 if conversations.isEmpty {
                     VStack(alignment: .leading, spacing: FizzSpacing.row) {
-                        Text("还没有和 AI 在这里聊过")
+                        Text(FizzL10n.text("还没有和 AI 在这里聊过", "No AI conversations here yet"))
                             .font(FizzTypography.sectionTitle)
-                        Text("打开终端或编辑器开始一次对话后，这里会自动记下每次想做什么、改了哪些文件。")
+                        Text(FizzL10n.text("打开终端或编辑器开始一次对话后，这里会自动记下每次想做什么、改了哪些文件。", "Start a conversation in your terminal or editor. Its goal and the files changed will appear here."))
                             .font(FizzTypography.body)
                             .foregroundStyle(.secondary)
                     }
@@ -223,12 +252,12 @@ struct ProgressTabView: View {
                                 FizzStatusDot(tint: session.endedWithError ? FizzTheme.statusWarning : Color.secondary.opacity(0.75))
                                 Text(aiSession.isAIGenerated
                                     ? aiSession.headline
-                                    : (session.primaryIntent ?? "\(HomeDashboardModel.toolTitle(session.tool)) 会话"))
+                                    : (session.primaryIntent ?? FizzL10n.text("\(HomeDashboardModel.toolTitle(session.tool)) 会话", "\(HomeDashboardModel.toolTitle(session.tool)) session")))
                                     .font(FizzTypography.body(.medium))
                                     .lineLimit(1)
                                 Spacer(minLength: 8)
                                 if !session.touchedFiles.isEmpty {
-                                    Text("改了 \(session.touchedFiles.count) 个文件")
+                                    Text(FizzL10n.text("改了 \(session.touchedFiles.count) 个文件", "Changed \(session.touchedFiles.count) \(session.touchedFiles.count == 1 ? "file" : "files")"))
                                         .font(FizzTypography.micro)
                                         .foregroundStyle(.secondary)
                                 }
@@ -246,7 +275,7 @@ struct ProgressTabView: View {
                         HStack(spacing: 6) {
                             FizzIcon(.sm, symbol: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.secondary)
-                            Text("最近报错：\(err)")
+                            Text(FizzL10n.text("最近报错：\(err)", "Latest error: \(err)"))
                                 .font(FizzTypography.mono)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
@@ -272,7 +301,7 @@ struct ProgressTabView: View {
         } accessory: {
             HStack(spacing: FizzSpacing.row) {
                 if projectSummary.isAIGenerated {
-                    FizzIconButton(title: "重新生成 AI 状态总结", symbol: "arrow.clockwise", height: .compact) {
+                    FizzIconButton(title: FizzL10n.text("重新生成 AI 状态总结", "Regenerate AI status summary"), symbol: "arrow.clockwise", height: .compact) {
                         Task {
                             isRefreshingAISummary = true
                             defer { isRefreshingAISummary = false }
@@ -280,16 +309,16 @@ struct ProgressTabView: View {
                         }
                     }
                     .disabled(isRefreshingAISummary)
-                    .accessibilityValue(isRefreshingAISummary ? "重新生成中" : "")
+                    .accessibilityValue(isRefreshingAISummary ? FizzL10n.text("重新生成中", "Regenerating") : "")
                 } else if !aiSummaryEnabled {
-                    FizzActionButton(title: "开启 AI 总结", height: .compact) {
+                    FizzActionButton(title: FizzL10n.text("开启 AI 总结", "Enable AI summaries"), height: .compact) {
                         openSettings()
                     }
                 }
 
                 if !conversations.isEmpty, project.dirtyCount > 0 {
                     FizzActionButton(
-                        title: isCreatingMark ? "记录中…" : "记一下当前状态",
+                        title: isCreatingMark ? FizzL10n.text("记录中…", "Recording…") : FizzL10n.text("记一下当前状态", "Mark this point"),
                         symbol: "bookmark",
                         height: .compact
                     ) {
@@ -302,12 +331,14 @@ struct ProgressTabView: View {
     }
 
     @ViewBuilder
-    private var timelineSection: some View {
-        ForEach(store.marks(for: project.path).filter(\.isProtectionBaseline)) { mark in
-            markNodeRow(mark)
+    private func timelineSection(now: Date) -> some View {
+        let projectMarks = store.marks(for: project.path)
+        let marksBySession = associatedMarksBySession(in: projectMarks)
+        let attachedIDs = Set(marksBySession.values.map(\.id))
+        ForEach(projectMarks.filter { !attachedIDs.contains($0.id) }) { mark in
+            markNodeRow(mark, now: now, standalone: true)
         }
         if !dayGroups.isEmpty {
-            let marksBySession = associatedMarksBySession()
             VStack(alignment: .leading, spacing: FizzSpacing.panel) {
                 ForEach(dayGroups) { group in
                     VStack(alignment: .leading, spacing: 8) {
@@ -320,7 +351,7 @@ struct ProgressTabView: View {
                                 let mark = marksBySession[session.stableID]
                                 VStack(alignment: .leading, spacing: 5) {
                                     if let mark {
-                                        markNodeRow(mark)
+                                        markNodeRow(mark, now: now)
                                     }
                                     sessionTimelineCard(session, associatedMark: mark)
                                         .id(session.id)
@@ -333,11 +364,12 @@ struct ProgressTabView: View {
         }
     }
 
-    private func markNodeRow(_ mark: SessionMark) -> some View {
+    private func markNodeRow(_ mark: SessionMark, now: Date, standalone: Bool = false) -> some View {
         let isSnapshot = mark.kind == .gitSnapshot
-        let available = isSnapshot && (markAvailability[mark.id] ?? true)
+        let available = markAvailability.byID[mark.id] == true
         let expiry = SessionMarkExpiryPolicy.state(
             for: mark,
+            now: now,
             available: available
         )
         let expiringDays: Int? = if case .expiring(let days) = expiry {
@@ -346,60 +378,65 @@ struct ProgressTabView: View {
             nil
         }
         let formatter = DateFormatter()
-        formatter.dateFormat = mark.isProtectionBaseline ? "M 月 d 日 HH:mm" : "HH:mm"
+        formatter.locale = FizzL10n.locale
+        formatter.dateFormat = standalone ? FizzL10n.text("M 月 d 日 HH:mm", "MMM d, HH:mm") : "HH:mm"
         let timeText = formatter.string(from: mark.createdAt)
 
         return HStack(spacing: 8) {
             FizzIcon(.xs, symbol: isSnapshot ? "diamond.fill" : "diamond")
             .foregroundStyle(available ? Color.secondary : .secondary.opacity(0.65))
 
-            Text("\(mark.label ?? "对话开始前的样子") · \(timeText)")
+            Text("\(mark.projectCheckpointTitle) · \(timeText)")
                 .font(FizzTypography.caption(.medium))
                 .foregroundStyle(available ? .primary : .secondary)
                 .lineLimit(1)
 
             if !isSnapshot {
-                Text("仅记录，无法还原")
+                Text(FizzL10n.text("仅记录，无法还原", "Record only; cannot restore"))
                     .font(FizzTypography.micro)
                     .foregroundStyle(.tertiary)
-            } else if !available {
-                Text("已过期")
+            } else if markAvailability.byID[mark.id] == false {
+                Text(FizzL10n.text("快照不可用", "Snapshot unavailable"))
                     .font(FizzTypography.micro)
                     .foregroundStyle(.tertiary)
-                    .help("超过 14 天，已被 Git 清理")
+                    .help(FizzL10n.text("找不到这个标记的 Git 快照，无法还原", "The Git snapshot for this checkpoint could not be found. Restore is unavailable."))
             }
 
             if let expiringDays {
                 TagChip(
-                    text: "约 \(expiringDays) 天后过期",
+                    text: FizzL10n.text("约 \(expiringDays) 天后过期", "Expires in ~\(expiringDays) \(expiringDays == 1 ? "day" : "days")"),
+                    tint: FizzTheme.statusWarning,
                     compact: true
                 )
-                .accessibilityLabel("这个对话标记约 \(expiringDays) 天后过期")
+                .fixedSize()
+                .accessibilityLabel(FizzL10n.text("这个对话标记约 \(expiringDays) 天后过期", "This session checkpoint expires in about \(expiringDays) \(expiringDays == 1 ? "day" : "days")."))
             }
 
             Spacer(minLength: 8)
 
             if available {
                 FizzActionButton(
-                    title: mark.pinned ? "已保留" : (expiringDays == nil ? "保留" : "固定保留"),
+                    title: mark.pinned ? FizzL10n.text("已保留", "Pinned") : (expiringDays == nil ? FizzL10n.text("保留", "Keep") : FizzL10n.text("固定保留", "Pin")),
                     symbol: mark.pinned ? "star.fill" : "star",
-                    height: .compact
+                    height: .compact,
+                    keyboardNavigation: true
                 ) {
                     Task {
-                        let success = await store.togglePin(mark: mark)
+                        let success = await store.setPinned(!mark.pinned, for: mark)
                         if !success {
                             ToastCenter.shared.show(
-                                "暂时没能更新保留状态",
+                                FizzL10n.text("暂时没能更新保留状态", "Couldn’t update the pin. Try again."),
                                 symbol: "exclamationmark.triangle.fill",
                                 tint: FizzTheme.statusWarning
                             )
                         }
                     }
                 }
+                .disabled(store.updatingMarkPins.contains(mark.id))
                 .foregroundStyle(Color.primary)
-                .help(mark.pinned ? "取消永久保留" : "永久保留，不会被 Git 清理")
+                .help(mark.pinned ? FizzL10n.text("取消永久保留", "Stop keeping this checkpoint permanently") : FizzL10n.text("永久保留，不会被 Git 清理", "Keep permanently so Git won’t remove this checkpoint"))
 
-                FizzActionButton(title: "还原到这里", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("还原到这里", "Restore to here"), height: .compact) {
                     diffTarget = MarkDiffSheetTarget(mark: mark)
                 }
             }
@@ -411,7 +448,7 @@ struct ProgressTabView: View {
     private func sessionTimelineCard(_ session: SessionRecord, associatedMark: SessionMark?) -> some View {
         let toolTitle = HomeDashboardModel.toolTitle(session.tool)
         let isMarkAvailable = associatedMark.map {
-            $0.kind == .gitSnapshot && (markAvailability[$0.id] ?? true)
+            markAvailability.byID[$0.id] == true
         } ?? false
         let aiSummary = summaryEngine.cachedOrRuleBasedSessionSummary(
             for: session,
@@ -434,7 +471,7 @@ struct ProgressTabView: View {
                 )
 
                 if let mins = session.durationMinutes, mins > 0 {
-                    Text("\(mins) 分钟")
+                    Text(FizzL10n.text("\(mins) 分钟", "\(mins) min"))
                         .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -454,20 +491,20 @@ struct ProgressTabView: View {
                 if isLive {
                     HStack(spacing: 4) {
                         RunningPulseDot()
-                        Text("进行中")
+                        Text(FizzL10n.text("进行中", "In progress"))
                             .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
                     }
                 } else if session.endedWithError {
-                    TagChip(text: "⚠ 报错结束", tint: FizzTheme.statusWarning, compact: true)
+                    TagChip(text: FizzL10n.text("⚠ 报错结束", "⚠ Ended with an error"), tint: FizzTheme.statusWarning, compact: true)
                 } else {
-                    Text("✓ 正常结束")
+                    Text(FizzL10n.text("✓ 正常结束", "✓ Finished"))
                         .font(FizzTypography.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Text("「\(session.primaryIntent ?? "\(toolTitle) 会话")」")
+            Text(FizzL10n.text("「\(session.primaryIntent ?? "\(toolTitle) 会话")」", "“\(session.primaryIntent ?? "\(toolTitle) session")”"))
                 .font(FizzTypography.body(.medium))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -490,7 +527,7 @@ struct ProgressTabView: View {
                                 }
                                 .frame(maxWidth: 200)
                                 .truncationMode(.middle)
-                                .help("对比「\(fileName)」的改动")
+                                .help(FizzL10n.text("对比「\(fileName)」的改动", "Compare changes to “\(fileName)”"))
                             } else {
                                 Text(fileName)
                                     .font(FizzTypography.monoSmall)
@@ -510,8 +547,8 @@ struct ProgressTabView: View {
                         FizzActionButton(title: "+\(overflowCount)", height: .compact) {
                             expandedFileSessions.insert(session.stableID)
                         }
-                        .help("展开其余 \(overflowCount) 个文件")
-                        .accessibilityLabel("展开其余 \(overflowCount) 个文件")
+                        .help(FizzL10n.text("展开其余 \(overflowCount) 个文件", "Show \(overflowCount) more \(overflowCount == 1 ? "file" : "files")"))
+                        .accessibilityLabel(FizzL10n.text("展开其余 \(overflowCount) 个文件", "Show \(overflowCount) more \(overflowCount == 1 ? "file" : "files")"))
                     }
                 }
             }
@@ -531,14 +568,14 @@ struct ProgressTabView: View {
                 HStack(spacing: FizzSpacing.row) {
                     Spacer(minLength: 0)
                     if isMarkAvailable, let associatedMark {
-                        FizzActionButton(title: "看改了什么", symbol: "doc.text.magnifyingglass", height: .compact) {
+                        FizzActionButton(title: FizzL10n.text("看改了什么", "View changes"), symbol: "doc.text.magnifyingglass", height: .compact) {
                             diffTarget = MarkDiffSheetTarget(mark: associatedMark)
                         }
                     }
 
                     if session.resumeCommand != nil {
                         FizzActionButton(
-                            title: isResuming ? "继续中…" : (isLive ? "回到这次对话" : "继续这次对话"),
+                            title: isResuming ? FizzL10n.text("继续中…", "Resuming…") : (isLive ? FizzL10n.text("回到这次对话", "Return to conversation") : FizzL10n.text("继续这次对话", "Resume conversation")),
                             symbol: "play.fill",
                             height: .compact
                         ) {
@@ -586,7 +623,7 @@ struct ProgressTabView: View {
         let result = await SessionResumeService.resume(session: session, projectPath: project.path)
         if result.success {
             ToastCenter.shared.show(
-                "已唤起 \(HomeDashboardModel.toolTitle(session.tool))",
+                FizzL10n.text("已唤起 \(HomeDashboardModel.toolTitle(session.tool))", "Opened \(HomeDashboardModel.toolTitle(session.tool))"),
                 symbol: "terminal.fill",
                 tint: FizzTheme.statusSuccess,
                 subtitle: project.displayName
@@ -599,13 +636,12 @@ struct ProgressTabView: View {
                 result.message,
                 symbol: "exclamationmark.triangle.fill",
                 tint: FizzTheme.statusWarning,
-                subtitle: result.fallbackCommand != nil ? "已复制命令到剪贴板" : nil
+                subtitle: result.fallbackCommand != nil ? FizzL10n.text("已复制命令到剪贴板", "Copied command to clipboard") : nil
             )
         }
     }
 
-    private func loadMarksAndSummaries() async {
-        await refreshMarkAvailability()
+    private func loadSummaries() async {
         guard aiSummaryEnabled else { return }
         _ = await summaryEngine.summarizeProjectStatusIfNeeded(project, copyMode: copyMode)
         for session in conversations.prefix(3) {
@@ -617,44 +653,32 @@ struct ProgressTabView: View {
         }
     }
 
-    private func refreshMarkAvailability() async {
-        let projectMarks = store.marks(for: project.path)
-        let directory = URL(fileURLWithPath: project.path)
-        var status: [String: Bool] = [:]
-        for mark in projectMarks where mark.kind == .gitSnapshot {
-            status[mark.id] = await SessionMarkService.isAvailable(mark, in: directory)
-        }
-        guard !Task.isCancelled else { return }
-        markAvailability = status
-    }
-
     private func createManualMark() async {
         isCreatingMark = true
         defer { isCreatingMark = false }
         let mark = await store.createMark(
             for: project,
             session: conversations.first,
-            label: "手动记录点",
+            label: SessionMark.manualCheckpointLabel,
             allowGitSnapshot: true
         )
-        await refreshMarkAvailability()
         ToastCenter.shared.show(
-            mark.kind == .gitSnapshot ? "已记下当前状态" : "已添加纯记录标记",
+            mark.kind == .gitSnapshot ? FizzL10n.text("已记下当前状态", "Recorded the current state") : FizzL10n.text("已添加纯记录标记", "Added a record-only checkpoint"),
             symbol: "bookmark.circle.fill",
             tint: Color.secondary,
-            subtitle: mark.kind == .gitSnapshot ? "之后随时可在时间线对比或还原" : nil
+            subtitle: mark.kind == .gitSnapshot ? FizzL10n.text("之后随时可在时间线对比或还原", "Compare or restore it later from the timeline.") : nil
         )
     }
 
     private func applyRequestedMarkDiff() {
         guard let requestedID = store.requestedMarkIDForDiff, !requestedID.isEmpty else { return }
         guard let mark = store.marks(for: project.path).first(where: { $0.id == requestedID }) else { return }
+        viewMode = .timeline
         diffTarget = MarkDiffSheetTarget(mark: mark)
         store.requestedMarkIDForDiff = nil
     }
 
-    private func associatedMarksBySession() -> [String: SessionMark] {
-        let projectMarks = store.marks(for: project.path)
+    private func associatedMarksBySession(in projectMarks: [SessionMark]) -> [String: SessionMark] {
         var usedMarkIDs: Set<String> = []
         var result: [String: SessionMark] = [:]
 

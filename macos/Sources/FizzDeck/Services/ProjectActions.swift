@@ -8,6 +8,18 @@ enum ProjectAction: String, Sendable {
     case stopping
 }
 
+struct DevServerFailure: Sendable, Equatable {
+    enum Reason: Equatable, Sendable { case launchFailed, exited(Int32) }
+    let reason: Reason
+    let recordedAt: Date
+    let logHeader: String?
+
+    var exitCode: Int32? {
+        if case .exited(let code) = reason { return code }
+        return nil
+    }
+}
+
 enum TestStatus: String, Sendable {
     case running
     case passed
@@ -52,11 +64,15 @@ struct TestRunState: Identifiable, Sendable {
 @Observable
 final class ProjectActions {
     var busy: [String: ProjectAction] = [:]
+    var devFailures: [String: DevServerFailure] = [:]
     var testRuns: [String: TestRunState] = [:]
     var scriptRuns: [String: ScriptRunState] = [:]
     var portConflicts: [String: PortConflict] = [:]
     var messages: [String: String] = [:]
     var testMessages: [String: String] = [:]
+
+    private let logs: URL
+    init(logs: URL = AppPaths.logsDir) { self.logs = logs }
 
     @ObservationIgnored private var devProcesses: [String: Process] = [:]
     @ObservationIgnored private var devLogs: [String: FileHandle] = [:]
@@ -113,23 +129,24 @@ final class ProjectActions {
     }
 
     func logPath(for project: RepoProject, prefix: String = "") -> String {
-        AppPaths.logsDir
+        logs
             .appendingPathComponent(prefix + URL(fileURLWithPath: project.path).lastPathComponent + ".log")
             .path
     }
 
     func launch(_ project: RepoProject, store: RepositoryStore) async {
         guard !isBusy(project.path) else { return }
+        devFailures[project.path] = nil
         guard isManaged(project, in: store) else {
-            messages[project.path] = "不在受管项目内，拒绝启动"
+            messages[project.path] = FizzL10n.text("不在受管项目内，拒绝启动", "This project is not managed by FizzDeck and cannot be started here")
             return
         }
         guard let run = project.run else {
-            messages[project.path] = "没有识别到可运行的 dev 脚本"
+            messages[project.path] = FizzL10n.text("没有识别到可运行的 dev 脚本", "No development command found")
             return
         }
         guard run.port > 0 else {
-            messages[project.path] = "没有可探测的预览端口"
+            messages[project.path] = FizzL10n.text("没有可探测的预览端口", "No preview port to check")
             return
         }
 
@@ -138,11 +155,11 @@ final class ProjectActions {
             let resolvedConflict = conflict ?? PortConflict(
                 port: run.port,
                 occupants: [],
-                note: "端口已有监听进程"
+                note: FizzL10n.text("端口已有监听进程", "A process is already listening on this port")
             )
             portConflicts[project.path] = resolvedConflict
             store.setPort(.stopped, for: project.path)
-            messages[project.path] = "端口 \(run.port) 被占用：\(resolvedConflict.occupantSummary)"
+            messages[project.path] = FizzL10n.text("端口 \(run.port) 被占用：\(resolvedConflict.occupantSummary)", "Port \(run.port) is in use: \(resolvedConflict.occupantSummary)")
             showPortConflictToast(
                 project: project,
                 conflict: resolvedConflict,
@@ -155,7 +172,7 @@ final class ProjectActions {
         messages[project.path] = nil
         updateServiceToast(
             path: project.path,
-            title: "正在启动 \(project.displayName)",
+            title: FizzL10n.text("正在启动 \(project.displayName)", "Starting \(project.displayName)"),
             subtitle: run.command,
             step: 0,
             state: .running,
@@ -166,13 +183,14 @@ final class ProjectActions {
         defer { busy[project.path] = nil }
 
         let logURL = URL(fileURLWithPath: logPath(for: project))
-        let header = "\n--- \(Date().ISO8601Format()) \(run.command)\n"
-        guard let log = openLog(logURL, header: header) else {
-            messages[project.path] = "无法写入 \(PathTools.displayPath(logURL.path))"
+        let header = "--- \(Date().ISO8601Format(.init(includingFractionalSeconds: true))) \(run.command)"
+        guard let log = openLog(logURL, header: "\n\(header)\n") else {
+            devFailures[project.path] = DevServerFailure(reason: .launchFailed, recordedAt: Date(), logHeader: nil)
+            messages[project.path] = FizzL10n.text("无法写入 \(PathTools.displayPath(logURL.path))", "Couldn’t write to \(PathTools.displayPath(logURL.path))")
             updateServiceToast(
                 path: project.path,
-                title: "无法启动服务",
-                subtitle: "日志目录不可写",
+                title: FizzL10n.text("无法启动服务", "Couldn’t start the service"),
+                subtitle: FizzL10n.text("日志目录不可写", "The log folder is read-only"),
                 step: 0,
                 state: .failed,
                 tint: FizzTheme.statusWarning,
@@ -195,10 +213,11 @@ final class ProjectActions {
             try process.run()
         } catch {
             try? log.close()
-            messages[project.path] = "启动失败：\(error.localizedDescription)"
+            devFailures[project.path] = DevServerFailure(reason: .launchFailed, recordedAt: Date(), logHeader: header)
+            messages[project.path] = FizzL10n.text("启动失败：\(error.localizedDescription)", "Couldn’t start: \(error.localizedDescription)")
             updateServiceToast(
                 path: project.path,
-                title: "启动失败",
+                title: FizzL10n.text("启动失败", "Couldn’t start"),
                 subtitle: error.localizedDescription,
                 step: 0,
                 state: .failed,
@@ -215,6 +234,7 @@ final class ProjectActions {
                 self?.handleDevTermination(
                     path: project.path,
                     port: run.port,
+                    logHeader: header,
                     process: finished,
                     store: store
                 )
@@ -225,10 +245,10 @@ final class ProjectActions {
         while Date() < deadline {
             if PortProbe.isOpen(run.port) {
                 store.setPort(.running, for: project.path)
-                messages[project.path] = "已启动 \(run.command) · localhost:\(run.port)"
+                messages[project.path] = FizzL10n.text("已启动 \(run.command) · localhost:\(run.port)", "Started \(run.command) · localhost:\(run.port)")
                 Task {
                     await LocalNotifications.send(
-                        title: "开发服务已就绪",
+                        title: FizzL10n.text("开发服务已就绪", "Development service ready"),
                         body: "\(project.displayName) · localhost:\(run.port)",
                         projectPath: project.path,
                         tab: .progress
@@ -236,13 +256,13 @@ final class ProjectActions {
                 }
                 updateServiceToast(
                     path: project.path,
-                    title: "服务已启动",
+                    title: FizzL10n.text("服务已启动", "Service started"),
                     subtitle: "localhost:\(run.port)",
                     step: 4,
                     state: .live,
                     tint: FizzTheme.statusSuccess,
                     action: ToastAction(
-                        title: "打开预览",
+                        title: FizzL10n.text("打开预览", "Open Preview"),
                         symbol: "arrow.up.forward.square"
                     ) {
                         SystemActions.openURL("http://127.0.0.1:\(run.port)")
@@ -255,11 +275,11 @@ final class ProjectActions {
         }
 
         if process.isRunning {
-            messages[project.path] = "进程已启动（PID \(process.processIdentifier)），端口 \(run.port) 尚未就绪"
+            messages[project.path] = FizzL10n.text("进程已启动（PID \(process.processIdentifier)），端口 \(run.port) 尚未就绪", "Process started (PID \(process.processIdentifier)); port \(run.port) is not ready yet")
             updateServiceToast(
                 path: project.path,
-                title: "服务启动中",
-                subtitle: "PID \(process.processIdentifier) · 等待 localhost:\(run.port)",
+                title: FizzL10n.text("服务启动中", "Starting service"),
+                subtitle: FizzL10n.text("PID \(process.processIdentifier) · 等待 localhost:\(run.port)", "PID \(process.processIdentifier) · Waiting for localhost:\(run.port)"),
                 step: 2,
                 state: .running,
                 tint: .secondary,
@@ -267,12 +287,13 @@ final class ProjectActions {
             )
         } else {
             store.setPort(.stopped, for: project.path)
+            devFailures[project.path] = DevServerFailure(reason: .exited(process.terminationStatus), recordedAt: Date(), logHeader: header)
             let tail = FileTools.tail(logURL, bytes: 800).trimmingCharacters(in: .whitespacesAndNewlines)
-            messages[project.path] = tail.isEmpty ? "启动失败，进程已退出" : "启动失败：\(tail)"
+            messages[project.path] = tail.isEmpty ? FizzL10n.text("启动失败，进程已退出", "Startup failed; the process exited") : FizzL10n.text("启动失败：\(tail)", "Couldn’t start: \(tail)")
             updateServiceToast(
                 path: project.path,
-                title: "启动失败",
-                subtitle: tail.isEmpty ? "进程已退出" : String(tail.prefix(100)),
+                title: FizzL10n.text("启动失败", "Couldn’t start"),
+                subtitle: tail.isEmpty ? FizzL10n.text("进程已退出", "Process exited") : String(tail.prefix(100)),
                 step: 0,
                 state: .failed,
                 tint: FizzTheme.statusDanger,
@@ -285,15 +306,15 @@ final class ProjectActions {
         let path = project.path
         guard !isBusy(path) else { return }
         func review(_ reason: String) {
-            let hint = "请到体检的「开发监听端口」逐个核对 PID。"
+            let hint = FizzL10n.text("请到体检的「开发监听端口」逐个核对 PID。", "Check each PID under Development Ports in Doctor.")
             messages[path] = "\(reason)。\(hint)"
             presentNotice()
             ToastCenter.shared.show(reason, symbol: "info.circle", tint: FizzTheme.statusWarning, duration: 8, subtitle: hint,
-                                    action: ToastAction(title: "去体检", symbol: "stethoscope") { store.openCleanup() })
+                                    action: ToastAction(title: FizzL10n.text("去体检", "Open Doctor"), symbol: "stethoscope") { store.openCleanup() })
         }
         func registered() -> Bool { store.projects.contains { $0.path == path && $0.run == project.run } }
         guard registered(), let owner = PreviewProject.from(project, actions: self) else {
-            review("项目或预览端口已变化")
+            review(FizzL10n.text("项目或预览端口已变化", "The project or preview port changed"))
             return
         }
         busy[path] = .stopping
@@ -306,6 +327,7 @@ final class ProjectActions {
         case .cancelled: break
         case .portFree(let message):
             guard registered() else { return }
+            devFailures[path] = nil
             portConflicts[path] = nil
             store.setPort(.stopped, for: path)
             messages[path] = message
@@ -320,13 +342,13 @@ final class ProjectActions {
     ) async {
         guard !isBusy(project.path) else { return }
         guard isManaged(project, in: store) else {
-            messages[project.path] = "不在受管项目内，拒绝结束占用进程"
+            messages[project.path] = FizzL10n.text("不在受管项目内，拒绝结束占用进程", "Cannot stop a process for an unmanaged project")
             return
         }
 
         updateServiceToast(
             path: project.path,
-            title: "正在释放端口",
+            title: FizzL10n.text("正在释放端口", "Freeing port"),
             subtitle: conflict.occupants.map { "PID \($0.pid)" }.joined(separator: " · "),
             step: 0,
             state: .running,
@@ -346,13 +368,13 @@ final class ProjectActions {
         guard result.succeeded else {
             updateServiceToast(
                 path: project.path,
-                title: "释放端口失败",
+                title: FizzL10n.text("释放端口失败", "Couldn’t free the port"),
                 subtitle: result.message,
                 step: 0,
                 state: .failed,
                 tint: FizzTheme.statusWarning,
                 action: ToastAction(
-                    title: "再次尝试",
+                    title: FizzL10n.text("再次尝试", "Try Again"),
                     symbol: "arrow.clockwise"
                 ) { [weak self] in
                     guard let self else { return }
@@ -372,11 +394,11 @@ final class ProjectActions {
 
     func runTests(_ project: RepoProject, store: RepositoryStore) {
         guard isManaged(project, in: store) else {
-            testMessages[project.path] = "不在受管项目内，拒绝执行测试"
+            testMessages[project.path] = FizzL10n.text("不在受管项目内，拒绝执行测试", "Cannot run tests for an unmanaged project")
             return
         }
         guard let test = project.test else {
-            testMessages[project.path] = "没有识别到测试命令"
+            testMessages[project.path] = FizzL10n.text("没有识别到测试命令", "No test command found")
             return
         }
         guard testRuns[project.path]?.status != .running else { return }
@@ -386,7 +408,7 @@ final class ProjectActions {
         let logURL = URL(fileURLWithPath: logPath(for: project, prefix: "test-"))
         let header = "\n--- \(Date().ISO8601Format()) \(test.command)\n"
         guard let log = openLog(logURL, header: header) else {
-            testMessages[project.path] = "无法写入测试日志"
+            testMessages[project.path] = FizzL10n.text("无法写入测试日志", "Couldn’t write the test log")
             return
         }
 
@@ -451,7 +473,7 @@ final class ProjectActions {
 
     func runScript(_ script: ProjectScript, project: RepoProject, store: RepositoryStore) {
         guard isManaged(project, in: store) else {
-            messages[project.path] = "不在受管项目内，拒绝执行脚本"
+            messages[project.path] = FizzL10n.text("不在受管项目内，拒绝执行脚本", "Cannot run scripts for an unmanaged project")
             return
         }
 
@@ -462,7 +484,7 @@ final class ProjectActions {
         let logURL = scriptLogURL(for: project, script: script)
         let header = "\n--- \(Date().ISO8601Format()) \(script.command)\n"
         guard let log = openLog(logURL, header: header) else {
-            messages[project.path] = "无法写入脚本日志"
+            messages[project.path] = FizzL10n.text("无法写入脚本日志", "Couldn’t write the script log")
             return
         }
 
@@ -520,7 +542,7 @@ final class ProjectActions {
                 state.duration = Date().timeIntervalSince(state.startedAt)
                 scriptRuns[key] = state
             }
-            messages[project.path] = "脚本启动失败：\(error.localizedDescription)"
+            messages[project.path] = FizzL10n.text("脚本启动失败：\(error.localizedDescription)", "Couldn’t start the script: \(error.localizedDescription)")
             return
         }
     }
@@ -535,7 +557,7 @@ final class ProjectActions {
     func openScriptLog(_ script: ProjectScript, project: RepoProject) {
         let path = scriptLogPath(for: project, script: script)
         guard FileTools.exists(path) else {
-            messages[project.path] = "还没有脚本日志"
+            messages[project.path] = FizzL10n.text("还没有脚本日志", "No script log yet")
             return
         }
         SystemActions.open(path)
@@ -548,7 +570,7 @@ final class ProjectActions {
     static func installDependenciesScript(command: String) -> ProjectScript {
         ProjectScript(
             id: "doctor-install-deps",
-            name: "安装依赖",
+            name: FizzL10n.text("安装依赖", "Install dependencies"),
             command: command,
             source: .npm
         )
@@ -575,9 +597,9 @@ final class ProjectActions {
         }
         guard FileTools.exists(path) else {
             if test {
-                testMessages[project.path] = "还没有测试日志"
+                testMessages[project.path] = FizzL10n.text("还没有测试日志", "No test log yet")
             } else {
-                messages[project.path] = "还没有启动日志"
+                messages[project.path] = FizzL10n.text("还没有启动日志", "No launch log yet")
             }
             return
         }
@@ -634,27 +656,30 @@ final class ProjectActions {
         let scriptSlug = script.id.map { character -> Character in
             character.isLetter || character.isNumber ? character : "-"
         }
-        return AppPaths.logsDir
+        return logs
             .appendingPathComponent("script-\(projectSlug)-\(String(scriptSlug)).log")
     }
 
     private func handleDevTermination(
         path: String,
         port: Int,
+        logHeader: String,
         process: Process,
         store: RepositoryStore
     ) {
-        if devProcesses[path] === process {
-            devProcesses[path] = nil
-        }
+        guard devProcesses[path] === process else { return }
+        devProcesses[path] = nil
         if let log = devLogs[path] {
             try? log.close()
             devLogs[path] = nil
         }
         store.setPort(PortProbe.isOpen(port) ? .running : .stopped, for: path)
+        if process.terminationStatus != 0, busy[path] != .stopping {
+            devFailures[path] = DevServerFailure(reason: .exited(process.terminationStatus), recordedAt: Date(), logHeader: logHeader)
+        }
         messages[path] = process.terminationStatus == 0
-            ? "开发服务器已退出"
-            : "开发服务器已退出（状态 \(process.terminationStatus)）"
+            ? FizzL10n.text("开发服务器已退出", "Development server exited")
+            : FizzL10n.text("开发服务器已退出（状态 \(process.terminationStatus)）", "Development server exited (status \(process.terminationStatus))")
     }
 
     private func appendTestOutput(_ path: String, text: String) {
@@ -690,7 +715,7 @@ final class ProjectActions {
         if !wasStopped {
             let succeeded = state.status == .succeeded
             ToastCenter.shared.show(
-                succeeded ? "脚本完成" : "脚本失败",
+                succeeded ? FizzL10n.text("脚本完成", "Script completed") : FizzL10n.text("脚本失败", "Script failed"),
                 symbol: succeeded ? "checkmark.circle.fill" : "xmark.circle.fill",
                 tint: succeeded ? FizzTheme.statusSuccess : FizzTheme.statusDanger,
                 subtitle: state.script.name,
@@ -717,7 +742,7 @@ final class ProjectActions {
         if state.status == .failed, !wasStopped {
             Task {
                 await LocalNotifications.send(
-                    title: "测试失败",
+                    title: FizzL10n.text("测试失败", "Tests failed"),
                     body: "\(project.displayName) · \(state.command)",
                     projectPath: project.path,
                     tab: .run
@@ -726,7 +751,7 @@ final class ProjectActions {
         }
         if wasStopped {
             ToastCenter.shared.show(
-                "测试已停止",
+                FizzL10n.text("测试已停止", "Tests stopped"),
                 symbol: "stop.circle.fill",
                 tint: .secondary,
                 subtitle: project.displayName,
@@ -736,13 +761,13 @@ final class ProjectActions {
             let summary = TestOutcomeSummary.parse(state.output, status: state.status)
             let passed = state.status == .passed
             ToastCenter.shared.show(
-                passed ? "测试通过" : "测试失败",
+                passed ? FizzL10n.text("测试通过", "Tests passed") : FizzL10n.text("测试失败", "Tests failed"),
                 symbol: passed ? "checkmark.seal.fill" : "xmark.octagon.fill",
                 tint: passed ? FizzTheme.statusSuccess : FizzTheme.statusDanger,
-                subtitle: "\(summary.passed) 通过 · \(summary.failed) 失败 · \(durationLabel(state.duration))",
+                subtitle: FizzL10n.text("\(summary.passed) 通过 · \(summary.failed) 失败 · \(durationLabel(state.duration))", "\(summary.passed) passed · \(summary.failed) failed · \(durationLabel(state.duration))"),
                 microViz: .tests(passed: summary.passed, failed: summary.failed),
                 action: ToastAction(
-                    title: "查看日志",
+                    title: FizzL10n.text("查看日志", "View Log"),
                     symbol: "doc.text"
                 ) { [weak self] in
                     self?.openLog(for: project, test: true)
@@ -755,7 +780,7 @@ final class ProjectActions {
         for project: RepoProject,
         store: RepositoryStore
     ) -> ToastAction {
-        ToastAction(title: "重试", symbol: "arrow.clockwise") { [weak self] in
+        ToastAction(title: FizzL10n.text("重试", "Retry"), symbol: "arrow.clockwise") { [weak self] in
             guard let self else { return }
             Task { await self.launch(project, store: store) }
         }
@@ -768,13 +793,13 @@ final class ProjectActions {
     ) {
         updateServiceToast(
             path: project.path,
-            title: "端口 :\(conflict.port) 被占用",
+            title: FizzL10n.text("端口 :\(conflict.port) 被占用", "Port :\(conflict.port) is in use"),
             subtitle: conflict.occupantSummary,
             step: 0,
             state: .failed,
             tint: FizzTheme.statusWarning,
             action: ToastAction(
-                title: "释放并重试",
+                title: FizzL10n.text("释放并重试", "Free Port and Retry"),
                 symbol: "arrow.clockwise"
             ) { [weak self] in
                 guard let self else { return }
@@ -791,8 +816,8 @@ final class ProjectActions {
 
     private func updateServiceToast(
         path: String,
-        title: String,
-        subtitle: String?,
+        title: @autoclosure () -> String,
+        subtitle: @autoclosure () -> String?,
         step: Int,
         state: ToastPipelineState,
         tint: Color,
@@ -801,8 +826,7 @@ final class ProjectActions {
         let microViz = ToastMicroViz.pipeline(step: step, state: state)
         if let id = serviceToastIDs[path],
            ToastCenter.shared.update(id, mutate: { message in
-               message.title = title
-               message.subtitle = subtitle
+               message.setText(title, subtitle: subtitle)
                message.tint = tint
                message.microViz = microViz
                message.action = action
@@ -812,11 +836,11 @@ final class ProjectActions {
         }
 
         serviceToastIDs[path] = ToastCenter.shared.show(
-            title,
+            title(),
             symbol: "bolt.horizontal.fill",
             tint: tint,
             duration: nil,
-            subtitle: subtitle,
+            subtitle: subtitle(),
             microViz: microViz,
             action: action
         )

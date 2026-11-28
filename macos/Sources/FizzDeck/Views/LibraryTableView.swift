@@ -18,9 +18,9 @@ struct LibraryTableRow: Identifiable, Sendable {
     let recentTimestamp: TimeInterval
     let recentDisplay: String
 
-    static func makeRows(from projects: [RepoProject]) -> [LibraryTableRow] {
+    static func makeRows(from projects: [RepoProject], locale: Locale = FizzL10n.locale) -> [LibraryTableRow] {
         projects.map { project in
-            let framework = project.stacks.first?.items.first ?? "—"
+            let framework = project.stacks.first?.displayItems.first ?? "—"
             let branch = project.branch ?? "—"
             let commitSubject = !project.note.isEmpty
                 ? project.note
@@ -33,7 +33,7 @@ struct LibraryTableRow: Identifiable, Sendable {
                 aiCostDisplay = cost
                 aiCostSortValue = costUSD ?? 0
             } else if tokens > 0 {
-                aiCostDisplay = Format.tokens(tokens)
+                aiCostDisplay = Format.tokens(tokens, locale: locale)
                 aiCostSortValue = Double(tokens) / 1_000_000_000.0
             } else {
                 aiCostDisplay = "—"
@@ -59,7 +59,7 @@ struct LibraryTableRow: Identifiable, Sendable {
                 sizeBytes: project.size.totalBytes,
                 sizeDisplay: sizeDisplay,
                 recentTimestamp: project.recent?.timeIntervalSince1970 ?? 0,
-                recentDisplay: Format.relative(project.recent)
+                recentDisplay: Format.relative(project.recent, locale: locale)
             )
         }
     }
@@ -144,7 +144,7 @@ struct LibraryTableView: View {
 
     var body: some View {
         Table(rows, selection: $selectedPaths, sortOrder: $sortOrder) {
-            TableColumn("名称", sortUsing: LibraryRowComparator(column: .name)) { row in
+            TableColumn(FizzL10n.text("名称", "Name"), sortUsing: LibraryRowComparator(column: .name)) { row in
                 HStack(spacing: 7) {
                     ProjectBadgeIcon(project: row.project, size: 18, framed: false)
                     Text(row.name)
@@ -161,15 +161,15 @@ struct LibraryTableView: View {
             }
             .width(min: 150, ideal: 190)
 
-            TableColumn("分组", sortUsing: LibraryRowComparator(column: .group)) { row in
-                Text(row.group)
+            TableColumn(FizzL10n.text("分组", "Group"), sortUsing: LibraryRowComparator(column: .group)) { row in
+                Text(row.project.groupTitle)
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             .width(min: 60, ideal: 78)
 
-            TableColumn("框架", sortUsing: LibraryRowComparator(column: .framework)) { row in
+            TableColumn(FizzL10n.text("框架", "Framework"), sortUsing: LibraryRowComparator(column: .framework)) { row in
                 Text(row.framework)
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
@@ -177,7 +177,7 @@ struct LibraryTableView: View {
             }
             .width(min: 72, ideal: 96)
 
-            TableColumn("分支", sortUsing: LibraryRowComparator(column: .branch)) { row in
+            TableColumn(FizzL10n.text("分支", "Branch"), sortUsing: LibraryRowComparator(column: .branch)) { row in
                 Text(row.branch)
                     .font(FizzTypography.monoSmall)
                     .foregroundStyle(.secondary)
@@ -185,23 +185,23 @@ struct LibraryTableView: View {
             }
             .width(min: 76, ideal: 110)
 
-            TableColumn("改动", sortUsing: LibraryRowComparator(column: .dirtyCount)) { row in
+            TableColumn(FizzL10n.text("改动", "Changes"), sortUsing: LibraryRowComparator(column: .dirtyCount)) { row in
                 Text(row.dirtyCount > 0 ? "\(row.dirtyCount)" : "—")
                     .font(FizzTypography.mono)
                     .foregroundStyle(row.dirtyCount > 0 ? Color.primary : Color.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .width(min: 48, ideal: 56)
+            .width(min: 72, ideal: 82)
 
-            TableColumn("未推送", sortUsing: LibraryRowComparator(column: .ahead)) { row in
+            TableColumn(FizzL10n.text("未推送", "Unpushed"), sortUsing: LibraryRowComparator(column: .ahead)) { row in
                 Text(row.ahead > 0 ? "↑\(row.ahead)" : "—")
                     .font(FizzTypography.mono)
                     .foregroundStyle(row.ahead > 0 ? Color.secondary : Color.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .width(min: 52, ideal: 62)
+            .width(min: 76, ideal: 86)
 
-            TableColumn("最近提交", sortUsing: LibraryRowComparator(column: .commitSubject)) { row in
+            TableColumn(FizzL10n.text("最近提交", "Latest commit"), sortUsing: LibraryRowComparator(column: .commitSubject)) { row in
                 Text(row.commitSubject)
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
@@ -210,7 +210,7 @@ struct LibraryTableView: View {
             }
             .width(min: 140, ideal: 220)
 
-            TableColumn("AI 费用", sortUsing: LibraryRowComparator(column: .aiCost)) { row in
+            TableColumn(FizzL10n.text("AI 费用", "AI cost"), sortUsing: LibraryRowComparator(column: .aiCost)) { row in
                 Text(row.aiCostDisplay)
                     .font(FizzTypography.mono)
                     .foregroundStyle(row.aiCostSortValue >= 0 ? Color.primary : Color.secondary)
@@ -218,7 +218,7 @@ struct LibraryTableView: View {
             }
             .width(min: 66, ideal: 78)
 
-            TableColumn("体积", sortUsing: LibraryRowComparator(column: .sizeBytes)) { row in
+            TableColumn(FizzL10n.text("体积", "Size"), sortUsing: LibraryRowComparator(column: .sizeBytes)) { row in
                 Group {
                     if row.project.sizeLoadState == .ready {
                         Text(row.sizeDisplay)
@@ -235,13 +235,14 @@ struct LibraryTableView: View {
             }
             .width(min: 64, ideal: 76)
 
-            TableColumn("最近活跃", sortUsing: LibraryRowComparator(column: .recentTimestamp)) { row in
+            TableColumn(FizzL10n.text("最近活跃", "Last active"), sortUsing: LibraryRowComparator(column: .recentTimestamp)) { row in
                 Text(row.recentDisplay)
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
-            .width(min: 72, ideal: 86)
+            .width(min: 90, ideal: 110)
         }
+        .id(FizzL10n.isEnglish)
         .tableStyle(.inset(alternatesRowBackgrounds: true))
         .frame(height: tableHeight)
         .clipShape(RoundedRectangle(cornerRadius: FizzRadius.panel, style: .continuous))
@@ -252,10 +253,10 @@ struct LibraryTableView: View {
         .contextMenu(forSelectionType: String.self) { selection in
             if let path = selection.first,
                let project = projects.first(where: { $0.path == path }) {
-                Button("打开 \(project.displayName)") {
+                Button(FizzL10n.text("打开 \(project.displayName)", "Open \(project.displayName)")) {
                     store.openProject(project)
                 }
-                Button(project.starred ? "取消星标" : "设为星标") {
+                Button(project.starred ? FizzL10n.text("取消星标", "Unstar") : FizzL10n.text("设为星标", "Star")) {
                     store.toggleStar(project)
                 }
                 ProjectGroupingMenu(project: project)

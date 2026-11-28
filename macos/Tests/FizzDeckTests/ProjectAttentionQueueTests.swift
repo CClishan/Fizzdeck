@@ -1,7 +1,7 @@
 import XCTest
 @testable import FizzDeck
 
-final class ProjectAttentionQueueTests: XCTestCase {
+final class ProjectAttentionQueueTests: ChineseInterfaceTestCase {
     func testItemsFollowPriorityOrder() {
         let now = Date()
         let project = makeProject(
@@ -142,6 +142,45 @@ final class ProjectAttentionQueueTests: XCTestCase {
         XCTAssertFalse(ProjectAttentionKind.dirty.isCritical)
         XCTAssertEqual(items.first?.title, "跑不起来：检查没通过")
         XCTAssertEqual(items[1].title, "上次 AI 对话报错结束")
+    }
+
+    @MainActor
+    func testExpiringMarksGroupByFocusAndRouteToExactMarkEvenWithoutRecentSessions() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("FizzDeck-queue-\(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        var focused = makeProject(path: root.appendingPathComponent("focused").path)
+        focused.starred = true
+        let idle = makeProject(path: root.appendingPathComponent("idle").path)
+        let projects = [focused, idle]
+        let focusedPaths = ProjectFocusPolicy.partition(projects: projects, now: now).focusedPaths
+        let marks = [("later", focused, 10), ("first", focused, 13), ("idle", idle, 12)].map { id, project, age in
+            // A persisted checkpoint may use a different spelling of the indexed directory.
+            SessionMark(id: id, projectPath: project.path + "/.", createdAt: now.addingTimeInterval(-Double(age) * 86_400),
+                        kind: .gitSnapshot, snapshotSHA: String(repeating: "a", count: 40), label: "还原前自动备份")
+        }
+        let reminders = SessionMarkExpiryPolicy.attentionCandidates(in: marks, focusedPaths: focusedPaths, now: now)
+        let file = root.appendingPathComponent("marks.json")
+        for mark in marks { try MarkStore.upsertChecked(mark, in: file) }
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
+        defaults.setVolatileDomain(["fizzdeck.recentProjects": [focused.path]], forName: UserDefaults.argumentDomain)
+        let store = RepositoryStore(preferences: defaults, marksFile: file)
+        store.projects = projects
+
+        for mode in [CopyMode.plain, .pro] {
+            let items = ProjectAttentionQueue.items(projects: projects, testRuns: [:], focusedPaths: mode == .plain ? focusedPaths : nil,
+                                                  copyMode: mode, expiringMarks: reminders)
+            XCTAssertEqual(items.map(\.kind), [.expiringMarks])
+            let row = try XCTUnwrap(items.first)
+            XCTAssertEqual(row.expiringMarks.map(\.mark.id), ["first", "later"])
+            XCTAssertFalse(row.kind.isCritical)
+            store.openDashboard()
+            store.openAttentionItem(row)
+            XCTAssertEqual(store.selectedProject?.path, focused.path)
+            XCTAssertEqual(store.requestedTab, .progress)
+            XCTAssertEqual(store.requestedMarkIDForDiff, "first")
+        }
     }
 
     private func makeProject(

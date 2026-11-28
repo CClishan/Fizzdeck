@@ -2,7 +2,7 @@ import AppIntents
 import Foundation
 
 struct ShortcutProject: AppEntity {
-    static let typeDisplayRepresentation: TypeDisplayRepresentation = "FizzDeck 项目"
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "FizzDeck Project"
     static let defaultQuery = ShortcutProjectQuery()
     let id: String
     let name: String
@@ -26,9 +26,9 @@ struct ShortcutProjectQuery: EntityStringQuery {
 }
 
 struct OpenFizzProjectIntent: AppIntent {
-    static let title: LocalizedStringResource = "打开 FizzDeck 项目"
+    static let title: LocalizedStringResource = "Open FizzDeck Project"
     static var supportedModes: IntentModes { .foreground }
-    @Parameter(title: "项目") var project: ShortcutProject
+    @Parameter(title: "Project") var project: ShortcutProject
 
     @MainActor func perform() async throws -> some IntentResult {
         guard RootStore.load().contains(project.id) else { throw ShortcutProjectError.unavailable }
@@ -38,8 +38,8 @@ struct OpenFizzProjectIntent: AppIntent {
 }
 
 struct CopyFizzHandoffIntent: AppIntent {
-    static let title: LocalizedStringResource = "复制项目接力卡"
-    @Parameter(title: "项目") var project: ShortcutProject
+    static let title: LocalizedStringResource = "Copy Project Handoff Card"
+    @Parameter(title: "Project") var project: ShortcutProject
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let projects = await ShortcutProjectData.cachedProjects()
@@ -51,7 +51,7 @@ struct CopyFizzHandoffIntent: AppIntent {
 }
 
 struct FocusedFizzDoctorIntent: AppIntent {
-    static let title: LocalizedStringResource = "查询关注项目体检状态"
+    static let title: LocalizedStringResource = "Check Followed Projects"
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let projects = await ShortcutProjectData.cachedProjects()
@@ -65,29 +65,29 @@ struct FocusedFizzDoctorIntent: AppIntent {
             let checked: String
             if let latest = reports[entry.id] {
                 report = latest
-                checked = "体检正常"
+                checked = FizzL10n.text("体检正常", "All checks passed")
             } else {
                 report = await DoctorService.inspectL0(entry.project, exemptions: exemptions[entry.id] ?? [])
-                checked = "轻量体检正常"
+                checked = FizzL10n.text("轻量体检正常", "Quick checks passed")
             }
-            let status = report.actionableCount == 0 ? checked : report.issues.map(\.title).joined(separator: "；")
-            lines.append("\(entry.project.displayName)：\(status)")
+            let status = report.actionableCount == 0 ? checked : report.issues.map(\.title).joined(separator: FizzL10n.text("；", "; "))
+            lines.append(entry.project.displayName + FizzL10n.text("：", ": ") + status)
         }
-        return .result(value: lines.isEmpty ? "没有已扫描的关注项目" : lines.joined(separator: "\n"))
+        return .result(value: lines.isEmpty ? FizzL10n.text("没有已扫描的关注项目", "No followed projects have been scanned") : lines.joined(separator: "\n"))
     }
 }
 
 struct FizzDeckShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: OpenFizzProjectIntent(), phrases: ["在 \(.applicationName) 打开项目"], shortTitle: "打开项目", systemImageName: "folder")
-        AppShortcut(intent: CopyFizzHandoffIntent(), phrases: ["用 \(.applicationName) 复制接力卡"], shortTitle: "复制接力卡", systemImageName: "doc.on.clipboard")
-        AppShortcut(intent: FocusedFizzDoctorIntent(), phrases: ["查看 \(.applicationName) 关注项目体检"], shortTitle: "关注项目体检", systemImageName: "stethoscope")
+        AppShortcut(intent: OpenFizzProjectIntent(), phrases: ["Open a project in \(.applicationName)"], shortTitle: "Open Project", systemImageName: "folder")
+        AppShortcut(intent: CopyFizzHandoffIntent(), phrases: ["Copy a handoff card with \(.applicationName)"], shortTitle: "Copy Handoff Card", systemImageName: "doc.on.clipboard")
+        AppShortcut(intent: FocusedFizzDoctorIntent(), phrases: ["Check followed projects in \(.applicationName)"], shortTitle: "Check Followed Projects", systemImageName: "stethoscope")
     }
 }
 
 private enum ShortcutProjectError: LocalizedError {
     case unavailable
-    var errorDescription: String? { "项目未加入 FizzDeck 或尚未完成扫描。" }
+    var errorDescription: String? { FizzL10n.text("项目未加入 FizzDeck 或尚未完成扫描。", "This project hasn’t been added to FizzDeck or hasn’t been scanned yet.") }
 }
 
 enum ShortcutProjectData {

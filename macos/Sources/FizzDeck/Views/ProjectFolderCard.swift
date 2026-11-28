@@ -15,8 +15,8 @@ struct ProjectFolderCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FizzSpacing.row) {
-            if showsCoverPreview, let artwork = project.artwork {
-                LibraryCoverPreview(path: artwork)
+            if showsCoverPreview {
+                LibraryCoverPreview(project: project)
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
 
@@ -43,12 +43,12 @@ struct ProjectFolderCard: View {
 
                         if project.dirtyCount > 0 {
                             TagChip(
-                                text: "\(project.dirtyCount) 处改动",
+                                text: FizzL10n.text("\(project.dirtyCount) 处改动", SessionSummaryText.englishCount(project.dirtyCount, "change")),
                                 tint: FizzTheme.statusWarning,
                                 compact: true
                             )
                             .fixedSize()
-                            .help("\(project.dirtyCount) 处未提交改动")
+                            .help(FizzL10n.text("\(project.dirtyCount) 处未提交改动", "\(project.dirtyCount) uncommitted \(project.dirtyCount == 1 ? "change" : "changes")"))
                         }
                     }
                 }
@@ -64,7 +64,7 @@ struct ProjectFolderCard: View {
                     .accessibilityHidden(true)
                 } else if project.port == .running {
                     PortStatusBadge(state: project.port, port: project.run?.port)
-                } else if !showsCoverPreview, let artwork = project.artwork {
+                } else if !showsCoverPreview, let artwork = project.artwork, !artwork.isEmpty {
                     LibraryCoverMiniThumbnail(path: artwork)
                 }
             }
@@ -93,7 +93,7 @@ struct ProjectFolderCard: View {
         .padding(FizzSpacing.card)
         .frame(
             maxWidth: .infinity,
-            minHeight: showsCoverPreview && project.artwork != nil ? 188 : 122,
+            minHeight: showsCoverPreview ? 188 : 122,
             maxHeight: .infinity,
             alignment: .topLeading
         )
@@ -137,19 +137,19 @@ struct ProjectFolderCard: View {
                 }
         )
         .help(selecting
-            ? (selected ? "取消选择 \(project.displayName)" : "选择 \(project.displayName)")
-            : "打开 \(project.displayName)")
+            ? (selected ? FizzL10n.text("取消选择 \(project.displayName)", "Deselect \(project.displayName)") : FizzL10n.text("选择 \(project.displayName)", "Select \(project.displayName)"))
+            : FizzL10n.text("打开 \(project.displayName)", "Open \(project.displayName)"))
         .accessibilityLabel(selecting
-            ? (selected ? "取消选择 \(project.displayName)" : "选择 \(project.displayName)")
-            : "打开 \(project.displayName)")
-        .accessibilityHint(selecting ? "点击或按空格切换选择" : "点击或按回车打开项目详情，Command 加回车继续最近 AI 会话")
+            ? (selected ? FizzL10n.text("取消选择 \(project.displayName)", "Deselect \(project.displayName)") : FizzL10n.text("选择 \(project.displayName)", "Select \(project.displayName)"))
+            : FizzL10n.text("打开 \(project.displayName)", "Open \(project.displayName)"))
+        .accessibilityHint(selecting ? FizzL10n.text("点击或按空格切换选择", "Click or press Space to toggle selection") : FizzL10n.text("点击或按回车打开项目详情，Command 加回车继续最近 AI 会话", "Press Return to open project details, or Command-Return to resume the latest AI session"))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .contextMenu {
-            Button(project.starred ? "取消星标" : "设为星标") {
+            Button(project.starred ? FizzL10n.text("取消星标", "Unstar") : FizzL10n.text("设为星标", "Star")) {
                 store.toggleStar(project)
             }
-            Menu("标签颜色") {
-                Button("无标签") { store.setColor(nil, for: project) }
+            Menu(FizzL10n.text("标签颜色", "Tag color")) {
+                Button(FizzL10n.text("无标签", "No tag")) { store.setColor(nil, for: project) }
                 ForEach(TagColor.allCases) { color in
                     Button(color.label) { store.setColor(color, for: project) }
                 }
@@ -162,9 +162,9 @@ struct ProjectFolderCard: View {
 
     private var projectSubtitle: String {
         if let branch = project.branch {
-            return "\(project.group) · \(branch)"
+            return "\(project.groupTitle) · \(branch)"
         }
-        return project.group
+        return project.groupTitle
     }
 
     private var primaryDetail: String {
@@ -174,22 +174,74 @@ struct ProjectFolderCard: View {
     }
 
     private var firstStack: String? {
-        project.stacks.first?.items.first
+        project.stacks.first?.displayItems.first
     }
 }
 
 private struct LibraryCoverPreview: View {
-    let path: String
+    @Environment(\.calendar) private var calendar
+    let project: RepoProject
 
     var body: some View {
-        LibraryCoverImage(path: path)
-            .frame(maxWidth: .infinity)
+        let outline = RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
+        Rectangle()
+            .fill(FizzTheme.recessedFill)
             .frame(height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: FizzRadius.inset, style: .continuous)
-                    .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+                if let path = project.artwork, !path.isEmpty {
+                    LibraryCoverImage(path: path) { raster }
+                } else {
+                    raster
+                }
             }
+            .clipShape(outline)
+            .overlay { outline.strokeBorder(FizzTheme.stroke, lineWidth: 1) }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    private var raster: some View {
+        let pattern = ProjectRasterPattern(
+            weekly: project.weekly, sessions: project.sessions.recentSessions, now: .now, calendar: calendar
+        )
+        let ink = ProjectAccentColor.color(for: project.path)
+        return Canvas { context, size in
+            var path = Path()
+            path.addRects(pattern.bars(in: size))
+            context.fill(path, with: .color(ink))
+        }
+        .padding(FizzSpacing.row)
+    }
+}
+
+struct ProjectRasterPattern {
+    let dailyActivity: [Double]
+
+    init(weekly: [String: Int], sessions: [SessionRecord], now: Date, calendar: Calendar) {
+        let start = DashboardMetrics.sevenDayWindowStart(now: now, calendar: calendar)
+        let window = calendar.startOfDay(for: start)...now
+        var conversations: [String: Int] = [:]
+        for session in sessions where session.kind == .conversation && window.contains(session.modified) {
+            let key = WorkbenchMetrics.dayKey(session.modified, calendar: calendar)
+            conversations[key, default: 0] += 1
+        }
+        dailyActivity = WorkbenchMetrics.lastSevenDays(counts: weekly, now: now, calendar: calendar).map { day in
+            Double(day.count) + Double(conversations[day.key, default: 0])
+        }
+    }
+
+    func bars(in size: CGSize) -> [CGRect] {
+        guard size.width > 0, size.height > 0 else { return [] }
+        let barsPerDay = 6
+        let count = dailyActivity.count * barsPerDay
+        let pitch = size.width / CGFloat(count)
+        let width = min(3, pitch / 2)
+        let heights = dailyActivity.map { min(size.height, 2 + 8 * CGFloat(log2(1 + $0))) }
+        return (0..<count).map { index in
+            let height = heights[index / barsPerDay]
+            let center = (CGFloat(index) + 0.5) * pitch
+            return CGRect(x: center - width / 2, y: (size.height - height) / 2, width: width, height: height)
+        }
     }
 }
 
@@ -197,48 +249,50 @@ private struct LibraryCoverMiniThumbnail: View {
     let path: String
 
     var body: some View {
-        LibraryCoverImage(path: path)
-            .frame(width: 46, height: 28)
-            .clipShape(RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous)
-                    .strokeBorder(FizzTheme.stroke, lineWidth: 1)
-            }
+        LibraryCoverImage(path: path) {
+            FizzIcon(.sm, symbol: "photo")
+                .foregroundStyle(.tertiary)
+        }
+        .frame(width: 46, height: 28)
+        .background(FizzTheme.recessedFill)
+        .clipShape(RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: FizzRadius.micro, style: .continuous)
+                .strokeBorder(FizzTheme.stroke, lineWidth: 1)
+        }
     }
 }
 
-private struct LibraryCoverImage: View {
+private struct LibraryCoverImage<Placeholder: View>: View {
     let path: String
+    @ViewBuilder let placeholder: () -> Placeholder
 
     @State private var image: NSImage?
 
     var body: some View {
         ZStack {
-            Rectangle()
-                .fill(FizzTheme.recessedFill)
-
             if let image {
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.medium)
                     .scaledToFill()
             } else {
-                FizzIcon(.sm, symbol: "photo")
-                    .foregroundStyle(.tertiary)
+                placeholder()
             }
         }
         .task(id: path) {
             image = nil
-            let data: Data? = await Task.detached(priority: .utility) { () -> Data? in
-                guard let value = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
-                    return nil
-                }
-                return Task.isCancelled ? nil : value
-            }.value
+            let data = await loadLibraryCoverData(at: path)
             guard !Task.isCancelled, let data else { return }
             image = NSImage(data: data)
         }
     }
+}
+
+private func loadLibraryCoverData(at path: String) async -> Data? {
+    await Task.detached(priority: .utility) { [path] in
+        try? Data(contentsOf: URL(fileURLWithPath: path))
+    }.value
 }
 
 struct HomeToolBadge: View {

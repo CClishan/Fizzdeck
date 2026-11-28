@@ -301,34 +301,34 @@ enum GitService {
 
     static func stage(_ paths: [String], in directory: URL) async -> GitActionResult {
         guard !paths.isEmpty else {
-            return GitActionResult(succeeded: false, message: "没有可暂存的文件")
+            return GitActionResult(succeeded: false, message: FizzL10n.text("没有可暂存的文件", "No files to stage"))
         }
         return await runWrite(
             ["add", "--"] + paths,
             in: directory,
-            successMessage: paths.count == 1 ? "已暂存 1 个文件" : "已暂存 \(paths.count) 个文件"
+            successMessage: paths.count == 1 ? FizzL10n.text("已暂存 1 个文件", "Staged 1 file") : FizzL10n.text("已暂存 \(paths.count) 个文件", "Staged \(paths.count) files")
         )
     }
 
     static func stageAll(in directory: URL) async -> GitActionResult {
-        await runWrite(["add", "-A", "--", "."], in: directory, successMessage: "已暂存全部改动")
+        await runWrite(["add", "-A", "--", "."], in: directory, successMessage: FizzL10n.text("已暂存全部改动", "Staged all changes"))
     }
 
     static func unstage(_ paths: [String], in directory: URL) async -> GitActionResult {
         guard !paths.isEmpty else {
-            return GitActionResult(succeeded: false, message: "没有可取消暂存的文件")
+            return GitActionResult(succeeded: false, message: FizzL10n.text("没有可取消暂存的文件", "No files to unstage"))
         }
         if await hasHead(in: directory) {
             return await runWrite(
                 ["restore", "--staged", "--"] + paths,
                 in: directory,
-                successMessage: paths.count == 1 ? "已取消暂存 1 个文件" : "已取消暂存 \(paths.count) 个文件"
+                successMessage: paths.count == 1 ? FizzL10n.text("已取消暂存 1 个文件", "Unstaged 1 file") : FizzL10n.text("已取消暂存 \(paths.count) 个文件", "Unstaged \(paths.count) files")
             )
         }
         return await runWrite(
             ["rm", "--cached", "-r", "--"] + paths,
             in: directory,
-            successMessage: "已从初始索引移除暂存"
+            successMessage: FizzL10n.text("已从初始索引移除暂存", "Removed staged files from the initial index")
         )
     }
 
@@ -337,23 +337,23 @@ enum GitService {
             return await runWrite(
                 ["restore", "--staged", "--", "."],
                 in: directory,
-                successMessage: "已取消全部暂存"
+                successMessage: FizzL10n.text("已取消全部暂存", "Unstaged all changes")
             )
         }
         return await runWrite(
             ["rm", "--cached", "-r", "--", "."],
             in: directory,
-            successMessage: "已清空初始索引"
+            successMessage: FizzL10n.text("已清空初始索引", "Cleared the initial index")
         )
     }
 
     static func commit(_ message: String, in directory: URL) async -> GitActionResult {
         let value = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
-            return GitActionResult(succeeded: false, message: "先填写一行提交信息")
+            return GitActionResult(succeeded: false, message: FizzL10n.text("先填写一行提交信息", "Enter a one-line commit message."))
         }
         guard !value.contains(where: \.isNewline) else {
-            return GitActionResult(succeeded: false, message: "提交信息只能是一行")
+            return GitActionResult(succeeded: false, message: FizzL10n.text("提交信息只能是一行", "The commit message must be a single line."))
         }
         guard let result = await Shell.run(
             "git",
@@ -362,12 +362,12 @@ enum GitService {
             timeout: 120,
             extraEnvironment: ["GIT_TERMINAL_PROMPT": "0"]
         ) else {
-            return GitActionResult(succeeded: false, message: "提交失败：无法启动 git")
+            return GitActionResult(succeeded: false, message: FizzL10n.text("提交失败：无法启动 git", "Commit failed: could not start Git"))
         }
         guard result.succeeded else {
-            return GitActionResult(succeeded: false, message: failureMessage("提交", result))
+            return GitActionResult(succeeded: false, message: failureMessage(FizzL10n.text("提交", "Commit"), result))
         }
-        return GitActionResult(succeeded: true, message: "已提交：\(value)", didMutate: true)
+        return GitActionResult(succeeded: true, message: FizzL10n.text("已提交：\(value)", "Committed: \(value)"), didMutate: true)
     }
 
     static func commitAndPush(_ message: String, in directory: URL) async -> GitActionResult {
@@ -378,13 +378,13 @@ enum GitService {
         guard pushResult.succeeded else {
             return GitActionResult(
                 succeeded: false,
-                message: "已提交，但推送失败：\(pushResult.message)",
+                message: FizzL10n.text("已提交，但推送失败：\(pushResult.message)", "Committed locally. \(pushResult.message)"),
                 didMutate: true
             )
         }
         return GitActionResult(
             succeeded: true,
-            message: "已提交并推送：\(message)",
+            message: FizzL10n.text("已提交并推送：\(message)", "Committed and pushed: \(message)"),
             didMutate: true
         )
     }
@@ -394,7 +394,7 @@ enum GitService {
         return await runWrite(
             ["stash", "push", "--include-untracked", "-m", "FizzDeck \(stamp)"],
             in: directory,
-            successMessage: "已暂存当前改动"
+            successMessage: FizzL10n.text("已暂存当前改动", "Stashed current changes")
         )
     }
 
@@ -402,7 +402,7 @@ enum GitService {
         await runWrite(
             ["stash", "pop"],
             in: directory,
-            successMessage: "已恢复最近一次 Stash",
+            successMessage: FizzL10n.text("已恢复最近一次 Stash", "Restored the latest stash"),
             timeout: 60
         )
     }
@@ -410,10 +410,10 @@ enum GitService {
     static func switchBranch(_ name: String, in directory: URL) async -> GitActionResult {
         let branch = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !branch.isEmpty else {
-            return GitActionResult(succeeded: false, message: "分支名为空")
+            return GitActionResult(succeeded: false, message: FizzL10n.text("分支名为空", "Enter a branch name."))
         }
         guard !branch.hasPrefix("-") else {
-            return GitActionResult(succeeded: false, message: "非法分支名")
+            return GitActionResult(succeeded: false, message: FizzL10n.text("非法分支名", "Invalid branch name"))
         }
         guard let validation = await Shell.run(
             "git",
@@ -421,12 +421,12 @@ enum GitService {
             cwd: directory,
             timeout: 10
         ), validation.succeeded else {
-            return GitActionResult(succeeded: false, message: "非法分支名：\(branch)")
+            return GitActionResult(succeeded: false, message: FizzL10n.text("非法分支名：\(branch)", "Invalid branch name: \(branch)"))
         }
         return await runWrite(
             ["switch", branch],
             in: directory,
-            successMessage: "已切换到 \(branch)"
+            successMessage: FizzL10n.text("已切换到 \(branch)", "Switched to \(branch)")
         )
     }
 
@@ -450,7 +450,7 @@ enum GitService {
                 let parsed = parseUnifiedDiff(output.text, maxLines: maxDiffLines)
                 if !parsed.lines.isEmpty {
                     sections.append(
-                        GitDiffSection(id: "staged", title: "已暂存", lines: parsed.lines)
+                        GitDiffSection(id: "staged", title: FizzL10n.text("已暂存", "Staged"), lines: parsed.lines)
                     )
                 }
                 additions += parsed.additions
@@ -470,7 +470,7 @@ enum GitService {
                 let parsed = parseUnifiedDiff(output.text, maxLines: maxDiffLines)
                 if !parsed.lines.isEmpty {
                     sections.append(
-                        GitDiffSection(id: "working", title: "工作区", lines: parsed.lines)
+                        GitDiffSection(id: "working", title: FizzL10n.text("工作区", "Workspace"), lines: parsed.lines)
                     )
                 }
                 additions += parsed.additions
@@ -488,7 +488,7 @@ enum GitService {
             deletions: deletions,
             truncated: truncated,
             binary: binary,
-            note: binary ? "二进制文件仅显示状态，不展开内容。" : nil
+            note: binary ? FizzL10n.text("二进制文件仅显示状态，不展开内容。", "Binary file: status only, no content preview.") : nil
         )
     }
 
@@ -588,7 +588,7 @@ enum GitService {
                 deletions: 0,
                 truncated: false,
                 binary: false,
-                note: "未跟踪文件指向仓库外，已拒绝预览。"
+                note: FizzL10n.text("未跟踪文件指向仓库外，已拒绝预览。", "The untracked file points outside the repository. Preview blocked.")
             )
         }
 
@@ -600,7 +600,7 @@ enum GitService {
                 deletions: 0,
                 truncated: false,
                 binary: false,
-                note: "无法读取未跟踪文件。"
+                note: FizzL10n.text("无法读取未跟踪文件。", "Couldn’t read the untracked file.")
             )
         }
         defer { try? handle.close() }
@@ -618,7 +618,7 @@ enum GitService {
                 deletions: 0,
                 truncated: truncated,
                 binary: true,
-                note: "二进制文件仅显示状态，不展开内容。"
+                note: FizzL10n.text("二进制文件仅显示状态，不展开内容。", "Binary file: status only, no content preview.")
             )
         }
 
@@ -639,7 +639,7 @@ enum GitService {
         return GitFileDiff(
             path: change.path,
             sections: [
-                GitDiffSection(id: "untracked", title: "未跟踪文件", lines: lines),
+                GitDiffSection(id: "untracked", title: FizzL10n.text("未跟踪文件", "Untracked file"), lines: lines),
             ],
             additions: limited.count,
             deletions: 0,
@@ -718,30 +718,30 @@ enum GitService {
             timeout: timeout,
             extraEnvironment: ["GIT_TERMINAL_PROMPT": "0"]
         ) else {
-            return GitActionResult(succeeded: false, message: "无法启动 git")
+            return GitActionResult(succeeded: false, message: FizzL10n.text("无法启动 git", "Couldn’t start Git"))
         }
         guard result.succeeded else {
-            return GitActionResult(succeeded: false, message: failureMessage("操作", result))
+            return GitActionResult(succeeded: false, message: failureMessage(FizzL10n.text("操作", "Operation"), result))
         }
         return GitActionResult(succeeded: true, message: successMessage, didMutate: true)
     }
 
     private static func failureMessage(_ action: String, _ result: ShellOutput) -> String {
         if result.timedOut {
-            return "\(action)超时，检查网络、代理或 Git 凭据"
+            return FizzL10n.text("\(action)超时，检查网络、代理或 Git 凭据", "\(action) timed out. Check your network, proxy or Git credentials.")
         }
         let lowercased = result.text.lowercased()
         if lowercased.contains("nothing to commit") {
-            return "\(action)失败：没有可提交的暂存改动"
+            return FizzL10n.text("\(action)失败：没有可提交的暂存改动", "\(action) failed: no staged changes to commit.")
         }
         if lowercased.contains("no local changes") {
-            return "\(action)失败：当前没有可暂存的改动"
+            return FizzL10n.text("\(action)失败：当前没有可暂存的改动", "\(action) failed: no changes to stage.")
         }
         if lowercased.contains("conflict") {
-            return "\(action)失败：存在冲突，先在终端处理冲突文件"
+            return FizzL10n.text("\(action)失败：存在冲突，先在终端处理冲突文件", "\(action) failed: resolve the conflicting files in Terminal first.")
         }
         if lowercased.contains("not a git repository") {
-            return "\(action)失败：当前目录不是 Git 仓库"
+            return FizzL10n.text("\(action)失败：当前目录不是 Git 仓库", "\(action) failed: this folder is not a Git repository.")
         }
         let lines = result.text
             .split(whereSeparator: \.isNewline)
@@ -749,11 +749,11 @@ enum GitService {
             .filter { !$0.isEmpty && !$0.hasPrefix("hint:") }
         let detail = lines.first(where: { $0.hasPrefix("fatal:") || $0.hasPrefix("error:") })
             ?? lines.last
-            ?? "退出状态 \(result.status)"
+            ?? FizzL10n.text("退出状态 \(result.status)", "Exit status \(result.status)")
         let cleaned = detail
             .replacingOccurrences(of: "fatal: ", with: "")
             .replacingOccurrences(of: "error: ", with: "")
-        return "\(action)失败：\(String(cleaned.prefix(160)))"
+        return FizzL10n.text("\(action)失败：\(String(cleaned.prefix(160)))", "\(action) failed: \(String(cleaned.prefix(160)))")
     }
 
     private static func shellQuote(_ value: String) -> String {

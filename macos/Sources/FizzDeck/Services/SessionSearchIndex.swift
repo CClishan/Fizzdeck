@@ -15,6 +15,12 @@ struct SessionSearchResult: Identifiable, Equatable, Sendable {
     let modified: Date
     let endedWithError: Bool
     let matchedSnippet: String?
+
+    var displayTitle: String {
+        guard primaryIntent.isEmpty else { return primaryIntent }
+        let name = HomeDashboardModel.toolTitle(tool)
+        return FizzL10n.text("\(name) 会话", "\(name) session")
+    }
 }
 
 struct SessionSearchDocument: Sendable, Equatable {
@@ -38,7 +44,7 @@ struct SessionSearchDocument: Sendable, Equatable {
         session: SessionRecord,
         aiSummaryHeadline: String? = nil
     ) {
-        let intentRaw = session.primaryIntent ?? "\(HomeDashboardModel.toolTitle(session.tool)) 会话"
+        let intentRaw = session.primaryIntent ?? ""
         let cleanIntent = SecretRedactor.redact(String(intentRaw.prefix(400))).text
         let cleanLastUser = SecretRedactor.redact(String((session.lastUser ?? "").prefix(400))).text
         let cleanAI = SecretRedactor.redact(String((aiSummaryHeadline ?? "").prefix(300))).text
@@ -437,7 +443,7 @@ actor SessionSearchIndex {
     ) -> String? {
         let lowerTerms = queryTerms.map { $0.lowercased() }
         if !lastError.isEmpty, lowerTerms.contains(where: { lastError.lowercased().contains($0) }) {
-            return "命中报错：\(String(lastError.prefix(70)))"
+            return FizzL10n.text("命中报错：\(String(lastError.prefix(70)))", "Error: \(String(lastError.prefix(70)))")
         }
         if !aiSummary.isEmpty, lowerTerms.contains(where: { aiSummary.lowercased().contains($0) }) {
             return "✦ \(String(aiSummary.prefix(70)))"
@@ -449,13 +455,13 @@ actor SessionSearchIndex {
             let fileTokens = (lines.count > 1 ? lines : touchedFiles.split(separator: " ").map(String.init))
                 .filter { token in lowerTerms.contains { token.lowercased().contains($0) } }
             if let first = fileTokens.first {
-                return "命中文件：\(URL(fileURLWithPath: first).lastPathComponent)"
+                return FizzL10n.text("命中文件：\(URL(fileURLWithPath: first).lastPathComponent)", "File: \(URL(fileURLWithPath: first).lastPathComponent)")
             }
         }
         if !lastUser.isEmpty,
            lastUser != primaryIntent,
            lowerTerms.contains(where: { lastUser.lowercased().contains($0) }) {
-            return "对话提及：\(String(lastUser.prefix(70)))"
+            return FizzL10n.text("对话提及：\(String(lastUser.prefix(70)))", "Mention: \(String(lastUser.prefix(70)))")
         }
         return nil
     }

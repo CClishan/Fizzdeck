@@ -24,14 +24,14 @@ struct SessionCostTotal: Equatable, Sendable {
     var amount: Double? { priced > 0 ? subtotal : nil }
 
     var amountLabel: String {
-        guard let amount else { return unpriced > 0 ? "未计价" : "无会话" }
+        guard let amount else { return unpriced > 0 ? FizzL10n.text("未计价", "Unpriced") : FizzL10n.text("无会话", "No sessions") }
         return Format.cost(amount, estimated: amount > 0) ?? "—"
     }
 
     var isPartial: Bool { priced > 0 && unpriced > 0 }
 
     var description: String {
-        isPartial ? "\(amountLabel)（另有 \(unpriced) 次未计价）" : amountLabel
+        isPartial ? FizzL10n.text("\(amountLabel)（另有 \(unpriced) 次未计价）", "\(amountLabel) (\(unpriced) unpriced)") : amountLabel
     }
 }
 

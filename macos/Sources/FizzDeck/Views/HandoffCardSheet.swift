@@ -13,7 +13,7 @@ struct HandoffCopyButton: View {
 
     var body: some View {
         FizzActionButton(
-            title: copied ? "已复制" : "复制接力卡",
+            title: copied ? FizzL10n.text("已复制", "Copied") : FizzL10n.text("复制接力卡", "Copy Handoff"),
             symbol: copied ? "checkmark" : "doc.on.clipboard",
             height: compact ? .compact : .standard
         ) {
@@ -23,8 +23,8 @@ struct HandoffCopyButton: View {
                 copyNow()
             }
         }
-        .help("复制项目进度给任意 AI 接着做（按住 ⌥ 点击可预览）")
-        .accessibilityLabel("复制接力卡")
+        .help(FizzL10n.text("复制项目进度给任意 AI 接着做（按住 ⌥ 点击可预览）", "Copy project context for another AI. Option-click to preview."))
+        .accessibilityLabel(FizzL10n.text("复制接力卡", "Copy Handoff"))
         .sheet(isPresented: $showingPreview) {
             HandoffCardSheet(project: project, initialLimit: sessionLimit)
         }
@@ -39,15 +39,15 @@ struct HandoffCopyButton: View {
         SystemActions.copy(result.markdown, feedback: nil)
 
         let subtitle = result.redactedCount > 0
-            ? "\(result.characterCount) 字 · 已打码 \(result.redactedCount) 处密钥"
-            : "\(result.characterCount) 字 · 含 \(result.includedSessionCount) 次对话"
+            ? FizzL10n.text("\(result.characterCount) 字 · 已打码 \(result.redactedCount) 处密钥", "\(SessionSummaryText.englishCount(result.characterCount, "character")) · \(SessionSummaryText.englishCount(result.redactedCount, "secret")) redacted")
+            : FizzL10n.text("\(result.characterCount) 字 · 含 \(result.includedSessionCount) 次对话", "\(SessionSummaryText.englishCount(result.characterCount, "character")) · \(SessionSummaryText.englishCount(result.includedSessionCount, "session"))")
 
         ToastCenter.shared.show(
-            "接力卡已复制",
+            FizzL10n.text("接力卡已复制", "Handoff copied"),
             symbol: "doc.on.clipboard.fill",
             tint: Color.secondary,
             subtitle: subtitle,
-            action: ToastAction(title: "预览", symbol: "eye") {
+            action: ToastAction(title: FizzL10n.text("预览", "Preview"), symbol: "eye") {
                 showingPreview = true
             }
         )
@@ -71,8 +71,8 @@ struct HandoffCardSheet: View {
 
         var title: String {
             switch self {
-            case .rule: "规则版"
-            case .ai: "✦ AI 版"
+            case .rule: FizzL10n.text("规则版", "Local")
+            case .ai: FizzL10n.text("✦ AI 版", "✦ AI")
             }
         }
     }
@@ -145,7 +145,7 @@ struct HandoffCardSheet: View {
         let markdown = polished ?? rule.markdown
 
         VStack(spacing: 0) {
-            FizzSheetHeader(title: "接力卡预览", subtitle: SecretRedactor.redact(project.displayName).text) { dismiss() }
+            FizzSheetHeader(title: FizzL10n.text("接力卡预览", "Handoff Preview"), subtitle: SecretRedactor.redact(project.displayName).text) { dismiss() }
                 .padding(.horizontal, FizzSpacing.page)
                 .padding(.vertical, FizzSpacing.panel)
 
@@ -155,12 +155,12 @@ struct HandoffCardSheet: View {
                 previewControls
                 if !waitingForRepair {
                     HStack(spacing: FizzSpacing.row) {
-                        let sessionCount = scenario == .resume ? " · 含最近 \(rule.includedSessionCount) 次对话" : ""
-                        Text("\(markdown.count) 字\(sessionCount)")
+                        let sessionCount = scenario == .resume ? FizzL10n.text(" · 含最近 \(rule.includedSessionCount) 次对话", " · \(SessionSummaryText.englishCount(rule.includedSessionCount, "recent session"))") : ""
+                        Text(FizzL10n.text("\(markdown.count) 字\(sessionCount)", "\(SessionSummaryText.englishCount(markdown.count, "character"))\(sessionCount)"))
                             .font(FizzTypography.caption)
                             .foregroundStyle(.secondary)
                         if rule.redactedCount > 0 {
-                            TagChip(text: "已自动打码 \(rule.redactedCount) 处密钥", compact: true)
+                            TagChip(text: FizzL10n.text("已自动打码 \(rule.redactedCount) 处密钥", "\(SessionSummaryText.englishCount(rule.redactedCount, "secret")) redacted"), compact: true)
                         }
                     }
                 }
@@ -196,6 +196,7 @@ struct HandoffCardSheet: View {
             if !canUseAI { resetAI() }
         }
         .onChange(of: sessionLimit) { resetAI() }
+        .onChange(of: FizzL10n.isEnglish) { resetAI() }
         .onChange(of: copyMode) { resetAI() }
         .onChange(of: project.path) { resetAI() }
         .onDisappear {
@@ -205,14 +206,14 @@ struct HandoffCardSheet: View {
 
     private var previewControls: some View {
         VStack(alignment: .leading, spacing: FizzSpacing.row) {
-            previewPicker("接力场景", items: HandoffCardScenario.allCases, selection: scenarioSelection) { $0.title }
+            previewPicker(FizzL10n.text("接力场景", "Handoff type"), items: HandoffCardScenario.allCases, selection: scenarioSelection) { $0.title }
             if scenario == .resume {
                 HStack(spacing: FizzSpacing.row) {
                     if canUseAI {
-                        previewPicker("版本", items: Edition.allCases, selection: editionSelection) { $0.title }
-                            .help("选择 AI 版会发送脱敏后的项目接力信息进行润色")
+                        previewPicker(FizzL10n.text("版本", "Version"), items: Edition.allCases, selection: editionSelection) { $0.title }
+                            .help(FizzL10n.text("选择 AI 版会发送脱敏后的项目接力信息进行润色", "Send the redacted handoff to your AI provider for editing."))
                     }
-                    previewPicker("对话条数", items: [1, 3, 5], selection: $sessionLimit) { "最近 \($0) 次" }
+                    previewPicker(FizzL10n.text("对话条数", "Sessions to include"), items: [1, 3, 5], selection: $sessionLimit) { FizzL10n.text("最近 \($0) 次", "Last \($0)") }
                 }
             }
         }
@@ -220,17 +221,17 @@ struct HandoffCardSheet: View {
 
     private func footer(_ markdown: String) -> some View {
         FizzSheetFooter {
-            FizzActionButton(title: "复制并打开终端", symbol: "terminal", height: .standard, prominence: .primary) {
+            FizzActionButton(title: FizzL10n.text("复制并打开终端", "Copy and Open Terminal"), symbol: "terminal", height: .standard, prominence: .primary) {
                 copy(markdown) { SystemActions.openTerminal(project.path) }
             }
             .keyboardShortcut(.defaultAction)
 
-            FizzMenuButton(title: "其他复制方式", symbol: "chevron.down", height: .standard) {
-                Button("只复制", systemImage: "doc.on.clipboard") { copy(markdown) }
+            FizzMenuButton(title: FizzL10n.text("其他复制方式", "More Options"), symbol: "chevron.down", height: .standard) {
+                Button(FizzL10n.text("只复制", "Copy Only"), systemImage: "doc.on.clipboard") { copy(markdown) }
                 if !editors.isEmpty {
                     Divider()
                     ForEach(editors) { editor in
-                        Button("复制并打开 \(editor.title)") {
+                        Button(FizzL10n.text("复制并打开 \(editor.title)", "Copy and Open \(editor.title)")) {
                             copy(markdown) { SystemActions.open(project.path, in: editor) }
                         }
                     }
@@ -242,8 +243,8 @@ struct HandoffCardSheet: View {
     private func copy(_ markdown: String, then open: () -> Void = {}) {
         let text = SecretRedactor.redact(markdown).text
         SystemActions.copy(text, feedback: nil)
-        ToastCenter.shared.show("接力卡已复制", symbol: "doc.on.clipboard.fill", tint: FizzTheme.statusSuccess,
-                                subtitle: "\(text.count) 字")
+        ToastCenter.shared.show(FizzL10n.text("接力卡已复制", "Handoff copied"), symbol: "doc.on.clipboard.fill", tint: FizzTheme.statusSuccess,
+                                subtitle: FizzL10n.text("\(text.count) 字", "\(SessionSummaryText.englishCount(text.count, "character"))"))
         open()
         dismiss()
     }
@@ -267,7 +268,7 @@ struct HandoffCardSheet: View {
             HStack(spacing: FizzSpacing.row) {
                 ProgressView()
                     .controlSize(.mini)
-                Text("AI 仍在整理中，先显示规则版，不用干等…")
+                Text(FizzL10n.text("AI 仍在整理中，先显示规则版，不用干等…", "Showing the local version while AI finishes…"))
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -275,10 +276,10 @@ struct HandoffCardSheet: View {
             HStack(spacing: FizzSpacing.row) {
                 FizzIcon(.sm, symbol: "sparkles")
                     .foregroundStyle(Color.secondary)
-                Text("AI 版已就绪")
+                Text(FizzL10n.text("AI 版已就绪", "The AI version is ready."))
                     .font(FizzTypography.caption(.medium))
                 Spacer()
-                FizzActionButton(title: "切换查看", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("切换查看", "Show AI Version"), height: .compact) {
                     aiTimedOutToRule = false
                     aiReadyBanner = false
                 }
@@ -293,7 +294,7 @@ struct HandoffCardSheet: View {
             if waitingForRepair {
                 ProgressView()
                     .controlSize(.small)
-                    .accessibilityLabel("正在整理本地失败记录")
+                    .accessibilityLabel(FizzL10n.text("正在整理本地失败记录", "Gathering local error reports"))
                     .frame(maxWidth: .infinity, minHeight: 280)
             } else if canUseAI && showingAIShimmer {
                 VStack(alignment: .leading, spacing: FizzSpacing.row) {

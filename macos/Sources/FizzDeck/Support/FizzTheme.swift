@@ -11,9 +11,9 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .system: "跟随系统"
-        case .light: "浅色"
-        case .dark: "暗色"
+        case .system: FizzL10n.text("跟随系统", "Follow System")
+        case .light: FizzL10n.text("浅色", "Light")
+        case .dark: FizzL10n.text("暗色", "Dark")
         }
     }
 

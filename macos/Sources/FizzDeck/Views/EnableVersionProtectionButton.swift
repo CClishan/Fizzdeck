@@ -8,7 +8,7 @@ struct EnableVersionProtectionButton: View {
 
     var body: some View {
         FizzActionButton(
-            title: working ? "正在开启版本保护…" : "开启版本保护",
+            title: working ? FizzL10n.text("正在开启版本保护…", "Enabling protection…") : FizzL10n.text("开启版本保护", "Enable version protection"),
             symbol: "checkmark.shield",
             height: .compact,
             prominence: prominence

@@ -28,7 +28,7 @@ struct HomeProjectBrowser: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FizzSpacing.grid) {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
-                Text("项目")
+                Text(FizzL10n.text("项目", "Projects"))
                     .font(FizzTypography.font(15, weight: .semibold))
                     .accessibilityAddTraits(.isHeader)
                 Text("\(projects.count)")
@@ -62,29 +62,29 @@ struct HomeProjectBrowser: View {
             HStack(spacing: 8) {
                 FizzIcon(.md, symbol: "checkmark.circle")
                     .foregroundStyle(Color.secondary)
-                Text("已选 \(selectedCount) 个")
+                Text(FizzL10n.text("已选 \(selectedCount) 个", "\(selectedCount) selected"))
                     .font(FizzTypography.caption(.medium))
 
                 Spacer(minLength: 8)
 
-                FizzMenuButton(title: "更多批量操作") {
+                FizzMenuButton(title: FizzL10n.text("更多批量操作", "More actions for selected projects")) {
                     if let onBatchStar {
-                        Button(allSelectedStarred ? "取消星标" : "设星标") {
+                        Button(allSelectedStarred ? FizzL10n.text("取消星标", "Unstar") : FizzL10n.text("设星标", "Star")) {
                             onBatchStar(!allSelectedStarred)
                         }
                         .disabled(selectedCount == 0)
                     }
 
                     if let onBatchGroup {
-                        Menu("改分组") {
+                        Menu(FizzL10n.text("改分组", "Change group")) {
                             ForEach(knownGroups, id: \.self) { group in
-                                Button(group) { onBatchGroup(group) }
+                                Button(ProjectGrouping.title(for: group)) { onBatchGroup(group) }
                             }
                             if !knownGroups.isEmpty {
                                 Divider()
                             }
-                            Button("自动分组") { onBatchGroup(nil) }
-                            Button("自定义…") {
+                            Button(FizzL10n.text("自动分组", "Automatic group")) { onBatchGroup(nil) }
+                            Button(FizzL10n.text("自定义…", "Custom…")) {
                                 if let custom = SystemActions.promptForGroupName() {
                                     onBatchGroup(custom)
                                 }
@@ -94,23 +94,23 @@ struct HomeProjectBrowser: View {
                     }
 
                     if let onBatchFetch {
-                        Button("Fetch", action: onBatchFetch)
+                        Button(GitSyncAction.fetch.title, action: onBatchFetch)
                             .disabled(selectedCount == 0 || batchRunning || isScanning)
                     }
 
-                    Button("复制清理命令", action: onCopyCleanup)
+                    Button(FizzL10n.text("复制清理命令", "Copy cleanup commands"), action: onCopyCleanup)
                         .disabled(selectedCount == 0)
 
                     Divider()
 
-                    Button(allVisibleSelected ? "取消全选" : "全选", action: onToggleSelectAll)
+                    Button(allVisibleSelected ? FizzL10n.text("取消全选", "Deselect all") : FizzL10n.text("全选", "Select all"), action: onToggleSelectAll)
                         .disabled(projects.isEmpty)
-                    Button("清除", action: onClearSelection)
+                    Button(FizzL10n.text("清除", "Clear"), action: onClearSelection)
                         .disabled(selectedPaths.isEmpty)
                 }
 
                 FizzActionButton(
-                    title: batchRunning ? "扫描中…" : "重新扫描",
+                    title: batchRunning ? FizzL10n.text("扫描中…", "Scanning…") : FizzL10n.text("重新扫描", "Rescan"),
                     height: .compact,
                     action: onRescanSelected
                 )
@@ -123,7 +123,7 @@ struct HomeProjectBrowser: View {
                         .foregroundStyle(Color.secondary)
                     Text(batchFeedback)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .font(FizzTypography.micro)
             }

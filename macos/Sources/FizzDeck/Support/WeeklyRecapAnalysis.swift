@@ -16,8 +16,10 @@ enum WeeklyRecapRange: String, CaseIterable, Sendable {
     }
 
     var periodTitle: String {
-        days.map { "最近 \($0) 天" } ?? "全部已索引历史"
+        days.map { FizzL10n.text("最近 \($0) 天", "Last \($0) days") } ?? FizzL10n.text("全部已索引历史", "All indexed history")
     }
+
+    var shortTitle: String { FizzL10n.text(days.map { "\($0) 天" } ?? "全部", rawValue) }
 }
 
 enum WeeklyRecapMetric: CaseIterable, Sendable {
@@ -25,9 +27,9 @@ enum WeeklyRecapMetric: CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .sessions: "对话次数"
-        case .agentTime: "AI 干活时长"
-        case .cost: "估算费用"
+        case .sessions: FizzL10n.text("对话次数", "Sessions")
+        case .agentTime: FizzL10n.text("AI 干活时长", "Agent time")
+        case .cost: FizzL10n.text("估算费用", "Estimated cost")
         case .tokens: "Tokens"
         }
     }
@@ -36,16 +38,16 @@ enum WeeklyRecapMetric: CaseIterable, Sendable {
 
     func label(_ value: Double?) -> String {
         guard let value else { return "—" }
+        let whole = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0)).locale(FizzL10n.locale)
+        let decimal = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...1)).locale(FizzL10n.locale)
         switch self {
-        case .sessions: return value.formatted(.number.precision(.fractionLength(0)))
+        case .sessions: return value.formatted(whole)
         case .agentTime:
-            let seconds = value.formatted(.number.precision(.fractionLength(0)))
-            if value < 60 { return "\(seconds) 秒" }
-            if value < 3_600 { return "\((value / 60).formatted(.number.precision(.fractionLength(0...1)))) 分钟" }
-            let hours = (value / 3_600).formatted(.number.precision(.fractionLength(0...1)))
-            return "\(hours) 小时"
+            if value < 60 { return value.formatted(whole) + FizzL10n.text(" 秒", " sec") }
+            if value < 3_600 { return (value / 60).formatted(decimal) + FizzL10n.text(" 分钟", " min") }
+            return (value / 3_600).formatted(decimal) + FizzL10n.text(" 小时", " hr")
         case .cost: return Format.cost(value, estimated: true) ?? "—"
-        case .tokens: return value.formatted(.number.notation(.compactName))
+        case .tokens: return Format.compactCount(value, locale: FizzL10n.locale)
         }
     }
 }
@@ -84,12 +86,12 @@ struct WeeklyRecapTotals: Equatable, Sendable {
 
     func detail(_ metric: WeeklyRecapMetric) -> String {
         switch metric {
-        case .sessions: "本机记录的实际对话"
+        case .sessions: FizzL10n.text("本机记录的实际对话", "Sessions recorded on this Mac")
         case .cost:
-            cost.unpriced == 0 ? "按已知计价汇总"
-                : cost.priced == 0 ? "\(cost.unpriced) 次未计价" : "另有 \(cost.unpriced) 次未计价"
-        case .agentTime: timedSessions == 0 ? "无时长记录" : "\(timedSessions) 次有时长记录"
-        case .tokens: tokenSessions == 0 ? "无用量记录" : "\(tokenSessions) 次有用量记录"
+            cost.unpriced == 0 ? FizzL10n.text("按已知计价汇总", "Based on available pricing")
+                : cost.priced == 0 ? FizzL10n.text("\(cost.unpriced) 次未计价", "\(SessionSummaryText.englishCount(cost.unpriced, "unpriced session"))") : FizzL10n.text("另有 \(cost.unpriced) 次未计价", "Excludes \(SessionSummaryText.englishCount(cost.unpriced, "unpriced session"))")
+        case .agentTime: timedSessions == 0 ? FizzL10n.text("无时长记录", "No time recorded") : FizzL10n.text("\(timedSessions) 次有时长记录", "Time recorded for \(SessionSummaryText.englishCount(timedSessions, "session"))")
+        case .tokens: tokenSessions == 0 ? FizzL10n.text("无用量记录", "No usage recorded") : FizzL10n.text("\(tokenSessions) 次有用量记录", "Usage recorded for \(SessionSummaryText.englishCount(tokenSessions, "session"))")
         }
     }
 

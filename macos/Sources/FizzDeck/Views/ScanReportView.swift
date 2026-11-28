@@ -50,7 +50,7 @@ struct ScanReportView: View {
                 HStack(spacing: 6) {
                     FizzIcon(.sm, symbol: "info.circle")
                         .foregroundStyle(Color.secondary)
-                    Text("已达到单次预览上限（300 个候选），建议缩小目录范围或先加入常用项目。")
+                    Text(FizzL10n.text("已达到单次预览上限（300 个候选），建议缩小目录范围或先加入常用项目。", "Preview limit reached (300 projects). Narrow your search or add the projects you use first."))
                         .font(FizzTypography.micro(.regular))
                         .foregroundStyle(.secondary)
                 }
@@ -61,13 +61,13 @@ struct ScanReportView: View {
             }
 
             HStack(spacing: 10) {
-                Text("共发现 \(report.projects.count) 个项目 · 当前显示 \(filteredProjects.count) 个")
+                Text(FizzL10n.text("共发现 \(report.projects.count) 个项目 · 当前显示 \(filteredProjects.count) 个", "Found \(SessionSummaryText.englishCount(report.projects.count, "project")) · Showing \(filteredProjects.count)"))
                     .font(FizzTypography.micro(.regular))
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
-                Button("全选高置信") {
+                Button(FizzL10n.text("全选高置信", "Select high-confidence matches")) {
                     selected = ProjectDiscovery.defaultSelection(
                         projects: report.projects,
                         excluding: managedPaths,
@@ -78,7 +78,7 @@ struct ScanReportView: View {
                 .font(FizzTypography.micro(.regular))
                 .foregroundStyle(Color.secondary)
 
-                Button("清空") {
+                Button(FizzL10n.text("清空", "Clear selection")) {
                     selected.removeAll()
                 }
                 .buttonStyle(.plain)
@@ -89,9 +89,9 @@ struct ScanReportView: View {
 
             if groupedProjects.isEmpty {
                 ContentUnavailableView(
-                    "当前筛选下没有项目",
+                    FizzL10n.text("当前筛选下没有项目", "No projects match these filters"),
                     systemImage: "line.3.horizontal.decrease.circle",
-                    description: Text("切换或清除顶部筛选条件后再试。")
+                    description: Text(FizzL10n.text("切换或清除顶部筛选条件后再试。", "Change or clear the filters above."))
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -133,7 +133,7 @@ struct ScanReportView: View {
     private var filterChips: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                Text("识别工具")
+                Text(FizzL10n.text("识别工具", "Tools"))
                     .font(FizzTypography.caption(.medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 58, alignment: .leading)
@@ -141,7 +141,7 @@ struct ScanReportView: View {
 
                 FlowLayout(spacing: 6) {
                     chipButton(
-                        title: "全部",
+                        title: FizzL10n.text("全部", "All"),
                         symbol: "sparkles",
                         tint: .secondary,
                         active: toolFilter == nil
@@ -165,7 +165,7 @@ struct ScanReportView: View {
             }
 
             HStack(alignment: .top, spacing: 8) {
-                Text("识别类型")
+                Text(FizzL10n.text("识别类型", "Types"))
                     .font(FizzTypography.caption(.medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 58, alignment: .leading)
@@ -173,7 +173,7 @@ struct ScanReportView: View {
 
                 FlowLayout(spacing: 6) {
                     chipButton(
-                        title: "全部",
+                        title: FizzL10n.text("全部", "All"),
                         symbol: "square.grid.2x2",
                         tint: .secondary,
                         active: kindFilter == nil
@@ -224,7 +224,7 @@ struct ScanReportView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
-        .accessibilityValue(active ? "已选中" : "未选中")
+        .accessibilityValue(active ? FizzL10n.text("已选中", "Selected") : FizzL10n.text("未选中", "Not selected"))
         .accessibilityAddTraits(active ? .isSelected : [])
         .accessibilityRemoveTraits(active ? [] : .isSelected)
     }
@@ -234,10 +234,10 @@ struct ScanReportView: View {
             HStack(spacing: 8) {
                 FizzIcon(.md, symbol: "lock.shield")
                     .foregroundStyle(.secondary)
-                Text("部分受保护目录未获读取权限（\(report.permissionDeniedPaths.count) 处）")
+                Text(FizzL10n.text("部分受保护目录未获读取权限（\(report.permissionDeniedPaths.count) 处）", "No read access to \(report.permissionDeniedPaths.count) protected \(report.permissionDeniedPaths.count == 1 ? "folder" : "folders")"))
                     .font(FizzTypography.body(.semibold))
                 Spacer()
-                Button("重新扫描", action: onRescan)
+                Button(FizzL10n.text("重新扫描", "Rescan"), action: onRescan)
                     .buttonStyle(.glass)
                     .controlSize(.small)
             }
@@ -248,14 +248,14 @@ struct ScanReportView: View {
                 .lineLimit(2)
 
             HStack(spacing: 8) {
-                Button("打开「文件和文件夹」设置") {
+                Button(FizzL10n.text("打开「文件和文件夹」设置", "Open Files and Folders settings")) {
                     SystemPermissionService.openFilesAndFoldersSettings()
                 }
                 .buttonStyle(.glassProminent)
                 .tint(FizzTheme.accent)
                 .controlSize(.small)
 
-                Button("打开完整磁盘访问") {
+                Button(FizzL10n.text("打开完整磁盘访问", "Open Full Disk Access")) {
                     SystemPermissionService.openFullDiskAccessSettings()
                 }
                 .buttonStyle(.glass)
@@ -280,7 +280,7 @@ struct ScanReportView: View {
                 .frame(width: 22)
 
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+                FlowLayout(spacing: 6) {
                     Text(candidate.name)
                         .font(FizzTypography.body(.semibold))
 
@@ -289,7 +289,7 @@ struct ScanReportView: View {
                     }
 
                     if !candidate.highConfidence {
-                        TagChip(text: "弱标记", tint: .secondary, compact: true)
+                        TagChip(text: FizzL10n.text("弱标记", "Weak match"), tint: .secondary, compact: true)
                     }
 
                     ForEach(candidate.tools) { tool in
@@ -307,7 +307,7 @@ struct ScanReportView: View {
             Spacer(minLength: 10)
 
             if managed {
-                Label("已加入", systemImage: "checkmark.circle.fill")
+                Label(FizzL10n.text("已加入", "Added"), systemImage: "checkmark.circle.fill")
                     .font(FizzTypography.caption(.medium))
                     .foregroundStyle(.secondary)
             } else {
@@ -324,7 +324,7 @@ struct ScanReportView: View {
                 .toggleStyle(.checkbox)
                 .labelsHidden()
                 .accessibilityLabel(candidate.name)
-                .accessibilityHint("选择是否把 \(PathTools.displayPath(candidate.path)) 加入项目")
+                .accessibilityHint(FizzL10n.text("选择是否把 \(PathTools.displayPath(candidate.path)) 加入项目", "Choose whether to add \(PathTools.displayPath(candidate.path))"))
             }
         }
         .padding(.horizontal, 12)
@@ -336,7 +336,7 @@ struct ScanReportView: View {
             selected = ProjectDiscovery.toggling(candidate.path, in: selected)
         }
         .accessibilityLabel(candidate.name)
-        .accessibilityValue(managed ? "已加入" : (isSelected ? "已选中" : "未选中"))
+        .accessibilityValue(managed ? FizzL10n.text("已加入", "Added") : (isSelected ? FizzL10n.text("已选中", "Selected") : FizzL10n.text("未选中", "Not selected")))
         .accessibilityElement(children: .contain)
     }
 }

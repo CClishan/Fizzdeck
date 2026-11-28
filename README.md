@@ -12,7 +12,7 @@ No account, no telemetry, and no FizzDeck-hosted backend. Project metadata, sess
 
 [中文说明](README.zh-CN.md)
 
-**Public release: [v0.9.0 (Build 23)](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.0).** Manage Git worktrees, pass context with three handoff cards, and search Cursor and OpenCode conversations. The new Workbench and cross-agent recap include raster and ASCII share cards. Latin text uses bundled Obel Mono; Chinese keeps the macOS system font. [Release notes and checksum](docs/releases/v0.9.0.md).
+**Public release: [v0.9.3 (Build 26)](https://github.com/CClishan/Fizzdeck/releases/tag/v0.9.3).** Switch between English and Simplified Chinese, resume a conversation or copy a handoff card from the menu bar, and pin conversation marks before they expire. The project gallery and anonymous share cards turn recent activity into raster or ASCII graphics. [Release notes and checksum](docs/releases/v0.9.3.md).
 
 The download link points to the latest public DMG. System Shortcuts require a build signed with an Apple Team ID; the default ad-hoc DMG has none. Project opening, handoff cards and health checks can also be used in the app. See [verification details](docs/SYSTEM_INTEGRATION.md).
 
@@ -63,7 +63,7 @@ The download link points to the latest public DMG. System Shortcuts require a bu
 
 The repository’s default package is ad-hoc signed and not Apple-notarized. On first launch:
 
-1. Download the DMG and its `.sha256` file from the same GitHub release. In the download directory, run `shasum -a 256 -c FizzDeck-0.9.0-arm64.dmg.sha256` and check for `OK`.
+1. Download the DMG and its `.sha256` file from the same GitHub release. In the download directory, run `shasum -a 256 -c FizzDeck-0.9.3-arm64.dmg.sha256` and check for `OK`.
 2. Open the DMG, drag FizzDeck to Applications, then try opening the app.
 3. If macOS blocks it and you trust the download, open **System Settings → Privacy & Security** and choose **Open Anyway** for FizzDeck.
 
@@ -103,10 +103,10 @@ Build, launch, and verify the process:
 ./macos/script/build_and_run.sh --verify
 ```
 
-The default version is `0.9.0`, Build `23`. Override it when needed:
+The default version is `0.9.3`, Build `26`. Override it when needed:
 
 ```sh
-VERSION=0.9.0 BUILD_NUM=23 ./macos/script/build_and_run.sh --build-only
+VERSION=0.9.3 BUILD_NUM=26 ./macos/script/build_and_run.sh --build-only
 ```
 
 The app bundle is written to `macos/dist/FizzDeck.app`. To work in Xcode, open `macos/Package.swift`.
@@ -123,7 +123,7 @@ swift test --package-path macos
 ./macos/script/package_dmg.sh
 ```
 
-The default output is `macos/dist/FizzDeck-0.9.0-arm64.dmg`, plus a matching `FizzDeck-0.9.0-arm64.dmg.sha256`. The checksum is standard `shasum -a 256` output for in-app updates and GitHub Releases.
+The default output is `macos/dist/FizzDeck-0.9.3-arm64.dmg`, plus a matching `FizzDeck-0.9.3-arm64.dmg.sha256`. The checksum is standard `shasum -a 256` output for in-app updates and GitHub Releases.
 
 ### Local web UI
 

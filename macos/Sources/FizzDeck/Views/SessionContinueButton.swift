@@ -99,7 +99,7 @@ struct SessionContinueButton: View {
             if let primary = primarySession {
                 let tool = toolTitle(primary.tool)
                 FizzActionButton(
-                    title: running ? "继续中…" : (style == .compact ? "继续" : "继续 · \(tool)"),
+                    title: running ? FizzL10n.text("继续中…", "Resuming…") : (style == .compact ? FizzL10n.text("继续", "Resume") : FizzL10n.text("继续 · \(tool)", "Resume · \(tool)")),
                     symbol: "play.fill",
                     height: height,
                     prominence: usesPrimaryAction ? .primary : .secondary
@@ -107,30 +107,30 @@ struct SessionContinueButton: View {
                     Task { await trigger(session: primary, target: .auto) }
                 }
                 .disabled(running)
-                .help("继续最近 \(tool) 会话")
-                .accessibilityLabel("继续 \(tool) 会话")
-                .accessibilityValue(running ? "继续中" : "")
-                .accessibilityHint("在终端恢复最近一次会话")
+                .help(FizzL10n.text("继续最近 \(tool) 会话", "Resume latest \(tool) session"))
+                .accessibilityLabel(FizzL10n.text("继续 \(tool) 会话", "Resume \(tool) session"))
+                .accessibilityValue(running ? FizzL10n.text("继续中", "Resuming") : "")
+                .accessibilityHint(FizzL10n.text("在终端恢复最近一次会话", "Resume the latest session in Terminal"))
             } else if let editor = ideEditors.first {
                 FizzActionButton(
-                    title: "打开 \(editor.title)",
+                    title: FizzL10n.text("打开 \(editor.title)", "Open \(editor.title)"),
                     symbol: "arrow.up.forward.app",
                     height: height,
                     prominence: usesPrimaryAction ? .primary : .secondary
                 ) {
                     SystemActions.open(project.path, in: editor)
                 }
-                .help("在 \(editor.title) 中打开项目")
-                .accessibilityLabel("在 \(editor.title) 中打开项目")
-                .accessibilityHint("用 \(editor.title) 打开当前项目目录")
+                .help(FizzL10n.text("在 \(editor.title) 中打开项目", "Open project in \(editor.title)"))
+                .accessibilityLabel(FizzL10n.text("在 \(editor.title) 中打开项目", "Open project in \(editor.title)"))
+                .accessibilityHint(FizzL10n.text("用 \(editor.title) 打开当前项目目录", "Open this project folder with \(editor.title)"))
             }
         }
     }
 
     private var toolMenu: some View {
-        let title = if style == .hero { "选择要继续的工具" }
-            else if primarySession == nil { "选择打开方式" }
-            else { "选择要继续的工具或打开方式" }
+        let title = if style == .hero { FizzL10n.text("选择要继续的工具", "Choose a tool to resume") }
+            else if primarySession == nil { FizzL10n.text("选择打开方式", "Choose how to open") }
+            else { FizzL10n.text("选择要继续的工具或打开方式", "Choose a tool to resume or an app to open") }
 
         return FizzMenuButton(title: title, symbol: "chevron.down", height: height) {
             toolMenuItems
@@ -149,13 +149,13 @@ struct SessionContinueButton: View {
                 .lineLimit(2)
 
             if let fallback = feedback.fallbackCommand {
-                FizzActionButton(title: "复制命令", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("复制命令", "Copy command"), height: .compact) {
                     SystemActions.copy(fallback)
                 }
             }
 
             if feedback.needsAutomationPermission {
-                FizzActionButton(title: "自动化设置", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("自动化设置", "Automation settings"), height: .compact) {
                     SystemPermissionService.openAutomationSettings()
                 }
             }
@@ -179,12 +179,12 @@ struct SessionContinueButton: View {
                 Button {
                     Task { await trigger(session: session, target: .cli) }
                 } label: {
-                    Label("Codex CLI（终端）", systemImage: "terminal")
+                    Label(FizzL10n.text("Codex CLI（终端）", "Codex CLI (Terminal)"), systemImage: "terminal")
                 }
                 Button {
                     Task { await trigger(session: session, target: .desktop) }
                 } label: {
-                    Label("Codex Desktop（直达线程）", systemImage: "macwindow")
+                    Label(FizzL10n.text("Codex Desktop（直达线程）", "Codex Desktop (open chat)"), systemImage: "macwindow")
                 }
             } else if style != .hero || session.stableID != primarySession?.stableID {
                 Button {
@@ -199,12 +199,12 @@ struct SessionContinueButton: View {
             if !resumableSessions.isEmpty {
                 Divider()
             }
-            Section("在 IDE 中打开项目") {
+            Section(FizzL10n.text("在 IDE 中打开项目", "Open project in IDE")) {
                 ForEach(ideEditors) { editor in
                     Button {
                         SystemActions.open(project.path, in: editor)
                     } label: {
-                        Label("在 \(editor.title) 中打开项目", systemImage: "arrow.up.forward.app")
+                        Label(FizzL10n.text("在 \(editor.title) 中打开项目", "Open project in \(editor.title)"), systemImage: "arrow.up.forward.app")
                     }
                 }
             }
@@ -212,10 +212,10 @@ struct SessionContinueButton: View {
 
         if !evidenceOnlyTools.isEmpty {
             Divider()
-            Section("仅识别工具痕迹") {
+            Section(FizzL10n.text("仅识别工具痕迹", "Tool traces only")) {
                 ForEach(evidenceOnlyTools) { tool in
                     Button {} label: {
-                        Label("\(tool.title)（暂不支持恢复）", systemImage: tool.symbol)
+                        Label(FizzL10n.text("\(tool.title)（暂不支持恢复）", "\(tool.title) (resume unavailable)"), systemImage: tool.symbol)
                     }
                     .disabled(true)
                 }
@@ -237,13 +237,13 @@ struct SessionContinueButton: View {
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
                     if feedback.needsAutomationPermission {
-                        FizzActionButton(title: "打开自动化设置", height: .compact) {
+                        FizzActionButton(title: FizzL10n.text("打开自动化设置", "Open automation settings"), height: .compact) {
                             SystemPermissionService.openAutomationSettings()
                             showFeedbackPopover = false
                         }
                     }
                     if let fallback = feedback.fallbackCommand {
-                        FizzActionButton(title: "复制命令", height: .compact, prominence: .primary) {
+                        FizzActionButton(title: FizzL10n.text("复制命令", "Copy command"), height: .compact, prominence: .primary) {
                             SystemActions.copy(fallback)
                             showFeedbackPopover = false
                         }

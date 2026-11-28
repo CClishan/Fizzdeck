@@ -1,7 +1,7 @@
 import XCTest
 @testable import FizzDeck
 
-final class HandoffCardTests: XCTestCase {
+final class HandoffCardTests: ChineseInterfaceTestCase {
     func testSecretRedactorMasksKnownFormatsAndCountsMatches() {
         let input = """
         OpenAI: sk-proj-1234567890abcdefghij
@@ -147,7 +147,7 @@ final class HandoffCardTests: XCTestCase {
         let fixtureTail = "fizzdeck-log-fixture-tail"
         let fixtureValue = String(repeating: "a", count: 760) + fixtureTail
         let local = HandoffFailure(
-            source: "测试", timestamp: now.addingTimeInterval(-60),
+            source: .tests, timestamp: now.addingTimeInterval(-60),
             output: "Sources/Feed.swift:12: error: missing decoder\nTEST_API_KEY=\(fixtureValue)", exitCode: 1
         )
 
@@ -161,7 +161,7 @@ final class HandoffCardTests: XCTestCase {
         XCTAssertFalse(repair.markdown.contains("Undated previous diagnostic"))
         XCTAssertEqual(repair.redactedCount, 1)
 
-        let olderLocal = HandoffFailure(source: "开发服务", timestamp: now.addingTimeInterval(-180), output: "Older log")
+        let olderLocal = HandoffFailure(source: .devServer, timestamp: now.addingTimeInterval(-180), output: "Older log")
         let sessionRepair = HandoffCardBuilder.build(
             project: project, scenario: .fixError, sessionLimit: 1, localFailure: olderLocal, now: now
         )
@@ -194,13 +194,13 @@ final class HandoffCardTests: XCTestCase {
 
         let paths = [project.path, project.path + "-other"]
         let latest = await HandoffCardBuilder.loadLocalFailure(for: project, actions: actions, projectPaths: paths)
-        XCTAssertEqual(latest?.source, "受管脚本：build")
+        XCTAssertEqual(latest?.source, .script("build"))
         XCTAssertEqual(latest?.timestamp, now.addingTimeInterval(-10))
         XCTAssertEqual(latest?.output, "Managed failure")
 
         actions.scriptRuns["same"]?.status = .stopped
         let latestTest = await HandoffCardBuilder.loadLocalFailure(for: project, actions: actions, projectPaths: paths)
-        XCTAssertEqual(latestTest?.source, "测试")
+        XCTAssertEqual(latestTest?.source, .tests)
         XCTAssertEqual(latestTest?.output, "Test failure")
     }
 
@@ -212,9 +212,10 @@ final class HandoffCardTests: XCTestCase {
         --- 2026-11-28T02:00:00Z npm run dev
         Current run failure
         """
-        XCTAssertEqual(HandoffCardBuilder.currentDevOutput(in: log, command: "npm run dev"), "Current run failure")
-        XCTAssertNil(HandoffCardBuilder.currentDevOutput(in: "An undated log tail", command: "npm run dev"))
-        XCTAssertNil(HandoffCardBuilder.currentDevOutput(in: log + "\n--- 2026-11-28T03:00:00Z npm start", command: "npm run dev"))
+        let header = "--- 2026-11-28T02:00:00Z npm run dev"
+        XCTAssertEqual(HandoffCardBuilder.currentDevOutput(in: log, header: header), "Current run failure")
+        XCTAssertNil(HandoffCardBuilder.currentDevOutput(in: "An undated log tail", header: header))
+        XCTAssertNil(HandoffCardBuilder.currentDevOutput(in: log + "\n--- 2026-11-28T03:00:00Z npm run dev", header: header))
     }
 
     @MainActor
@@ -224,13 +225,72 @@ final class HandoffCardTests: XCTestCase {
                                   run: RunConfig(command: "npm run dev", port: 3000, previewURL: nil))
         let actions = ProjectActions()
         actions.messages[project.path] = "启动失败：无法确认来源的日志内容"
+        let paths = [project.path, "/tmp/right/\(name)"]
+        let messageOnly = await HandoffCardBuilder.loadLocalFailure(for: project, actions: actions, projectPaths: paths)
+        XCTAssertNil(messageOnly)
+        let now = Date()
+        actions.devFailures[project.path] = .init(reason: .launchFailed, recordedAt: now, logHeader: nil)
 
         let failure = await HandoffCardBuilder.loadLocalFailure(
-            for: project, actions: actions, projectPaths: [project.path, "/tmp/right/\(name)"]
+            for: project, actions: actions, projectPaths: paths
         )
-        XCTAssertEqual(failure?.source, "开发服务")
-        XCTAssertNil(failure?.timestamp)
+        XCTAssertEqual(failure?.source, .devServer)
+        XCTAssertEqual(failure?.timestamp, now)
+        XCTAssertNil(failure?.exitCode)
         XCTAssertEqual(failure?.output, "")
+    }
+
+    @MainActor
+    func testFailedDevRunSurvivesLanguageSwitchAndUsesOnlyItsOwnLog() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let actions = ProjectActions(logs: root.appendingPathComponent("logs"))
+        let store = RepositoryStore(marksFile: root.appendingPathComponent("marks.json"))
+        let port = try XCTUnwrap((60_000..<60_100).first { !PortProbe.isOpen($0) })
+        let command = "echo 'fixture diagnostic'; exit 17"
+        let project = makeProject(path: root.path, displayName: "保留项目原名",
+                                  run: RunConfig(command: command, port: port, previewURL: nil))
+        store.projects = [project]
+        for language in [FizzLanguage.chinese, .english] {
+            await FizzL10n.$languageOverride.withValue(language) { await actions.launch(project, store: store) }
+            XCTAssertEqual(actions.devFailures[project.path]?.reason, .exited(17))
+            actions.messages[project.path] = "another action replaced the visible message"
+            let next: FizzLanguage = language == .english ? .chinese : .english
+            try await FizzL10n.$languageOverride.withValue(next) {
+                let found = await HandoffCardBuilder.loadLocalFailure(for: project, actions: actions, projectPaths: [project.path])
+                let failure = try XCTUnwrap(found)
+                XCTAssertEqual(failure.exitCode, 17)
+                XCTAssertEqual(failure.output.trimmingCharacters(in: .whitespacesAndNewlines), "fixture diagnostic")
+                let text = HandoffCardBuilder.build(project: project, scenario: .fixError, localFailure: failure).markdown
+                XCTAssertTrue(text.contains(next == .english ? "Dev server · just now · exit code 17" : "开发服务 · 刚刚 · 退出码 17"))
+                XCTAssertTrue(text.contains("保留项目原名"))
+                XCTAssertFalse(text.contains("another action"))
+                let ambiguous = await HandoffCardBuilder.loadLocalFailure(for: project, actions: actions,
+                    projectPaths: [project.path, "/other/\(root.lastPathComponent)"])
+                XCTAssertEqual(ambiguous?.exitCode, 17)
+                XCTAssertEqual(ambiguous?.output, "")
+            }
+        }
+    }
+
+    func testEnglishHandoffPreservesUserNotesAndRedactsBeforeTruncating() {
+        FizzL10n.$languageOverride.withValue(.english) {
+            var project = makeProject(displayName: "客户项目")
+            project.stacks = [.init(key: "feature", label: "能力", items: ["其他"])]
+            XCTAssertTrue(HandoffCardBuilder.build(project: project).markdown.contains("- Stack: Other"))
+            let secret = "ghp_" + String(repeating: "x", count: 28)
+            project.note = "保留备注 TEST_API_KEY=\(secret)"
+            let notes = HandoffCardBuilder.build(project: project, scenario: .notes)
+            XCTAssertTrue(notes.markdown.contains("# Handoff notes: 客户项目"))
+            XCTAssertTrue(notes.markdown.contains("Project note: 保留备注 TEST_API_KEY=[redacted]"))
+            XCTAssertEqual(notes.redactedCount, 1)
+            XCTAssertEqual(SecretRedactor.redact(notes.markdown).redactedCount, 0)
+            XCTAssertFalse(notes.markdown.contains(secret))
+            let short = HandoffCardBuilder.build(project: project, scenario: .notes, maxCharacters: 45)
+            XCTAssertEqual(short.characterCount, 45)
+            XCTAssertTrue(short.markdown.hasSuffix("… (truncated)"))
+        }
     }
 
     func testNotesUseKnownBackgroundAndCommandsAndRedactBeforeCopy() {
@@ -266,7 +326,7 @@ final class HandoffCardTests: XCTestCase {
         XCTAssertTrue(repair.markdown.contains("未找到可核对的失败日志或对话报错"))
         XCTAssertTrue(repair.markdown.contains("文件：暂无可关联记录"))
 
-        let fail = HandoffFailure(source: "开发服务", timestamp: nil, output: "", exitCode: 1)
+        let fail = HandoffFailure(source: .devServer, timestamp: nil, output: "", exitCode: 1)
         let noOutput = HandoffCardBuilder.build(project: project, scenario: .fixError, localFailure: fail)
         XCTAssertTrue(noOutput.markdown.contains("时间未记录 · 退出码 1"))
         XCTAssertTrue(noOutput.markdown.contains("有失败记录，但没有可核对的报错输出"))

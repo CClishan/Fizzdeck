@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import FizzDeck
 
-final class SessionSearchIndexTests: XCTestCase {
+final class SessionSearchIndexTests: ChineseInterfaceTestCase {
     private func makeTempDB(name: String) throws -> (dir: URL, db: URL) {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("fizzdeck-search-\(name)-\(UUID().uuidString)", isDirectory: true)

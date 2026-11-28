@@ -7,9 +7,9 @@ enum VersionProtectionService {
         guard projectRoot != "/", ![tmpDir, marksFile].contains(where: {
             let path = PathTools.canonical($0.path)
             return path == projectRoot || path.hasPrefix(projectRoot + "/")
-        }) else { return (false, "请选择不包含 FizzDeck 本地状态的项目目录。") }
+        }) else { return (false, FizzL10n.text("请选择不包含 FizzDeck 本地状态的项目目录。", "Choose a project folder that doesn’t contain FizzDeck’s local state.")) }
         guard FileTools.isDirectory(directory), await outsideRepository(directory) else {
-            return (false, "此目录已属于 Git 仓库，或无法检查目录状态。")
+            return (false, FizzL10n.text("此目录已属于 Git 仓库，或无法检查目录状态。", "This folder is already in a Git repository or couldn’t be inspected."))
         }
         do {
             let ignore = directory.appendingPathComponent(".gitignore")
@@ -33,7 +33,7 @@ enum VersionProtectionService {
             defer { try? FileTools.manager.removeItem(at: staging) }
             guard !PathTools.canonical(staging.path).hasPrefix(PathTools.canonical(directory.path) + "/"),
                   await Shell.run("git", ["init", "--quiet", "--template=", staging.path], cwd: staging)?.succeeded == true
-            else { return (false, "无法准备本地 Git 仓库。") }
+            else { return (false, FizzL10n.text("无法准备本地 Git 仓库。", "Couldn’t prepare a local Git repository.")) }
             let git = staging.appendingPathComponent(".git")
             let info = git.appendingPathComponent("info")
             try FileTools.manager.createDirectory(at: info, withIntermediateDirectories: true)
@@ -44,14 +44,14 @@ enum VersionProtectionService {
             try Data(generated.utf8).write(to: staging.appendingPathComponent(ProtectionFiles.marker))
 
             guard let mark = await SessionMarkService.protectionBaseline(for: directory, stagedGit: git, gitignore: merged, tmpDir: tmpDir) else {
-                return (false, "无法安全建立基线。请检查读取权限或缩小目录范围。")
+                return (false, FizzL10n.text("无法安全建立基线。请检查读取权限或缩小目录范围。", "Couldn’t safely create a baseline. Check read permissions or choose a smaller folder."))
             }
             try FileTools.manager.removeItem(at: exclude)
-            guard !Task.isCancelled, await outsideRepository(directory) else { return (false, "目录状态已变化，请刷新后重试。") }
+            guard !Task.isCancelled, await outsideRepository(directory) else { return (false, FizzL10n.text("目录状态已变化，请刷新后重试。", "The folder changed. Refresh and try again.")) }
             try await publish(mark, git: git, directory: directory, original: original, merged: merged, marksFile: marksFile)
-            return (true, "已开启版本保护，第一条可还原基线已固定。")
+            return (true, FizzL10n.text("已开启版本保护，第一条可还原基线已固定。", "Version protection is on. Your first restore point is pinned."))
         } catch {
-            return (false, "未开启版本保护：\(error.localizedDescription)")
+            return (false, FizzL10n.text("未开启版本保护：\(error.localizedDescription)", "Couldn’t enable version protection: \(error.localizedDescription)"))
         }
     }
 

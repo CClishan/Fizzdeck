@@ -7,6 +7,7 @@ struct GitWorktreePanel: View {
     @Binding var isWriting: Bool
     let onGitChanged: (String) async -> Void
 
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
     @Environment(ProjectActions.self) private var actions
     @State private var overview: GitWorktreeService.Overview?
     @State private var mainDirectory: URL?
@@ -22,7 +23,7 @@ struct GitWorktreePanel: View {
     private var branchName: String { branchDraft.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
-        Panel(title: "并行工作区（Worktree）", symbol: "rectangle.stack") {
+        Panel(title: FizzL10n.text("并行工作区（Worktree）", copyMode == .plain ? "Parallel folders" : "Git worktrees"), symbol: "rectangle.stack") {
             if let statusError {
                 Text(statusError)
                     .font(FizzTypography.body)
@@ -30,7 +31,7 @@ struct GitWorktreePanel: View {
             }
             if let overview {
                 if overview.rows.isEmpty {
-                    Text("还没有并行目录")
+                    Text(FizzL10n.text("还没有并行目录", "No parallel folders yet"))
                         .font(FizzTypography.body)
                         .foregroundStyle(.secondary)
                 } else {
@@ -49,17 +50,17 @@ struct GitWorktreePanel: View {
                 if isRefreshing || isWriting {
                     ProgressView()
                         .controlSize(.mini)
-                        .accessibilityLabel(isWriting ? "正在处理并行目录" : "正在读取并行工作区")
+                        .accessibilityLabel(isWriting ? FizzL10n.text("正在处理并行目录", "Updating worktrees") : FizzL10n.text("正在读取并行工作区", "Loading worktrees"))
                 }
 
-                FizzMenuButton(title: "更多并行工作区操作") {
-                    Button("刷新并行工作区", systemImage: "arrow.clockwise") {
+                FizzMenuButton(title: FizzL10n.text("更多并行工作区操作", "More worktree actions")) {
+                    Button(FizzL10n.text("刷新并行工作区", "Refresh worktrees"), systemImage: "arrow.clockwise") {
                         manualRefresh &+= 1
                     }
                 }
                 .disabled(controlsBusy)
 
-                FizzActionButton(title: "新建并行目录", symbol: "plus", height: .compact, prominence: .primary, keyboardNavigation: true) {
+                FizzActionButton(title: FizzL10n.text("新建并行目录", copyMode == .plain ? "New parallel folder" : "New worktree"), symbol: "plus", height: .compact, prominence: .primary, keyboardNavigation: true) {
                     guard let mainDirectory else { return }
                     branchDraft = ""
                     present(.create(mainDirectory))
@@ -80,27 +81,35 @@ struct GitWorktreePanel: View {
     private func worktreeRow(_ row: GitWorktreeService.Row, mainBranch: String?) -> some View {
         let worktree = row.worktree
         let name = worktree.branch ?? worktree.head ?? worktree.displayName
-        return HStack(spacing: FizzSpacing.grid) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(verbatim: name)
-                    .font(FizzTypography.mono(.medium))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(name)
-                Text(verbatim: PathTools.displayPath(worktree.path))
-                    .font(FizzTypography.monoSmall)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(worktree.path)
+        let identity = VStack(alignment: .leading, spacing: 3) {
+            Text(verbatim: name)
+                .font(FizzTypography.mono(.medium))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(name)
+            Text(verbatim: PathTools.displayPath(worktree.path))
+                .font(FizzTypography.monoSmall)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(worktree.path)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        let badges = statusBadges(row, mainBranch: mainBranch)
+        let controls = rowActions(row, mainBranch: mainBranch).fixedSize()
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: FizzSpacing.grid) {
+                identity
+                badges
+                controls
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            statusBadges(row, mainBranch: mainBranch)
-                .layoutPriority(1)
-            rowActions(row, mainBranch: mainBranch)
-                .fixedSize(horizontal: true, vertical: false)
-                .layoutPriority(2)
+            VStack(alignment: .leading, spacing: FizzSpacing.row) {
+                HStack(spacing: FizzSpacing.grid) {
+                    identity
+                    controls
+                }
+                badges
+            }
         }
         .padding(.vertical, FizzSpacing.row)
         .accessibilityElement(children: .contain)
@@ -109,33 +118,33 @@ struct GitWorktreePanel: View {
     private func statusBadges(_ row: GitWorktreeService.Row, mainBranch: String?) -> some View {
         FlowLayout(spacing: 4) {
             if row.worktree.isMain {
-                TagChip(text: "主仓", compact: true)
+                TagChip(text: FizzL10n.text("主仓", copyMode == .plain ? "Main folder" : "Main"), compact: true)
             }
             if row.worktree.isDetached {
-                TagChip(text: "未关联分支", compact: true)
+                TagChip(text: FizzL10n.text("未关联分支", copyMode == .plain ? "No branch" : "Detached HEAD"), compact: true)
             }
             if row.worktree.isLocked {
-                TagChip(text: "已锁定", tint: FizzTheme.statusWarning, compact: true)
+                TagChip(text: FizzL10n.text("已锁定", "Locked"), tint: FizzTheme.statusWarning, compact: true)
             }
             if row.worktree.isPrunable {
-                TagChip(text: "待清理", tint: FizzTheme.statusWarning, compact: true)
+                TagChip(text: FizzL10n.text("待清理", copyMode == .plain ? "Ready to prune" : "Prunable"), tint: FizzTheme.statusWarning, compact: true)
             }
             if let changed = row.changedCount {
                 TagChip(
-                    text: changed == 0 ? "无未提交改动" : "未提交 \(changed)",
+                    text: changed == 0 ? FizzL10n.text("无未提交改动", copyMode == .plain ? "All changes saved" : "Clean") : FizzL10n.text("未提交 \(changed)", "\(changed) uncommitted"),
                     tint: changed == 0 ? .secondary : FizzTheme.statusWarning,
                     compact: true
                 )
             } else {
-                TagChip(text: "改动未知", compact: true)
+                TagChip(text: FizzL10n.text("改动未知", "Changes unknown"), compact: true)
             }
             if let ahead = row.ahead, let behind = row.behind, let mainBranch {
-                TagChip(text: "领先 \(ahead)", tint: ahead == 0 ? .secondary : Color.secondary, compact: true)
-                    .help("比主分支「\(mainBranch)」多的提交")
-                TagChip(text: "落后 \(behind)", tint: behind == 0 ? .secondary : FizzTheme.statusWarning, compact: true)
-                    .help("比主分支「\(mainBranch)」少的提交")
+                TagChip(text: FizzL10n.text("领先 \(ahead)", "\(ahead) ahead"), tint: ahead == 0 ? .secondary : Color.secondary, compact: true)
+                    .help(FizzL10n.text("比主分支「\(mainBranch)」多的提交", "Commits ahead of the main branch “\(mainBranch)”"))
+                TagChip(text: FizzL10n.text("落后 \(behind)", "\(behind) behind"), tint: behind == 0 ? .secondary : FizzTheme.statusWarning, compact: true)
+                    .help(FizzL10n.text("比主分支「\(mainBranch)」少的提交", "Commits behind the main branch “\(mainBranch)”"))
             } else if !row.worktree.isMain {
-                TagChip(text: "未比较主分支", compact: true)
+                TagChip(text: FizzL10n.text("未比较主分支", "Not compared to main"), compact: true)
             }
         }
     }
@@ -143,35 +152,35 @@ struct GitWorktreePanel: View {
     private func rowActions(_ row: GitWorktreeService.Row, mainBranch: String?) -> some View {
         let worktree = row.worktree
         return HStack(spacing: FizzSpacing.row) {
-            FizzIconButton(title: "打开目录", symbol: "folder", height: .compact) {
+            FizzIconButton(title: FizzL10n.text("打开目录", "Open folder"), symbol: "folder", height: .compact) {
                 SystemActions.open(worktree.path)
             }
             .disabled(worktree.isPrunable)
 
-            FizzIconButton(title: "在终端打开", symbol: "terminal", height: .compact) {
+            FizzIconButton(title: FizzL10n.text("在终端打开", "Open in Terminal"), symbol: "terminal", height: .compact) {
                 SystemActions.openTerminal(worktree.path)
             }
             .disabled(worktree.isPrunable)
 
             if !worktree.isMain {
-                FizzIconButton(title: "合并回主分支", symbol: "arrow.triangle.merge", height: .compact) {
+                FizzIconButton(title: FizzL10n.text("合并回主分支", "Merge into main branch"), symbol: "arrow.triangle.merge", height: .compact) {
                     guard let mainBranch else { return }
                     present(.merge(worktree, into: mainBranch))
                 }
                 .disabled(mutationsDisabled || !row.canManage || mainBranch == nil)
 
-                FizzIconButton(title: "安全移除并行目录", symbol: "trash", height: .compact) {
+                FizzIconButton(title: FizzL10n.text("安全移除并行目录", "Safely remove worktree"), symbol: "trash", height: .compact) {
                     present(.remove(worktree))
                 }
                 .disabled(mutationsDisabled || !row.canManage)
             }
 
-            FizzMenuButton(title: "\(worktree.displayName) 的更多操作") {
-                Button("在 Finder 中显示", systemImage: "folder") {
+            FizzMenuButton(title: FizzL10n.text("\(worktree.displayName) 的更多操作", "More actions for \(worktree.displayName)")) {
+                Button(FizzL10n.text("在 Finder 中显示", "Show in Finder"), systemImage: "folder") {
                     SystemActions.reveal(worktree.path)
                 }
                 .disabled(worktree.isPrunable)
-                Button("复制目录路径", systemImage: "doc.on.doc") {
+                Button(FizzL10n.text("复制目录路径", "Copy folder path"), systemImage: "doc.on.doc") {
                     SystemActions.copy(worktree.path)
                 }
             }
@@ -180,7 +189,7 @@ struct GitWorktreePanel: View {
 
     private func dialogSheet(_ dialog: Dialog) -> some View {
         VStack(alignment: .leading, spacing: FizzSpacing.panel) {
-            FizzSheetHeader(title: dialog.title, onClose: closeDialog)
+            FizzSheetHeader(title: dialog.title(for: copyMode), onClose: closeDialog)
                 .disabled(isWriting)
 
             dialogContent(dialog)
@@ -199,26 +208,26 @@ struct GitWorktreePanel: View {
                 if isWriting {
                     ProgressView()
                         .controlSize(.mini)
-                        .accessibilityLabel("正在处理并行目录")
+                        .accessibilityLabel(FizzL10n.text("正在处理并行目录", "Updating worktrees"))
                 }
                 if case .conflict = dialog {
-                    FizzActionButton(title: "完成", prominence: .primary, action: closeDialog)
+                    FizzActionButton(title: FizzL10n.text("完成", "Done"), prominence: .primary, action: closeDialog)
                         .keyboardShortcut(.defaultAction)
                         .disabled(isWriting)
                 } else {
-                    FizzActionButton(title: "取消", role: .cancel, action: closeDialog)
+                    FizzActionButton(title: FizzL10n.text("取消", "Cancel"), role: .cancel, action: closeDialog)
                         .keyboardShortcut(.cancelAction)
                         .disabled(isWriting)
 
                     switch dialog {
                     case .create(let mainDirectory):
-                        confirmButton("新建目录", dialog: dialog)
+                        confirmButton(FizzL10n.text("新建目录", "Create folder"), dialog: dialog)
                             .keyboardShortcut(.defaultAction)
                             .disabled(destination(beside: mainDirectory) == nil)
                     case .merge:
-                        confirmButton("合并", dialog: dialog)
+                        confirmButton(FizzL10n.text("合并", "Merge"), dialog: dialog)
                     case .remove(_, let discard):
-                        confirmButton(discard == nil ? "移除目录" : "丢弃并移除", dialog: dialog, role: .destructive)
+                        confirmButton(discard == nil ? FizzL10n.text("移除目录", "Remove folder") : FizzL10n.text("丢弃并移除", "Discard and remove"), dialog: dialog, role: .destructive)
                     case .conflict:
                         EmptyView()
                     }
@@ -234,52 +243,52 @@ struct GitWorktreePanel: View {
         switch dialog {
         case .create(let mainDirectory):
             VStack(alignment: .leading, spacing: FizzSpacing.row) {
-                TextField("分支名", text: $branchDraft, prompt: Text("输入分支名，如 feature/new-page"))
+                TextField(FizzL10n.text("分支名", "Branch name"), text: $branchDraft, prompt: Text(FizzL10n.text("输入分支名，如 feature/new-page", "Enter a branch name, e.g. feature/new-page")))
                     .textFieldStyle(.roundedBorder)
                     .foregroundStyle(.primary)
                     .disabled(isWriting)
                 if let target = destination(beside: mainDirectory) {
-                    Text("将创建在：")
+                    Text(FizzL10n.text("将创建在：", "Folder location:"))
                     pathLine(target.path)
                 } else if !branchName.isEmpty {
-                    Text("请输入有效的分支名。")
+                    Text(FizzL10n.text("请输入有效的分支名。", "Enter a valid branch name."))
                         .fizzStatus(FizzTheme.statusWarning)
                 }
             }
         case .merge(let worktree, let mainBranch):
-            Text("将「\(worktree.branch ?? worktree.displayName)」已提交的改动合并到「\(mainBranch)」。并行目录和分支都会保留。")
+            Text(FizzL10n.text("将「\(worktree.branch ?? worktree.displayName)」已提交的改动合并到「\(mainBranch)」。并行目录和分支都会保留。", "Merge committed changes from “\(worktree.branch ?? worktree.displayName)” into “\(mainBranch)”. The worktree and its branch will be kept."))
                 .fixedSize(horizontal: false, vertical: true)
             pathLine(worktree.path)
         case .remove(let worktree, let discard):
             pathLine(worktree.path)
             if let discard {
-                Text("未提交改动：\(discard.changedCount) 项\nGit 忽略的内容：\(discard.ignoredCount) 项")
-                Text("这些内容会永久丢失，无法撤消。分支「\(worktree.branch ?? worktree.displayName)」会保留。")
+                Text(FizzL10n.text("未提交改动：\(discard.changedCount) 项\nGit 忽略的内容：\(discard.ignoredCount) 项", "Uncommitted changes: \(discard.changedCount)\nGit-ignored items: \(discard.ignoredCount)"))
+                Text(FizzL10n.text("这些内容会永久丢失，无法撤消。分支「\(worktree.branch ?? worktree.displayName)」会保留。", "These items will be permanently lost. This can’t be undone. The branch “\(worktree.branch ?? worktree.displayName)” will be kept."))
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("移除这个并行目录，保留分支「\(worktree.branch ?? worktree.displayName)」。如有未提交或被 Git 忽略的内容，会再次请你确认。")
+                Text(FizzL10n.text("移除这个并行目录，保留分支「\(worktree.branch ?? worktree.displayName)」。如有未提交或被 Git 忽略的内容，会再次请你确认。", "Remove this worktree and keep the branch “\(worktree.branch ?? worktree.displayName)”. If it contains uncommitted or ignored files, you’ll be asked again."))
                     .fixedSize(horizontal: false, vertical: true)
             }
         case .conflict(let mainPath, let rollbackSucceeded, let editors):
             Text(
                 rollbackSucceeded
-                    ? "已用 git merge --abort 撤回合并，主仓已回到合并前。处理分支差异后可以重试。"
-                    : "未能用 git merge --abort 自动撤回。请打开主仓检查并处理当前的合并，再继续操作。"
+                    ? FizzL10n.text("已用 git merge --abort 撤回合并，主仓已回到合并前。处理分支差异后可以重试。", "FizzDeck ran git merge --abort to restore the main worktree. Resolve the differences between the branches before trying again.")
+                    : FizzL10n.text("未能用 git merge --abort 自动撤回。请打开主仓检查并处理当前的合并，再继续操作。", "Git couldn’t abort the merge. Open the main worktree and resolve the current merge before continuing.")
             )
             .fixedSize(horizontal: false, vertical: true)
             pathLine(mainPath)
             HStack(spacing: FizzSpacing.row) {
-                FizzActionButton(title: "打开主仓目录", symbol: "folder", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("打开主仓目录", "Open main worktree"), symbol: "folder", height: .compact) {
                     SystemActions.open(mainPath)
                 }
-                FizzActionButton(title: "打开主仓终端", symbol: "terminal", height: .compact) {
+                FizzActionButton(title: FizzL10n.text("打开主仓终端", "Open main worktree in Terminal"), symbol: "terminal", height: .compact) {
                     SystemActions.openTerminal(mainPath)
                 }
                 if !editors.isEmpty {
-                    FizzMenuButton(title: "用编辑器打开主仓", symbol: "chevron.left.forwardslash.chevron.right") {
+                    FizzMenuButton(title: FizzL10n.text("用编辑器打开主仓", "Open main worktree in editor"), symbol: "chevron.left.forwardslash.chevron.right") {
                         ForEach(editors) { editor in
-                            Button("在 \(editor.title) 打开") {
+                            Button(FizzL10n.text("在 \(editor.title) 打开", "Open in \(editor.title)")) {
                                 SystemActions.open(mainPath, in: editor)
                             }
                         }
@@ -354,7 +363,7 @@ struct GitWorktreePanel: View {
                 switch dialog {
                 case .create:
                     let worktree = try await GitWorktreeService.create(branch, in: mainDirectory)
-                    message = "已为「\(worktree.branch ?? branch)」新建并行目录。"
+                    message = FizzL10n.text("已为「\(worktree.branch ?? branch)」新建并行目录。", "Created a worktree for “\(worktree.branch ?? branch)”.")
                 case .merge(let worktree, _):
                     message = try await GitWorktreeService.mergeIntoMain(worktree, in: mainDirectory)
                 case .remove(let worktree, let discard):
@@ -362,7 +371,7 @@ struct GitWorktreePanel: View {
                         worktree, in: mainDirectory, confirmingDiscardOf: discard,
                         managedActivity: { actions.hasRunningWorktreeActivity(at: $0) }
                     )
-                    message = "已移除并行目录，分支仍保留。"
+                    message = FizzL10n.text("已移除并行目录，分支仍保留。", "Removed the worktree and kept the branch.")
                 case .conflict:
                     return
                 }
@@ -406,12 +415,12 @@ struct GitWorktreePanel: View {
         case remove(GitWorktree, discard: GitWorktreeService.DiscardConfirmation? = nil)
         case conflict(mainPath: String, rollbackSucceeded: Bool, editors: [ProjectEditor])
 
-        var title: String {
+        func title(for copyMode: CopyMode) -> String {
             switch self {
-            case .create: "新建并行目录"
-            case .merge: "合并回主分支？"
-            case .remove(_, let discard): discard == nil ? "移除并行目录？" : "丢弃改动并移除？"
-            case .conflict: "合并遇到冲突"
+            case .create: FizzL10n.text("新建并行目录", copyMode == .plain ? "New parallel folder" : "New worktree")
+            case .merge: FizzL10n.text("合并回主分支？", "Merge into the main branch?")
+            case .remove(_, let discard): discard == nil ? FizzL10n.text("移除并行目录？", "Remove this worktree?") : FizzL10n.text("丢弃改动并移除？", "Discard changes and remove this worktree?")
+            case .conflict: FizzL10n.text("合并遇到冲突", "Merge conflict")
             }
         }
     }

@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import FizzDeck
 
-final class WeeklyRecapServiceTests: XCTestCase {
+final class WeeklyRecapServiceTests: ChineseInterfaceTestCase {
     private func makeProject(
         path: String,
         name: String,
@@ -161,6 +161,32 @@ final class WeeklyRecapServiceTests: XCTestCase {
         let recap = WeeklyRecapService.build(projects: [caught])
         XCTAssertFalse(recap.markdown.contains(syntheticToken))
         XCTAssertTrue(recap.markdown.contains("[已脱敏]"))
+    }
+
+    func testAlreadyBuiltRecapCopiesEnglishMarkdownButSendsOnlyFiguresToAI() {
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        let secret = "ghp_" + String(repeating: "x", count: 28)
+        let path = "/fixture/客户资料"
+        let record = SessionRecord(tool: "codex", id: "private-session", cwd: path, startedAt: nil, modified: now,
+                                   lastUser: "保留我的输入", touchedFiles: ["Sources/中文-\(secret).swift"], agentTimeSeconds: 90)
+        let project = makeProject(path: path, name: "客户项目", sessions: [record])
+        let recap = FizzL10n.$languageOverride.withValue(.chinese) { WeeklyRecapService.build(projects: [project], now: now) }
+        FizzL10n.$languageOverride.withValue(.english) {
+            let text = recap.markdown(polishedSummary: "My note")
+            XCTAssertTrue(text.contains("# FizzDeck weekly recap"))
+            XCTAssertTrue(text.contains("1 AI session across 1 project"))
+            XCTAssertTrue(text.contains("客户项目"))
+            XCTAssertTrue(text.contains("Sources/中文-[redacted].swift"))
+            XCTAssertTrue(text.contains("1.5 min"))
+            XCTAssertTrue(text.hasSuffix("## AI summary\n\nMy note"))
+            XCTAssertFalse(text.contains(secret))
+            let request = WeeklyRecapFigures(recap).request
+            XCTAssertTrue(request.systemPrompt.contains("English"))
+            XCTAssertTrue(request.userPrompt.contains("sessions: 1"))
+            for privateText in ["Sources/", "客户", "我的输入", secret, path, "private-session"] {
+                XCTAssertFalse(request.userPrompt.contains(privateText))
+            }
+        }
     }
 
     func testRangesCompareDisjointNaturalDaysAcrossDaylightSaving() throws {

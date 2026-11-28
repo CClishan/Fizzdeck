@@ -43,11 +43,11 @@ enum DoctorIssueKind: String, Codable, Sendable, Hashable {
 
     var exemptionTitle: String {
         switch self {
-        case .staleDependencies: "依赖过期"
-        case .missingEnvFile: "缺少环境配置"
-        case .runtimeVersionMismatch: "运行时版本不匹配"
-        case .notAGitRepo: "未开启版本保护"
-        case .cloudBehind: "云端领先"
+        case .staleDependencies: FizzL10n.text("依赖过期", "Outdated dependencies")
+        case .missingEnvFile: FizzL10n.text("缺少环境配置", "Missing environment file")
+        case .runtimeVersionMismatch: FizzL10n.text("运行时版本不匹配", "Runtime version mismatch")
+        case .notAGitRepo: FizzL10n.text("未开启版本保护", "Version protection off")
+        case .cloudBehind: FizzL10n.text("云端领先", "Remote ahead")
         default: rawValue
         }
     }
@@ -68,19 +68,78 @@ struct DoctorIssue: Identifiable, Equatable, Sendable {
     let projectPath: String
     let kind: DoctorIssueKind
     let severity: DoctorSeverity
-    let title: String
-    let detail: String
     let fixAction: DoctorFixAction?
+    private let finding: Finding
 
-    init(
-        projectPath: String,
-        kind: DoctorIssueKind,
-        severity: DoctorSeverity,
-        title: String,
-        detail: String,
-        fixAction: DoctorFixAction?,
-        identity: String? = nil
-    ) {
+    // Store facts, not rendered sentences. A language change never needs another scan.
+    fileprivate enum Finding: Equatable, Sendable {
+        case verbatim(title: String, detail: String)
+        case lightweight(LightweightProjectIssue)
+        case cloudBehind(Int)
+        case missingEnvironment(CopyMode)
+        case unprotected(CopyMode)
+        case runtime(RuntimeVersionMismatch)
+        case secrets(files: [String], total: Int, CopyMode)
+        case port(PortConflict, CopyMode, DoctorListenerFailure?)
+    }
+
+    var title: String { title(for: nil) }
+
+    func title(for mode: CopyMode?) -> String {
+        switch finding {
+        case .verbatim(let title, _): title
+        case .lightweight(let issue): issue.title(for: mode)
+        case .cloudBehind(let count):
+            FizzL10n.text("云端领先 \(count) 个提交", mode == .plain
+                ? "\(count) new \(count == 1 ? "version" : "versions") online"
+                : "Remote ahead by \(count) \(count == 1 ? "commit" : "commits")")
+        case .missingEnvironment(let scannedMode):
+            (mode ?? scannedMode) == .plain
+                ? FizzL10n.text("缺少项目配置文件 .env（已有模板）", "The project needs a .env file (template available)")
+                : FizzL10n.text("缺少环境变量文件 .env", "Missing .env file")
+        case .unprotected(let scannedMode):
+            (mode ?? scannedMode) == .plain
+                ? FizzL10n.text("还没有开启版本保护", "Version protection is off")
+                : FizzL10n.text("未初始化 Git 仓库", "Git repository not initialized")
+        case .runtime(let mismatch): mismatch.title
+        case .secrets(_, _, let scannedMode):
+            (mode ?? scannedMode) == .plain
+                ? FizzL10n.text("已保存的代码里疑似包含密钥", "Saved code may contain secrets")
+                : FizzL10n.text("跟踪文件命中疑似密钥", "Possible secrets in tracked files")
+        case .port(let conflict, let scannedMode, _):
+            (mode ?? scannedMode) == .plain
+                ? FizzL10n.text("端口 \(conflict.port) 被其他程序占着", "Another program is using port \(conflict.port)")
+                : FizzL10n.text("端口 \(conflict.port) 已被占用", "Port \(conflict.port) is in use")
+        }
+    }
+
+    var detail: String {
+        switch finding {
+        case .verbatim(_, let detail): return detail
+        case .lightweight(let issue): return issue.detail
+        case .cloudBehind:
+            return FizzL10n.text("可在版本页查看并决定是否拉取", "Review the changes on the version tab before pulling.")
+        case .missingEnvironment:
+            return FizzL10n.text("根目录已有 .env.example 模板，可复制成 .env 后填入所需配置", "Copy .env.example from the project root to .env, then fill in the required values.")
+        case .unprotected:
+            return FizzL10n.text("开启后，每次 AI 对话前都能自动记下状态，随时可还原", "Turn it on to save the project state before each AI conversation and restore it later.")
+        case .runtime(let mismatch): return mismatch.detail
+        case .secrets(let files, let total, _):
+            let sample = files.joined(separator: FizzL10n.text("、", ", "))
+            let more = total > files.count ? FizzL10n.text(" 等 \(total) 个文件", " (\(total) files in total)") : ""
+            return FizzL10n.text("命中文件：\(sample)\(more)，建议移入 .env 后再上传到云端", "Files: \(sample)\(more). Move the secrets into .env before uploading.")
+        case .port(let conflict, _, let failure): return failure?.message ?? conflict.occupantSummary
+        }
+    }
+
+    init(projectPath: String, kind: DoctorIssueKind, severity: DoctorSeverity, title: String, detail: String,
+         fixAction: DoctorFixAction?, identity: String? = nil) {
+        self.init(projectPath: projectPath, kind: kind, severity: severity, finding: .verbatim(title: title, detail: detail),
+                  fixAction: fixAction, identity: identity)
+    }
+
+    fileprivate init(projectPath: String, kind: DoctorIssueKind, severity: DoctorSeverity, finding: Finding,
+                     fixAction: DoctorFixAction?, identity: String? = nil) {
         let baseID = "\(projectPath)::\(kind.rawValue)"
         if let identity, !identity.isEmpty {
             self.id = "\(baseID)::\(identity)"
@@ -90,9 +149,29 @@ struct DoctorIssue: Identifiable, Equatable, Sendable {
         self.projectPath = projectPath
         self.kind = kind
         self.severity = severity
-        self.title = title
-        self.detail = detail
+        self.finding = finding
         self.fixAction = fixAction
+    }
+}
+
+// Keep app-generated probe errors typed; external error messages pass through unchanged.
+enum DoctorListenerFailure: Equatable, Sendable {
+    case unavailable, hidden(Int), other(String)
+
+    init(_ error: Error) {
+        switch error as? PortConflictService.ScanError {
+        case .unavailable: self = .unavailable
+        case .hiddenListener(let port): self = .hidden(port)
+        case nil: self = .other(error.localizedDescription)
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .unavailable: PortConflictService.ScanError.unavailable.localizedDescription
+        case .hidden(let port): PortConflictService.ScanError.hiddenListener(port).localizedDescription
+        case .other(let message): message
+        }
     }
 }
 
@@ -132,8 +211,9 @@ struct DoctorProjectReport: Identifiable, Equatable, Sendable {
 struct MachineToolStatus: Identifiable, Equatable, Sendable {
     let id: String
     let title: String
-    let available: Bool
-    let detail: String
+    let path: String?
+    var available: Bool { path != nil }
+    var detail: String { path ?? FizzL10n.text("未安装", "Not installed") }
 }
 
 struct MachineDiskStatus: Equatable, Sendable {
@@ -182,7 +262,7 @@ enum DoctorService {
     static func cloudIssue(for project: RepoProject) -> DoctorIssue? {
         guard project.behind > 0 else { return nil }
         return DoctorIssue(projectPath: project.path, kind: .cloudBehind, severity: .warning,
-                           title: "云端领先 \(project.behind) 个提交", detail: "可在版本页查看并决定是否拉取", fixAction: nil)
+                           finding: .cloudBehind(project.behind), fixAction: nil)
     }
 
     static func inspectL0(
@@ -199,8 +279,7 @@ enum DoctorService {
                     projectPath: project.path,
                     kind: .missingDependencies,
                     severity: .critical,
-                    title: item.title,
-                    detail: item.detail,
+                    finding: .lightweight(item),
                     fixAction: .installDependencies(command: detectInstallCommand(in: directory))
                 ))
             case .staleDependencies:
@@ -208,8 +287,7 @@ enum DoctorService {
                     projectPath: project.path,
                     kind: .staleDependencies,
                     severity: .warning,
-                    title: item.title,
-                    detail: item.detail,
+                    finding: .lightweight(item),
                     fixAction: .installDependencies(command: detectInstallCommand(in: directory))
                 ))
             case .unignoredEnvFile:
@@ -217,8 +295,7 @@ enum DoctorService {
                     projectPath: project.path,
                     kind: .unignoredEnvFile,
                     severity: .critical,
-                    title: item.title,
-                    detail: item.detail,
+                    finding: .lightweight(item),
                     fixAction: .addEnvToGitignore
                 ))
             }
@@ -232,8 +309,7 @@ enum DoctorService {
                 projectPath: project.path,
                 kind: .missingEnvFile,
                 severity: .warning,
-                title: copyMode == .plain ? "缺少项目配置文件 .env（已有模板）" : "缺少环境变量文件 .env",
-                detail: "根目录已有 .env.example 模板，可复制成 .env 后填入所需配置",
+                finding: .missingEnvironment(copyMode),
                 fixAction: .createEnvFromExample
             ))
         }
@@ -241,8 +317,8 @@ enum DoctorService {
         if !GitService.hasGit(directory) {
             issues.append(DoctorIssue(
                 projectPath: project.path, kind: .notAGitRepo, severity: .warning,
-                title: copyMode == .plain ? "还没有开启版本保护" : "未初始化 Git 仓库",
-                detail: "开启后，每次 AI 对话前都能自动记下状态，随时可还原", fixAction: .initGitRepository
+                finding: .unprotected(copyMode),
+                fixAction: .initGitRepository
             ))
         }
         return report(for: project.path, issues: issues).applying(exemptions)
@@ -268,8 +344,7 @@ enum DoctorService {
                     projectPath: project.path,
                     kind: .runtimeVersionMismatch,
                     severity: .warning,
-                    title: mismatch.title,
-                    detail: mismatch.detail,
+                    finding: .runtime(mismatch),
                     fixAction: .copyShellCommand(command: mismatch.fixCommand),
                     identity: mismatch.id
                 ))
@@ -279,34 +354,36 @@ enum DoctorService {
         if GitService.hasGit(directory) {
             let secretFiles = await findTrackedSecretFiles(in: directory)
             if !secretFiles.isEmpty {
-                let sample = secretFiles.prefix(3).joined(separator: "、")
-                let more = secretFiles.count > 3 ? " 等 \(secretFiles.count) 个文件" : ""
                 issues.append(DoctorIssue(
                     projectPath: project.path,
                     kind: .trackedSecrets,
                     severity: .critical,
-                    title: copyMode == .plain ? "已保存的代码里疑似包含密钥" : "跟踪文件命中疑似密钥",
-                    detail: "命中文件：\(sample)\(more)，建议移入 .env 后再上传到云端",
+                    finding: .secrets(files: Array(secretFiles.prefix(3)), total: secretFiles.count, copyMode),
                     fixAction: .inspectTrackedSecrets(files: Array(secretFiles.prefix(10)))
                 ))
             }
         }
 
-        if scope == .focused,
-           let port = project.run?.port,
-           project.port != .running,
-           let conflict = await PortConflictService.inspect(port: port) {
-            issues.append(DoctorIssue(
-                projectPath: project.path,
-                kind: .portConflict,
-                severity: .critical,
-                title: copyMode == .plain ? "端口 \(port) 被其他程序占着" : "端口 \(port) 已被占用",
-                detail: conflict.occupantSummary,
-                fixAction: .resolvePortConflict(conflict)
-            ))
+        if scope == .focused, let port = project.run?.port, project.port != .running,
+           let issue = await portIssue(port, projectPath: project.path, copyMode: copyMode) {
+            issues.append(issue)
         }
-
         return report(for: project.path, issues: issues).applying(exemptions)
+    }
+
+    private static func portIssue(_ port: Int, projectPath: String, copyMode: CopyMode) async -> DoctorIssue? {
+        let conflict: PortConflict
+        let failure: DoctorListenerFailure?
+        do {
+            guard let listener = try await PortConflictService.snapshot(ports: [port]).first else { return nil }
+            conflict = listener
+            failure = nil
+        } catch {
+            conflict = PortConflict(port: port, occupants: [], note: nil)
+            failure = DoctorListenerFailure(error)
+        }
+        return DoctorIssue(projectPath: projectPath, kind: .portConflict, severity: .critical,
+                           finding: .port(conflict, copyMode, failure), fixAction: .resolvePortConflict(conflict))
     }
 
     static func report(for path: String, issues: [DoctorIssue]) -> DoctorProjectReport {
@@ -355,20 +432,17 @@ enum DoctorService {
             MachineToolStatus(
                 id: "claude",
                 title: "Claude Code",
-                available: claudePath != nil,
-                detail: claudePath ?? "未安装"
+                path: claudePath
             ),
             MachineToolStatus(
                 id: "codex",
                 title: "Codex CLI",
-                available: codexPath != nil,
-                detail: codexPath ?? "未安装"
+                path: codexPath
             ),
             MachineToolStatus(
                 id: "gemini",
                 title: "Gemini CLI",
-                available: geminiPath != nil,
-                detail: geminiPath ?? "未安装"
+                path: geminiPath
             ),
         ]
 
@@ -432,15 +506,15 @@ enum DoctorService {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty, !cleanEmail.isEmpty else {
-            return (false, "请填写名字和邮箱")
+            return (false, FizzL10n.text("请填写名字和邮箱", "Enter your name and email."))
         }
 
         let nameResult = await Shell.run("git", ["config", "--global", "user.name", cleanName], timeout: 5)
         let emailResult = await Shell.run("git", ["config", "--global", "user.email", cleanEmail], timeout: 5)
         guard nameResult?.succeeded == true && emailResult?.succeeded == true else {
-            return (false, "写入 Git 全局设置失败")
+            return (false, FizzL10n.text("写入 Git 全局设置失败", "Couldn’t save global Git settings."))
         }
-        return (true, "已保存 Git 作者名与邮箱")
+        return (true, FizzL10n.text("已保存 Git 作者名与邮箱", "Saved Git author name and email"))
     }
 
     static func trashCleanupItems(
@@ -460,7 +534,7 @@ enum DoctorService {
             let rawURL = URL(fileURLWithPath: item.path)
             let candidate = rawURL.resolvingSymlinksInPath().standardizedFileURL
             guard candidate.path.hasPrefix(rootPrefix), candidate.path != rootURL.path else {
-                return (trashedCount, freedBytes, "已阻止越界路径清理：\(item.label)")
+                return (trashedCount, freedBytes, FizzL10n.text("已阻止越界路径清理：\(item.label)", "Blocked cleanup outside the project: \(item.label)"))
             }
             guard FileTools.exists(candidate) else { continue }
             do {
@@ -468,7 +542,7 @@ enum DoctorService {
                 trashedCount += 1
                 freedBytes += max(0, item.bytes)
             } catch {
-                return (trashedCount, freedBytes, "移入废纸篓失败：\(item.label)")
+                return (trashedCount, freedBytes, FizzL10n.text("移入废纸篓失败：\(item.label)", "Couldn’t move to Trash: \(item.label)"))
             }
         }
 

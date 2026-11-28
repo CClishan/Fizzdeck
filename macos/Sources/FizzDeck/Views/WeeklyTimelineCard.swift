@@ -19,16 +19,16 @@ struct WeeklyTimelineCard: View {
                     }
                 }
             } else {
-                Text("近 7 天暂无活动")
+                Text(FizzL10n.text("近 7 天暂无活动", "No activity in the last 7 days"))
                     .font(FizzTypography.body)
                     .foregroundStyle(.secondary)
             }
         } accessory: {
             if hasActivity {
-                legend(.session, label: copyMode == .plain ? "对话" : "会话")
-                legend(.commit, label: copyMode == .plain ? "版本" : "提交")
+                legend(.session, label: copyMode == .plain ? FizzL10n.text("对话", "Conversations") : FizzL10n.text("会话", "Sessions"))
+                legend(.commit, label: copyMode == .plain ? FizzL10n.text("版本", "Versions") : FizzL10n.text("提交", "Commits"))
             }
-            FizzIconButton(title: copyMode == .plain ? FizzCopy.heatmapTitle(.plain) : "提交热力图",
+            FizzIconButton(title: copyMode == .plain ? FizzCopy.heatmapTitle(.plain) : FizzL10n.text("提交热力图", "Commit heatmap"),
                            symbol: "square.grid.3x3", height: .compact, action: onOpenHeatmap)
         }
     }
@@ -47,7 +47,7 @@ struct WeeklyTimelineCard: View {
             .frame(height: FizzControlHeight.compact.rawValue)
             .background(column.isToday ? FizzTheme.selectedFill : Color.clear, in: Capsule())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(column.isToday ? "今天，\(column.dayNumber) 日，\(column.weekdayLabel)" : "\(column.dayNumber) 日，\(column.weekdayLabel)")
+            .accessibilityLabel(column.isToday ? FizzL10n.text("今天，\(column.dayNumber) 日，\(column.weekdayLabel)", "Today, \(column.weekdayLabel) \(column.dayNumber)") : FizzL10n.text("\(column.dayNumber) 日，\(column.weekdayLabel)", "\(column.weekdayLabel) \(column.dayNumber)"))
 
             let orderedBlocks: [TimelineBlock] = copyMode == .plain
                 ? column.blocks.sorted { left, right in
@@ -77,7 +77,7 @@ struct WeeklyTimelineCard: View {
                     }
                     .menuStyle(.button)
                     .buttonStyle(.plain)
-                    .accessibilityLabel("另有 \(overflow.count) 项活动")
+                    .accessibilityLabel(FizzL10n.text("另有 \(overflow.count) 项活动", "\(overflow.count) more \(overflow.count == 1 ? "event" : "events")"))
                 }
             }
             .padding(3)

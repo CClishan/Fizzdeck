@@ -63,10 +63,10 @@ struct TrialRun: Identifiable, Equatable {
 
     var summary: String {
         switch status {
-        case .running: stopRequested ? "等待退出" : "运行中"
-        case .succeeded: "通过"
-        case .failed: exitCode.map { "失败 · 退出码 \($0)" } ?? "启动失败"
-        case .stopped: "已停止"
+        case .running: stopRequested ? FizzL10n.text("等待退出", "Waiting to exit") : FizzL10n.text("运行中", "Running")
+        case .succeeded: FizzL10n.text("通过", "Passed")
+        case .failed: exitCode.map { FizzL10n.text("失败 · 退出码 \($0)", "Failed · Exit code \($0)") } ?? FizzL10n.text("启动失败", "Couldn’t start")
+        case .stopped: FizzL10n.text("已停止", "Stopped")
         }
     }
 }
@@ -130,7 +130,7 @@ final class ProjectTrialService {
         let pid = process.processIdentifier
         // Foundation launches a new process group on Darwin. Include npm/make workers, never the app's group.
         guard pid > 1, getpgid(pid) == pid, pid != getpgrp(), Darwin.kill(-pid, SIGTERM) == 0 else {
-            run.error = "无法核对本次试跑的进程组或发送 SIGTERM"
+            run.error = FizzL10n.text("无法核对本次试跑的进程组或发送 SIGTERM", "Couldn’t verify the trial’s process group or send SIGTERM")
             runs[path] = run
             return
         }

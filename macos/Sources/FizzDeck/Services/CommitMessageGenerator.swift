@@ -21,7 +21,7 @@ enum CommitMessageGenerator {
             if !firstLine.isEmpty {
                 let redacted = SecretRedactor.redact(firstLine).text
                 let trimmed = String(redacted.prefix(48))
-                return "更新：\(trimmed)"
+                return FizzL10n.text("更新：\(trimmed)", "Update: \(trimmed)")
             }
         }
 
@@ -29,11 +29,11 @@ enum CommitMessageGenerator {
             let names = changedFiles
                 .prefix(3)
                 .map { URL(fileURLWithPath: $0).lastPathComponent }
-            let suffix = changedFiles.count > 3 ? " 等" : ""
-            let raw = "更新 \(changedFiles.count) 个文件：\(names.joined(separator: ", "))\(suffix)"
+            let suffix = changedFiles.count > 3 ? FizzL10n.text(" 等", " and more") : ""
+            let raw = FizzL10n.text("更新 \(changedFiles.count) 个文件：\(names.joined(separator: ", "))\(suffix)", "Update \(changedFiles.count) files: \(names.joined(separator: ", "))\(suffix)")
             return SecretRedactor.redact(raw).text
         }
 
-        return copyMode == .plain ? "保存当前进度" : "chore: save working changes"
+        return copyMode == .plain ? FizzL10n.text("保存当前进度", "Save current progress") : "chore: save working changes"
     }
 }

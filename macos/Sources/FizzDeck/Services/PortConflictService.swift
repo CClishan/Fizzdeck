@@ -28,8 +28,9 @@ struct PortOccupant: Identifiable, Sendable, Hashable {
         guard let identity, let uid, let command, !command.isEmpty else { return false }
         return identity.pid == pid && identity.uid == uid && uid != 0 && uid == getuid() && uid == geteuid()
     }
-    var displayCommand: String { SecretRedactor.redact(command ?? name).text }
-    var details: String { "PID \(pid) · UID \(uid.map(String.init) ?? "未知")\n\(displayCommand)" }
+    var displayName: String { name.isEmpty ? FizzL10n.text("未知进程", "Unknown process") : name }
+    var displayCommand: String { SecretRedactor.redact(command ?? displayName).text }
+    var details: String { "PID \(pid) · UID \(uid.map(String.init) ?? FizzL10n.text("未知", "Unknown"))\n\(displayCommand)" }
 }
 
 struct PortConflict: Identifiable, Sendable, Equatable {
@@ -46,8 +47,8 @@ struct PortConflict: Identifiable, Sendable, Equatable {
 
     var id: Int { port }
     var occupantSummary: String {
-        guard !occupants.isEmpty else { return note ?? "占用进程未知" }
-        return occupants.map { "\($0.name) · PID \($0.pid)" }.joined(separator: "，")
+        guard !occupants.isEmpty else { return note ?? FizzL10n.text("占用进程未知", "Unknown process") }
+        return occupants.map { "\($0.displayName) · PID \($0.pid)" }.joined(separator: FizzL10n.text("，", ", "))
     }
     var canStop: Bool { occupants.count == 1 && occupants.first?.canStop == true }
     var details: String { occupants.map(\.details).joined(separator: "\n\n") }
@@ -76,8 +77,8 @@ enum PortConflictService {
         case hiddenListener(Int)
         var errorDescription: String? {
             switch self {
-            case .unavailable: "无法核对 TCP 监听进程，请刷新后重试"
-            case .hiddenListener(let port): "端口 \(port) 有响应，但无法读取监听 PID"
+            case .unavailable: FizzL10n.text("无法核对 TCP 监听进程，请刷新后重试", "Couldn’t check the TCP listener. Refresh and try again.")
+            case .hiddenListener(let port): FizzL10n.text("端口 \(port) 有响应，但无法读取监听 PID", "Port \(port) responded, but its listener PID is unavailable")
             }
         }
     }
@@ -131,7 +132,7 @@ enum PortConflictService {
             case "n":
                 guard let pid, pid > 0, let colon = value.lastIndex(of: ":"),
                       let port = Int(value.suffix(from: value.index(after: colon))), ports.contains(port) else { continue }
-                var item = listeners[port]?[pid] ?? PortOccupant(pid: pid, name: name.isEmpty ? "未知进程" : name, uid: uid)
+                var item = listeners[port]?[pid] ?? PortOccupant(pid: pid, name: name, uid: uid)
                 item.addresses.insert(String(value))
                 switch (family, value[..<colon]) {
                 case ("IPv4", "*"), ("IPv4", "0.0.0.0"), ("IPv4", "127.0.0.1"): item.previewHosts.insert("127.0.0.1")
@@ -158,31 +159,31 @@ enum PortConflictService {
         _ conflict: PortConflict, only target: PortOccupant? = nil, managedBy project: PreviewProject? = nil,
         stillAuthorized: () -> Bool = { true }
     ) async -> PortTerminationResult {
-        guard !conflict.occupants.isEmpty else { return .refused("没有可结束的 PID，请刷新后重试") }
-        guard conflict.consent?.consume() == true else { return .refused("请在运行页核对 PID 和命令，再确认停止") }
+        guard !conflict.occupants.isEmpty else { return .refused(FizzL10n.text("没有可结束的 PID，请刷新后重试", "No PID is available to stop. Refresh and try again.")) }
+        guard conflict.consent?.consume() == true else { return .refused(FizzL10n.text("请在运行页核对 PID 和命令，再确认停止", "Check the PID and command on the Run tab before stopping it")) }
         guard let selected = target ?? (conflict.occupants.count == 1 ? conflict.occupants.first : nil) else {
-            return .refused("多个进程共用此端口，请选择要停止的 PID")
+            return .refused(FizzL10n.text("多个进程共用此端口，请选择要停止的 PID", "Several processes share this port. Select a PID to stop."))
         }
         guard selected.canStop, conflict.occupants.contains(selected), let identity = selected.identity else {
-            return .refused("无法核实当前用户的进程身份，不发送信号")
+            return .refused(FizzL10n.text("无法核实当前用户的进程身份，不发送信号", "Couldn’t verify that this process belongs to you. No signal was sent."))
         }
         do {
             guard let current = try await snapshot(ports: [conflict.port]).first,
                   (target != nil || current.occupants.count == 1), current.occupants.contains(selected),
                   project?.owns(listener: selected.pid) != false, !Task.isCancelled, stillAuthorized()
-            else { return .refused("端口、属主或进程身份已变化，请重新确认") }
+            else { return .refused(FizzL10n.text("端口、属主或进程身份已变化，请重新确认", "The port, owner, or process changed. Please check again.")) }
             guard identity.sendTERM() else {
-                return .refused("无法向 PID \(selected.pid) 发送 SIGTERM，请刷新核对")
+                return .refused(FizzL10n.text("无法向 PID \(selected.pid) 发送 SIGTERM，请刷新核对", "Couldn’t send SIGTERM to PID \(selected.pid). Refresh and check again."))
             }
             for delay in [150, 350, 700, 1400] {
                 try await Task.sleep(for: .milliseconds(delay))
                 let remaining = try await snapshot(ports: [conflict.port]).first?.occupants ?? []
-                if remaining.isEmpty { return .init(succeeded: true, message: "端口 \(conflict.port) 已释放", portReleased: true) }
+                if remaining.isEmpty { return .init(succeeded: true, message: FizzL10n.text("端口 \(conflict.port) 已释放", "Port \(conflict.port) is free"), portReleased: true) }
                 if !remaining.contains(where: { $0.pid == selected.pid && ($0.identity == nil || $0.identity == identity) }) {
-                    return .init(succeeded: target != nil, message: "所选 PID 已停止监听，端口 \(conflict.port) 仍有其他监听")
+                    return .init(succeeded: target != nil, message: FizzL10n.text("所选 PID 已停止监听，端口 \(conflict.port) 仍有其他监听", "The selected PID stopped listening; another listener remains on port \(conflict.port)"))
                 }
             }
-            return .refused("已发送 SIGTERM，所选 PID 仍在监听；未强制停止")
+            return .refused(FizzL10n.text("已发送 SIGTERM，所选 PID 仍在监听；未强制停止", "SIGTERM sent. The selected PID is still listening and wasn’t forcibly stopped."))
         } catch { return .refused(error.localizedDescription) }
     }
 }
@@ -193,7 +194,7 @@ struct DeveloperListener: Identifiable, Sendable {
     let owner: PreviewProject?
     let possibleOrphan: Bool
     var id: String { "\(conflict.port):\(process.pid)" }
-    var label: String { owner.map { "受管 · \($0.title)" } ?? (possibleOrphan ? "未受管 · 疑似孤儿" : "未受管") }
+    var label: String { owner.map { FizzL10n.text("受管 · \($0.title)", "Managed · \($0.title)") } ?? (possibleOrphan ? FizzL10n.text("未受管 · 疑似孤儿", "Unmanaged · possibly orphaned") : FizzL10n.text("未受管", "Unmanaged")) }
 
     static func scan(ports: Set<Int>, projects: [PreviewProject]) async throws -> [Self] {
         try await PortConflictService.snapshot(ports: ports).flatMap { conflict in

@@ -3,6 +3,7 @@ import SwiftUI
 struct WorkbenchStatusCard: View {
     @Environment(RepositoryStore.self) private var store
     @Environment(ProjectActions.self) private var actions
+    @AppStorage(CopyModePreferences.key) private var copyMode: CopyMode = .plain
 
     let runningProjects: [RepoProject]
     let cloudProjects: [RepoProject]
@@ -18,7 +19,7 @@ struct WorkbenchStatusCard: View {
         let active = activeAIProjects
         if !runningProjects.isEmpty || !active.isEmpty || !healthAlerts.isEmpty || !cloudProjects.isEmpty {
             VStack(alignment: .leading, spacing: 5) {
-                Text("运行与健康")
+                Text(FizzL10n.text("运行与健康", "Services and health"))
                     .font(FizzTypography.caption(.medium))
                     .foregroundStyle(.secondary)
                     .accessibilityAddTraits(.isHeader)
@@ -26,9 +27,9 @@ struct WorkbenchStatusCard: View {
                 ForEach(active) { project in
                     HStack(spacing: FizzSpacing.row) {
                         RunningPulseDot()
-                        Text("AI 正在 \(project.displayName) 里干活")
+                        Text(FizzL10n.text("AI 正在 \(project.displayName) 里干活", "AI is working in \(project.displayName)"))
                         Spacer(minLength: FizzSpacing.row)
-                        FizzActionButton(title: "去看看", height: .compact) {
+                        FizzActionButton(title: FizzL10n.text("去看看", "View Progress"), height: .compact) {
                             store.openProject(project, tab: .progress)
                         }
                     }
@@ -38,9 +39,9 @@ struct WorkbenchStatusCard: View {
                     HStack(spacing: FizzSpacing.row) {
                         FizzStatusDot(tint: FizzTheme.statusWarning)
                         Text(project.displayName)
-                        Text("云端领先 \(project.behind) 个提交").foregroundStyle(.secondary)
+                        Text(FizzCopy.behind(count: project.behind, mode: copyMode).text).foregroundStyle(.secondary)
                         Spacer(minLength: FizzSpacing.row)
-                        FizzIconButton(title: "查看版本", symbol: "chevron.right", height: .compact) {
+                        FizzIconButton(title: FizzL10n.text("查看版本", "View versions"), symbol: "chevron.right", height: .compact) {
                             store.openProject(project, tab: .version)
                         }
                     }
@@ -58,19 +59,19 @@ struct WorkbenchStatusCard: View {
             FizzStatusDot(tint: FizzTheme.statusSuccess)
             Button(project.displayName) { store.openProject(project) }
                 .buttonStyle(.plain)
-                .accessibilityHint("服务正在运行")
+                .accessibilityHint(FizzL10n.text("服务正在运行", "Service is running"))
             if let port = project.run?.port, port > 0 {
                 Text(verbatim: ":\(port)")
                     .font(FizzTypography.monoSmall)
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: FizzSpacing.row)
-            FizzActionButton(title: "停止…", height: .compact, role: .destructive) {
+            FizzActionButton(title: FizzL10n.text("停止…", "Stop…"), height: .compact, role: .destructive) {
                 Task { await actions.stop(project, store: store) }
             }
             .disabled(actions.isBusy(project.path))
             if let preview = previewURL(project) {
-                FizzIconButton(title: "预览", symbol: "arrow.up.right", height: .compact) {
+                FizzIconButton(title: FizzL10n.text("预览", "Preview"), symbol: "arrow.up.right", height: .compact) {
                     SystemActions.openURL(preview)
                 }
             }
@@ -85,10 +86,10 @@ struct WorkbenchStatusCard: View {
             Spacer(minLength: FizzSpacing.row)
             switch alert.kind {
             case .highCleanup:
-                FizzActionButton(title: "去清理", height: .compact) { store.openCleanup() }
+                FizzActionButton(title: FizzL10n.text("去清理", "Clean up"), height: .compact) { store.openCleanup() }
             case .staleDirty:
                 if let path = alert.targetProjectPath, let project = store.projects.first(where: { $0.path == path }) {
-                    FizzActionButton(title: "查看", height: .compact) { store.openProject(project, tab: .version) }
+                    FizzActionButton(title: FizzL10n.text("查看", "View"), height: .compact) { store.openProject(project, tab: .version) }
                 }
             case .lowDisk:
                 EmptyView()

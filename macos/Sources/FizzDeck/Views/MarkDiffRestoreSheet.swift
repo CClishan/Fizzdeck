@@ -55,15 +55,16 @@ struct MarkDiffRestoreSheet: View {
 
     private var formattedMarkTime: String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MM-dd HH:mm"
+        formatter.locale = FizzL10n.locale
+        formatter.dateFormat = FizzL10n.text("MM-dd HH:mm", "MMM d, HH:mm")
         return formatter.string(from: currentMark.createdAt)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             FizzSheetHeader(
-                title: "看改了什么 · \(project.displayName)",
-                subtitle: "\(currentMark.label ?? "对话开始前的样子") · \(formattedMarkTime)"
+                title: FizzL10n.text("看改了什么 · \(project.displayName)", "Changes since the checkpoint · \(project.displayName)"),
+                subtitle: "\(currentMark.projectCheckpointTitle) · \(formattedMarkTime)"
             ) { dismiss() }
             .disabled(isRestoring)
             .padding(.horizontal, FizzSpacing.page)
@@ -86,9 +87,9 @@ struct MarkDiffRestoreSheet: View {
         .task(id: mark.id) {
             await loadSummary()
         }
-        .alert("确认还原这些文件？", isPresented: $showingConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("确认还原", role: .destructive) {
+        .alert(FizzL10n.text("确认还原这些文件？", "Restore these files?"), isPresented: $showingConfirm) {
+            Button(FizzL10n.text("取消", "Cancel"), role: .cancel) {}
+            Button(FizzL10n.text("确认还原", "Restore files"), role: .destructive) {
                 Task { await performRestore() }
             }
         } message: {
@@ -101,18 +102,18 @@ struct MarkDiffRestoreSheet: View {
         if summary?.available == false || currentMark.pinned || currentMark.kind == .gitSnapshot {
             HStack(spacing: FizzSpacing.row) {
                 if summary?.available == false {
-                    TagChip(text: "已过期", tint: .secondary, compact: true)
+                    TagChip(text: FizzL10n.text("已过期", "Expired"), tint: .secondary, compact: true)
                 } else if currentMark.pinned {
-                    TagChip(text: "已保留", tint: Color.secondary, compact: true)
+                    TagChip(text: FizzL10n.text("已保留", "Pinned"), tint: Color.secondary, compact: true)
                 } else {
-                    TagChip(text: "可安全还原", tint: FizzTheme.statusSuccess, compact: true)
+                    TagChip(text: FizzL10n.text("可安全还原", "Ready to restore"), tint: FizzTheme.statusSuccess, compact: true)
                 }
 
                 Spacer(minLength: FizzSpacing.row)
 
                 if currentMark.kind == .gitSnapshot && summary?.available == true {
                     FizzActionButton(
-                        title: currentMark.pinned ? "取消保留" : "永久保留",
+                        title: currentMark.pinned ? FizzL10n.text("取消保留", "Unpin") : FizzL10n.text("永久保留", "Keep permanently"),
                         symbol: currentMark.pinned ? "star.fill" : "star",
                         height: .compact
                     ) {
@@ -135,24 +136,24 @@ struct MarkDiffRestoreSheet: View {
         if isLoadingSummary {
             VStack(spacing: FizzSpacing.row) {
                 ProgressView()
-                Text("正在对比这个时间点之后的变化…")
+                Text(FizzL10n.text("正在对比这个时间点之后的变化…", "Comparing changes since this checkpoint…"))
                     .font(FizzTypography.body)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let summary, !summary.available {
             ContentUnavailableView(
-                "这个标记已过期",
+                FizzL10n.text("这个标记已过期", "This checkpoint has expired"),
                 systemImage: "clock.badge.exclamationmark",
-                description: Text("这个对话标记超过 14 天已被 Git 清理，无法对比或还原。重要节点可以在过期前选择「永久保留」。")
+                description: Text(FizzL10n.text("这个对话标记超过 14 天已被 Git 清理，无法对比或还原。重要节点可以在过期前选择「永久保留」。", "Git removed this snapshot after 14 days. It can no longer be compared or restored. Choose “Keep permanently” before an important checkpoint expires."))
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let summary,
                   summary.modifiedOrDeleted.isEmpty && summary.createdAfterMark.isEmpty {
             ContentUnavailableView(
-                "和这个标记时完全一致",
+                FizzL10n.text("和这个标记时完全一致", "No changes since this checkpoint"),
                 systemImage: "checkmark.circle",
-                description: Text("从记下这个时间点到现在，工作区没有留下任何改动。")
+                description: Text(FizzL10n.text("从记下这个时间点到现在，工作区没有留下任何改动。", "The working tree matches the state recorded at this checkpoint."))
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let summary {
@@ -175,12 +176,12 @@ struct MarkDiffRestoreSheet: View {
                 if !summary.modifiedOrDeleted.isEmpty {
                     VStack(alignment: .leading, spacing: FizzSpacing.row) {
                         HStack(spacing: FizzSpacing.row) {
-                            Text("修改或删除的文件（\(summary.modifiedOrDeleted.count)）")
+                            Text(FizzL10n.text("修改或删除的文件（\(summary.modifiedOrDeleted.count)）", "Modified or deleted files (\(summary.modifiedOrDeleted.count))"))
                                 .font(FizzTypography.caption(.semibold))
                                 .foregroundStyle(.secondary)
                             Spacer()
                             FizzActionButton(
-                                title: selectedRestorePaths.count == summary.modifiedOrDeleted.count ? "全不选" : "全选",
+                                title: selectedRestorePaths.count == summary.modifiedOrDeleted.count ? FizzL10n.text("全不选", "Deselect all") : FizzL10n.text("全选", "Select all"),
                                 height: .compact
                             ) {
                                 if selectedRestorePaths.count == summary.modifiedOrDeleted.count {
@@ -213,10 +214,10 @@ struct MarkDiffRestoreSheet: View {
                 if !summary.createdAfterMark.isEmpty {
                     VStack(alignment: .leading, spacing: FizzSpacing.row) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("对话后新建的文件（默认不删）")
+                            Text(FizzL10n.text("对话后新建的文件（默认不删）", "Files created later (kept by default)"))
                                 .font(FizzTypography.caption(.semibold))
                                 .foregroundStyle(.secondary)
-                            Text("勾选后会移入系统废纸篓，不会直接彻底抹掉")
+                            Text(FizzL10n.text("勾选后会移入系统废纸篓，不会直接彻底抹掉", "Selected files go to the Trash, where you can recover them."))
                                 .font(FizzTypography.micro)
                                 .foregroundStyle(.tertiary)
                         }
@@ -249,7 +250,7 @@ struct MarkDiffRestoreSheet: View {
         let fileName = URL(fileURLWithPath: change.path).lastPathComponent
 
         return HStack(spacing: FizzSpacing.row) {
-            Toggle("选择 \(fileName)", isOn: isChecked)
+            Toggle(FizzL10n.text("选择 \(fileName)", "Select \(fileName)"), isOn: isChecked)
                 .labelsHidden()
                 .toggleStyle(.checkbox)
 
@@ -286,9 +287,9 @@ struct MarkDiffRestoreSheet: View {
 
     private func statusBadge(_ status: MarkFileChangeStatus) -> some View {
         let (label, tint): (String, Color) = switch status {
-        case .modified: ("修改", FizzTheme.statusWarning)
-        case .deleted: ("删除", FizzTheme.statusDanger)
-        case .createdAfterMark: ("新建", FizzTheme.statusSuccess)
+        case .modified: (FizzL10n.text("修改", "Modified"), FizzTheme.statusWarning)
+        case .deleted: (FizzL10n.text("删除", "Deleted"), FizzTheme.statusDanger)
+        case .createdAfterMark: (FizzL10n.text("新建", "Created"), FizzTheme.statusSuccess)
         }
         return TagChip(text: label, tint: tint, compact: true)
     }
@@ -328,7 +329,7 @@ struct MarkDiffRestoreSheet: View {
                     HStack(spacing: FizzSpacing.row) {
                         ProgressView()
                             .controlSize(.small)
-                        Text("正在生成改动对比…")
+                        Text(FizzL10n.text("正在生成改动对比…", "Preparing diff…"))
                             .font(FizzTypography.body)
                             .foregroundStyle(.secondary)
                     }
@@ -341,7 +342,7 @@ struct MarkDiffRestoreSheet: View {
                             .padding(FizzSpacing.section)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     } else if diff.isEmpty {
-                        Text("没有可展示的文本差异。")
+                        Text(FizzL10n.text("没有可展示的文本差异。", "No text differences to show."))
                             .font(FizzTypography.body)
                             .foregroundStyle(.secondary)
                             .padding(FizzSpacing.section)
@@ -369,14 +370,14 @@ struct MarkDiffRestoreSheet: View {
                         .background(FizzTheme.recessedFill)
                     }
                 } else {
-                    Text("点击左侧文件名可查看改动的每一行。")
+                    Text(FizzL10n.text("点击左侧文件名可查看改动的每一行。", "Select a file on the left to see each changed line."))
                         .font(FizzTypography.body)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         } else {
-            Text("从左侧选择一个文件，即可查看改了哪些内容。")
+            Text(FizzL10n.text("从左侧选择一个文件，即可查看改了哪些内容。", "Select a file on the left to see what changed."))
                 .font(FizzTypography.body)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -392,23 +393,23 @@ struct MarkDiffRestoreSheet: View {
                     .lineLimit(2)
             } else if isRestoring {
                 ProgressView().controlSize(.small)
-                Text("正在还原…")
+                Text(FizzL10n.text("正在还原…", "Restoring…"))
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Text("还原前会自动再记一次当前状态，还原完也能点撤销。")
+                Text(FizzL10n.text("还原前会自动再记一次当前状态，还原完也能点撤销。", "FizzDeck backs up the current state first, so you can undo the restore."))
                     .font(FizzTypography.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: FizzSpacing.row)
 
-            FizzActionButton(title: "关闭", role: .cancel) { dismiss() }
+            FizzActionButton(title: FizzL10n.text("关闭", "Close"), role: .cancel) { dismiss() }
                 .keyboardShortcut(.cancelAction)
                 .disabled(isRestoring)
 
             FizzActionButton(
-                title: totalSelectedCount > 0 ? "还原选中（\(totalSelectedCount)）" : "还原选中",
+                title: totalSelectedCount > 0 ? FizzL10n.text("还原选中（\(totalSelectedCount)）", "Restore selected (\(totalSelectedCount))") : FizzL10n.text("还原选中", "Restore selected"),
                 prominence: .primary,
                 role: .destructive
             ) {
@@ -423,12 +424,12 @@ struct MarkDiffRestoreSheet: View {
         let trashCount = selectedTrashPaths.count
         var parts: [String] = []
         if restoreCount > 0 {
-            parts.append("把 \(restoreCount) 个文件恢复到 \(formattedMarkTime) 时的样子")
+            parts.append(FizzL10n.text("把 \(restoreCount) 个文件恢复到 \(formattedMarkTime) 时的样子", "restore \(restoreCount) \(restoreCount == 1 ? "file" : "files") to the state at \(formattedMarkTime)"))
         }
         if trashCount > 0 {
-            parts.append("把 \(trashCount) 个新建文件移到废纸篓")
+            parts.append(FizzL10n.text("把 \(trashCount) 个新建文件移到废纸篓", "move \(trashCount) new \(trashCount == 1 ? "file" : "files") to the Trash"))
         }
-        return "将\(parts.joined(separator: "，并"))。操作前会自动备份当前状态，随时可撤销。"
+        return FizzL10n.text("将\(parts.joined(separator: "，并"))。操作前会自动备份当前状态，随时可撤销。", "This will \(parts.joined(separator: " and ")). FizzDeck backs up the current state first, so you can undo this.")
     }
 
     private func loadSummary() async {
@@ -503,13 +504,13 @@ struct MarkDiffRestoreSheet: View {
         let removedViz = result.trashedCount
         let backupMark = result.preRestoreMark
         let subtitle: String? = if result.trashedCount > 0 {
-            "\(result.trashedCount) 个新建文件已移入废纸篓（可在系统废纸篓找回）"
+            FizzL10n.text("\(result.trashedCount) 个新建文件已移入废纸篓（可在系统废纸篓找回）", "Moved \(result.trashedCount) new \(result.trashedCount == 1 ? "file" : "files") to the Trash. You can put them back from there.")
         } else {
-            "随时可点击右侧「撤销」回到刚才的状态"
+            FizzL10n.text("随时可点击右侧「撤销」回到刚才的状态", "Choose Undo to return to the previous state.")
         }
 
         let undoAction: ToastAction? = if let backupMark, !restoreList.isEmpty {
-            ToastAction(title: "撤销", symbol: "arrow.uturn.backward") { [store, directory, onRestored] in
+            ToastAction(title: FizzL10n.text("撤销", "Undo"), symbol: "arrow.uturn.backward") { [store, directory, onRestored] in
                 Task { @MainActor in
                     let undoResult = await SessionMarkService.restore(
                         mark: backupMark,
@@ -521,10 +522,10 @@ struct MarkDiffRestoreSheet: View {
                     await onRestored()
                     if undoResult.succeeded {
                         ToastCenter.shared.show(
-                            "已撤销刚才的还原",
+                            FizzL10n.text("已撤销刚才的还原", "Undid the restore"),
                             symbol: "arrow.uturn.backward.circle.fill",
                             tint: FizzTheme.statusSuccess,
-                            subtitle: result.trashedCount > 0 ? "废纸篓里的新建文件请按需在废纸篓放回" : nil
+                            subtitle: result.trashedCount > 0 ? FizzL10n.text("废纸篓里的新建文件请按需在废纸篓放回", "Put any new files back from the Trash if needed.") : nil
                         )
                     } else {
                         ToastCenter.shared.show(
@@ -540,7 +541,7 @@ struct MarkDiffRestoreSheet: View {
         }
 
         ToastCenter.shared.show(
-            "已还原 \(result.restoredCount + result.trashedCount) 个文件",
+            FizzL10n.text("已还原 \(result.restoredCount + result.trashedCount) 个文件", "Restored \(result.restoredCount + result.trashedCount) \(result.restoredCount + result.trashedCount == 1 ? "file" : "files")"),
             symbol: "clock.arrow.circlepath",
             tint: FizzTheme.statusSuccess,
             subtitle: subtitle,

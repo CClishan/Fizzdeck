@@ -15,17 +15,22 @@ enum Format {
         return byteFormatter.string(fromByteCount: value)
     }
 
-    static func relative(_ date: Date?) -> String {
+    static func relative(_ date: Date?, now: Date = Date(), locale: Locale = FizzL10n.locale) -> String {
         guard let date else { return "—" }
-        if abs(date.timeIntervalSinceNow) < 10 { return "刚刚" }
+        if abs(date.timeIntervalSince(now)) < 10 { return locale.language.languageCode == .chinese ? "刚刚" : "Just now" }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
+        formatter.locale = locale
+        return spaceChineseUnits(formatter.localizedString(for: date, relativeTo: now), locale: locale)
     }
 
     static func shortDate(_ date: Date?) -> String {
         guard let date else { return "—" }
-        return date.formatted(date: .abbreviated, time: .shortened)
+        return date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: FizzL10n.locale))
+    }
+
+    static func monthDay(_ date: Date, locale: Locale = FizzL10n.locale) -> String {
+        date.formatted(.dateTime.month(.abbreviated).day().locale(locale))
     }
 
     static func day(_ value: String) -> Date? {
@@ -45,17 +50,21 @@ enum Format {
     }
 
     static func count(_ value: Int) -> String {
-        value.formatted()
+        value.formatted(.number.locale(FizzL10n.locale))
     }
 
-    static func tokens(_ value: Int) -> String {
-        if value >= 1_000_000 {
-            return String(format: "%.1fM", Double(value) / 1_000_000)
-        }
-        if value >= 1_000 {
-            return String(format: "%.1fK", Double(value) / 1_000)
-        }
-        return value.formatted()
+    static func tokens(_ value: Int, locale: Locale = FizzL10n.locale) -> String {
+        compactCount(Double(value), locale: locale)
+    }
+
+    static func compactCount(_ value: Double, locale: Locale = FizzL10n.locale) -> String {
+        let text = value.formatted(.number.notation(.compactName).locale(locale))
+        return spaceChineseUnits(text, locale: locale)
+    }
+
+    private static func spaceChineseUnits(_ text: String, locale: Locale) -> String {
+        guard locale.language.languageCode == .chinese else { return text }
+        return text.replacingOccurrences(of: #"(?<=\d)(?=\p{Han})"#, with: " ", options: .regularExpression)
     }
 
     static func cost(_ value: Double?, estimated: Bool = false) -> String? {

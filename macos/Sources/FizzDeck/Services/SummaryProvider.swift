@@ -9,9 +9,9 @@ enum SummaryProviderKind: String, CaseIterable, Codable, Sendable, Identifiable 
 
     var title: String {
         switch self {
-        case .agentCLI: "Agent CLI（推荐 · 免 Key）"
-        case .openAICompatible: "OpenAI 兼容 API（Keychain）"
-        case .localModel: "本地模型（Ollama / LM Studio）"
+        case .agentCLI: FizzL10n.text("Agent CLI（推荐 · 免 Key）", "Agent CLI (no key needed)")
+        case .openAICompatible: FizzL10n.text("OpenAI 兼容 API（Keychain）", "OpenAI-compatible API (Keychain)")
+        case .localModel: FizzL10n.text("本地模型（Ollama / LM Studio）", "Local model (Ollama or LM Studio)")
         }
     }
 
@@ -19,7 +19,7 @@ enum SummaryProviderKind: String, CaseIterable, Codable, Sendable, Identifiable 
         switch self {
         case .agentCLI: "Agent CLI"
         case .openAICompatible: "API Key"
-        case .localModel: "本地模型"
+        case .localModel: FizzL10n.text("本地模型", "Local model")
         }
     }
 }
@@ -34,7 +34,7 @@ enum AgentCLIKind: String, CaseIterable, Codable, Sendable, Identifiable {
 
     var title: String {
         switch self {
-        case .auto: "自动选择（Claude / Codex / Gemini）"
+        case .auto: FizzL10n.text("自动选择（Claude / Codex / Gemini）", "Automatic (Claude, Codex, or Gemini)")
         case .claude: "Claude Code (claude -p)"
         case .codex: "Codex CLI (codex exec)"
         case .gemini: "Gemini CLI (gemini -p)"
@@ -221,27 +221,24 @@ struct SummaryResponse: Sendable, Equatable {
 }
 
 enum SummaryProviderError: Error, LocalizedError, Equatable, Sendable {
-    case notConfigured(String)
-    case cliNotFound(String)
-    case timedOut
-    case httpStatus(Int, String)
-    case invalidResponse(String)
-    case transportError(String)
+    case invalidBaseURL, missingModel, missingKey
+    case cliNotFound(String), cliLaunchFailed(String), cliExited(Int32)
+    case timedOut, nonHTTPResponse, emptySummary
+    case httpStatus(Int, String), transportError(String)
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured(let message):
-            return message
-        case .cliNotFound(let message):
-            return message
-        case .timedOut:
-            return "总结生成超时，已自动回退到规则摘要"
-        case .httpStatus(let code, let detail):
-            return "接口返回错误（HTTP \(code)）：\(detail)"
-        case .invalidResponse(let detail):
-            return "无法解析模型返回内容：\(detail)"
-        case .transportError(let detail):
-            return "调用失败：\(detail)"
+        case .invalidBaseURL: FizzL10n.text("接口地址格式无效，请检查 Base URL", "Invalid endpoint. Check the base URL.")
+        case .missingModel: FizzL10n.text("请填写要使用的模型名称", "Enter a model name.")
+        case .missingKey: FizzL10n.text("请先填入并保存 API Key", "Enter and save your API key first.")
+        case .cliNotFound(let name): FizzL10n.text("本机未检测到可用的 \(name) 命令", "No \(name) command was found on this Mac.")
+        case .cliLaunchFailed(let name): FizzL10n.text("调用失败：无法启动 \(name)", "Couldn’t start \(name).")
+        case .cliExited(let code): FizzL10n.text("调用失败：退出码 \(code)", "The CLI exited with code \(code).")
+        case .timedOut: FizzL10n.text("总结生成超时，已自动回退到规则摘要", "The request timed out. Using a local summary.")
+        case .nonHTTPResponse: FizzL10n.text("无法解析模型返回内容：未收到有效的 HTTP 响应", "No valid HTTP response was received.")
+        case .emptySummary: FizzL10n.text("无法解析模型返回内容：返回结果中没有摘要文本", "The response contained no summary text.")
+        case .httpStatus(let code, let detail): FizzL10n.text("接口返回错误（HTTP \(code)）：\(detail)", "The provider returned HTTP \(code): \(detail)")
+        case .transportError(let detail): FizzL10n.text("调用失败：\(detail)", "Request failed: \(detail)")
         }
     }
 }
@@ -284,15 +281,15 @@ struct AgentCLISummaryProvider: SummaryProvider {
         let output = await runner(resolved.executable, arguments, config.workdir, config.timeoutSeconds)
 
         guard let output else {
-            throw SummaryProviderError.transportError("无法启动 \(resolved.kind.binaryName ?? "CLI")")
+            throw SummaryProviderError.cliLaunchFailed(resolved.kind.binaryName ?? "CLI")
         }
         if output.timedOut {
             throw SummaryProviderError.timedOut
         }
         guard output.succeeded else {
             let trimmed = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            let detail = trimmed.isEmpty ? "退出码 \(output.status)" : String(trimmed.prefix(160))
-            throw SummaryProviderError.transportError(detail)
+            if trimmed.isEmpty { throw SummaryProviderError.cliExited(output.status) }
+            throw SummaryProviderError.transportError(SecretRedactor.redactedPrefix(trimmed, 160))
         }
 
         return parseCLIOutput(output.text, cli: resolved.kind)
@@ -315,7 +312,7 @@ struct AgentCLISummaryProvider: SummaryProvider {
         let name = preference == .auto
             ? "claude / codex / gemini"
             : (preference.binaryName ?? preference.title)
-        throw SummaryProviderError.cliNotFound("本机未检测到可用的 \(name) 命令")
+        throw SummaryProviderError.cliNotFound(name)
     }
 
     func cliArguments(for cli: AgentCLIKind, prompt: String) -> [String] {
@@ -417,17 +414,17 @@ struct OpenAICompatibleSummaryProvider: SummaryProvider {
         config: SummaryProviderConfiguration
     ) async throws -> SummaryResponse {
         guard let url = Self.endpointURL(from: config.baseURL) else {
-            throw SummaryProviderError.notConfigured("接口地址格式无效，请检查 Base URL")
+            throw SummaryProviderError.invalidBaseURL
         }
 
         let model = config.model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !model.isEmpty else {
-            throw SummaryProviderError.notConfigured("请填写要使用的模型名称")
+            throw SummaryProviderError.missingModel
         }
 
         let trimmedKey = config.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if config.kind == .openAICompatible && trimmedKey.isEmpty {
-            throw SummaryProviderError.notConfigured("请先填入并保存 API Key")
+            throw SummaryProviderError.missingKey
         }
 
         do {
@@ -493,7 +490,7 @@ struct OpenAICompatibleSummaryProvider: SummaryProvider {
         }
 
         guard let http = response as? HTTPURLResponse else {
-            throw SummaryProviderError.invalidResponse("未收到有效的 HTTP 响应")
+            throw SummaryProviderError.nonHTTPResponse
         }
 
         guard (200 ..< 300).contains(http.statusCode) else {
@@ -505,7 +502,7 @@ struct OpenAICompatibleSummaryProvider: SummaryProvider {
               let content = decoded.choices.first?.message.content?
                 .trimmingCharacters(in: .whitespacesAndNewlines),
               !content.isEmpty else {
-            throw SummaryProviderError.invalidResponse("返回结果中没有摘要文本")
+            throw SummaryProviderError.emptySummary
         }
 
         let inputTokens = decoded.usage?.prompt_tokens ?? 0
@@ -530,7 +527,7 @@ struct OpenAICompatibleSummaryProvider: SummaryProvider {
             inputTokens: inputTokens,
             outputTokens: outputTokens,
             estimatedCostUSD: estimatedCost,
-            providerLabel: kind == .localModel ? "本地模型" : "OpenAI 兼容 API"
+            providerLabel: kind == .localModel ? FizzL10n.text("本地模型", "Local model") : FizzL10n.text("OpenAI 兼容 API", "OpenAI-compatible API")
         )
     }
 
@@ -561,12 +558,12 @@ struct OpenAICompatibleSummaryProvider: SummaryProvider {
         if let decoded = try? JSONDecoder().decode(APIErrorEnvelope.self, from: data),
            let message = decoded.error?.message?.trimmingCharacters(in: .whitespacesAndNewlines),
            !message.isEmpty {
-            return String(message.prefix(160))
+            return SecretRedactor.redactedPrefix(message, 160)
         }
         if let text = String(data: data, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !text.isEmpty {
-            return String(text.prefix(160))
+            return SecretRedactor.redactedPrefix(text, 160)
         }
         return nil
     }

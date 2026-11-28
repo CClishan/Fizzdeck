@@ -12,16 +12,16 @@ struct TestsTabView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Panel(
-                    title: "提交测试",
+                    title: FizzL10n.text("提交测试", "Project tests"),
                     symbol: "checkmark.shield",
                     content: {
                         VStack(alignment: .leading, spacing: 14) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(project.test?.command ?? "未识别测试命令")
+                                Text(project.test?.command ?? FizzL10n.text("未识别测试命令", "No test command found"))
                                     .font(FizzTypography.font(12))
                                     .textSelection(.enabled)
                                 if let test = project.test {
-                                    Text("来自 \(test.label)")
+                                    Text(FizzL10n.text("来自 \(test.label)", "From \(test.label)"))
                                         .font(FizzTypography.micro(.regular))
                                         .foregroundStyle(.secondary)
                                 }
@@ -43,9 +43,9 @@ struct TestsTabView: View {
                                 }
                             } else {
                                 ContentUnavailableView {
-                                    Label("还没有测试输出", systemImage: "terminal")
+                                    Label(FizzL10n.text("还没有测试输出", "No test output yet"), systemImage: "terminal")
                                 } description: {
-                                    Text(project.test == nil ? "这个项目没有 test / check / typecheck 脚本。" : "底栏「运行测试」会在项目目录执行命令，并实时回显输出。")
+                                    Text(project.test == nil ? FizzL10n.text("这个项目没有 test / check / typecheck 脚本。", "This project has no test, check or typecheck script.") : FizzL10n.text("底栏「运行测试」会在项目目录执行命令，并实时回显输出。", "Use “Run tests” in the bottom bar to run the command in the project folder and see live output."))
                                 }
                                 .frame(maxWidth: .infinity, minHeight: 180)
                             }
@@ -71,11 +71,11 @@ struct TestsTabView: View {
     private func statusText(_ run: TestRunState) -> String {
         switch run.status {
         case .running:
-            "运行中"
+            FizzL10n.text("运行中", "Running")
         case .passed:
-            "通过 · \(String(format: "%.1f", run.duration ?? 0))s"
+            FizzL10n.text("通过 · \(String(format: "%.1f", run.duration ?? 0))s", "Passed · \(String(format: "%.1f", run.duration ?? 0))s")
         case .failed:
-            "失败 · \(String(format: "%.1f", run.duration ?? 0))s"
+            FizzL10n.text("失败 · \(String(format: "%.1f", run.duration ?? 0))s", "Failed · \(String(format: "%.1f", run.duration ?? 0))s")
         }
     }
 

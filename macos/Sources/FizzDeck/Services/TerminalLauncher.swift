@@ -270,7 +270,7 @@ enum TerminalLauncher {
             "#!/bin/zsh",
             "clear",
             "cd \(shellQuote(cwd)) || {",
-            "  echo 'FizzDeck: 无法进入项目目录 \(cwd.replacingOccurrences(of: "'", with: ""))'",
+            FizzL10n.text("  echo 'FizzDeck: 无法进入项目目录 \(cwd.replacingOccurrences(of: "'", with: ""))'", "  echo 'FizzDeck: Cannot enter the project folder \(cwd.replacingOccurrences(of: "'", with: ""))'"),
             "  exec \"${SHELL:-/bin/zsh}\" -l",
             "}",
             "echo \"→ \(escapeDoubleQuoted(command))\"",
@@ -283,7 +283,7 @@ enum TerminalLauncher {
         lines.append(contentsOf: [
             "if [ $status -ne 0 ]; then",
             "  echo \"\"",
-            "  echo \"FizzDeck: 会话命令退出（exit $status），保留终端以便排查。\"",
+            FizzL10n.text("  echo \"FizzDeck: 会话命令退出（exit $status），保留终端以便排查。\"", "  echo \"FizzDeck: Session exited (status $status). Keeping this terminal open.\""),
             "  exec \"${SHELL:-/bin/zsh}\" -l",
             "fi",
         ])
@@ -391,7 +391,7 @@ enum TerminalLauncher {
         guard let application = terminal.applicationURL() else {
             return TerminalLaunchOutcome(
                 success: false,
-                message: "未检测到 \(terminal.title)，请更换默认终端或复制命令运行。",
+                message: FizzL10n.text("未检测到 \(terminal.title)，请更换默认终端或复制命令运行。", "\(terminal.title) wasn’t found. Choose a different terminal or copy the command."),
                 needsAutomationPermission: false,
                 tty: nil,
                 windowID: nil
@@ -404,7 +404,7 @@ enum TerminalLauncher {
         } catch {
             return TerminalLaunchOutcome(
                 success: false,
-                message: "生成启动脚本失败：\(error.localizedDescription)",
+                message: FizzL10n.text("生成启动脚本失败：\(error.localizedDescription)", "Couldn’t create the launch script: \(error.localizedDescription)"),
                 needsAutomationPermission: false,
                 tty: nil,
                 windowID: nil
@@ -418,7 +418,7 @@ enum TerminalLauncher {
         ) else {
             return TerminalLaunchOutcome(
                 success: false,
-                message: "\(terminal.title) 暂不支持自动恢复会话，请复制命令运行。",
+                message: FizzL10n.text("\(terminal.title) 暂不支持自动恢复会话，请复制命令运行。", "\(terminal.title) can’t resume sessions automatically. Copy the command instead."),
                 needsAutomationPermission: false,
                 tty: nil,
                 windowID: nil
@@ -431,7 +431,7 @@ enum TerminalLauncher {
             let parsed = parseLaunchOutput(output, terminal: terminal)
             return TerminalLaunchOutcome(
                 success: true,
-                message: "已在 \(terminal.title) 中恢复会话",
+                message: FizzL10n.text("已在 \(terminal.title) 中恢复会话", "Resumed the session in \(terminal.title)"),
                 needsAutomationPermission: false,
                 tty: parsed.tty,
                 windowID: parsed.windowID
@@ -447,9 +447,9 @@ enum TerminalLauncher {
                     success: opened,
                     message: opened
                         ? (errorCode == -1743
-                            ? "已通过 Terminal 启动会话（开启「自动化」权限后支持精确聚焦）"
-                            : "已通过 Terminal 启动会话")
-                        : "无法启动 Terminal，请复制命令在终端运行。",
+                            ? FizzL10n.text("已通过 Terminal 启动会话（开启「自动化」权限后支持精确聚焦）", "Started the session in Terminal. Allow Automation to focus its tab.")
+                            : FizzL10n.text("已通过 Terminal 启动会话", "Started the session in Terminal"))
+                        : FizzL10n.text("无法启动 Terminal，请复制命令在终端运行。", "Couldn’t open Terminal. Copy the command instead."),
                     needsAutomationPermission: errorCode == -1743,
                     tty: nil,
                     windowID: nil
@@ -461,11 +461,11 @@ enum TerminalLauncher {
                 success: false,
                 message: errorCode == -1743
                     ? (opened
-                        ? "已打开 \(terminal.title) 项目目录；开启「自动化」权限后可自动恢复会话。"
-                        : "已激活 \(terminal.title)；开启「自动化」权限后可自动恢复会话。")
+                        ? FizzL10n.text("已打开 \(terminal.title) 项目目录；开启「自动化」权限后可自动恢复会话。", "Opened the project folder in \(terminal.title). Allow Automation to resume the session.")
+                        : FizzL10n.text("已激活 \(terminal.title)；开启「自动化」权限后可自动恢复会话。", "Activated \(terminal.title). Allow Automation to resume the session."))
                     : (opened
-                        ? "已打开 \(terminal.title) 项目目录；自动启动失败，请复制命令运行。"
-                        : "已激活 \(terminal.title)；自动启动失败，请复制命令运行。"),
+                        ? FizzL10n.text("已打开 \(terminal.title) 项目目录；自动启动失败，请复制命令运行。", "Opened the project folder in \(terminal.title). Copy the command to start the session.")
+                        : FizzL10n.text("已激活 \(terminal.title)；自动启动失败，请复制命令运行。", "Activated \(terminal.title). Copy the command to start the session.")),
                 needsAutomationPermission: errorCode == -1743,
                 tty: nil,
                 windowID: nil
@@ -482,8 +482,8 @@ enum TerminalLauncher {
             return TerminalFocusOutcome(
                 success: true,
                 message: activated
-                    ? "会话正在 \(terminal.title)（\(tty)）运行，已激活应用；\(terminal.title) 暂不支持按标签定位。"
-                    : "会话正在 \(terminal.title)（\(tty)）运行中，请手动切换窗口。",
+                    ? FizzL10n.text("会话正在 \(terminal.title)（\(tty)）运行，已激活应用；\(terminal.title) 暂不支持按标签定位。", "This session is in \(terminal.title) (\(tty)). \(terminal.title) is open but can’t focus individual tabs.")
+                    : FizzL10n.text("会话正在 \(terminal.title)（\(tty)）运行中，请手动切换窗口。", "This session is running in \(terminal.title) (\(tty)). Switch to its window."),
                 needsAutomationPermission: false
             )
         }
@@ -491,7 +491,7 @@ enum TerminalLauncher {
         guard let source = TerminalAppleScript.focus(terminal: terminal, tty: tty) else {
             return TerminalFocusOutcome(
                 success: true,
-                message: "会话正在 \(terminal.title)（\(tty)）运行中，请切换至对应窗口。",
+                message: FizzL10n.text("会话正在 \(terminal.title)（\(tty)）运行中，请切换至对应窗口。", "This session is running in \(terminal.title) (\(tty)). Switch to its terminal window."),
                 needsAutomationPermission: false
             )
         }
@@ -503,8 +503,8 @@ enum TerminalLauncher {
             return TerminalFocusOutcome(
                 success: true,
                 message: focused
-                    ? "已聚焦到运行中的会话标签页"
-                    : "会话正在终端（\(tty)）运行中，请切换至对应窗口",
+                    ? FizzL10n.text("已聚焦到运行中的会话标签页", "Focused the active session tab")
+                    : FizzL10n.text("会话正在终端（\(tty)）运行中，请切换至对应窗口", "This session is running in \(tty). Switch to its terminal window."),
                 needsAutomationPermission: false
             )
 
@@ -516,8 +516,8 @@ enum TerminalLauncher {
             return TerminalFocusOutcome(
                 success: true,
                 message: errorCode == -1743
-                    ? "已激活 \(terminal.title)（开启「自动化」权限后可精确聚焦到 \(tty) 标签页）"
-                    : "已激活 \(terminal.title)",
+                    ? FizzL10n.text("已激活 \(terminal.title)（开启「自动化」权限后可精确聚焦到 \(tty) 标签页）", "Activated \(terminal.title). Allow Automation to focus the \(tty) tab.")
+                    : FizzL10n.text("已激活 \(terminal.title)", "Activated \(terminal.title)"),
                 needsAutomationPermission: errorCode == -1743
             )
         }
@@ -527,7 +527,7 @@ enum TerminalLauncher {
         guard let application = PreferredTerminal.warp.applicationURL() else {
             return TerminalLaunchOutcome(
                 success: false,
-                message: "未检测到 Warp，请更换默认终端或复制命令运行。",
+                message: FizzL10n.text("未检测到 Warp，请更换默认终端或复制命令运行。", "Warp wasn’t found. Choose a different terminal or copy the command."),
                 needsAutomationPermission: false,
                 tty: nil,
                 windowID: nil
@@ -539,7 +539,7 @@ enum TerminalLauncher {
             if opened {
                 return TerminalLaunchOutcome(
                     success: false,
-                    message: "已在 Warp 打开项目目录；Warp 不支持自动执行命令，请复制命令运行。",
+                    message: FizzL10n.text("已在 Warp 打开项目目录；Warp 不支持自动执行命令，请复制命令运行。", "Opened the project folder in Warp. Copy the command to resume the session."),
                     needsAutomationPermission: false,
                     tty: nil,
                     windowID: nil
@@ -550,7 +550,7 @@ enum TerminalLauncher {
         _ = await open([URL(fileURLWithPath: cwd)], withApplication: application)
         return TerminalLaunchOutcome(
             success: false,
-            message: "已在 Warp 打开项目目录；无法自动恢复会话，请复制命令运行。",
+            message: FizzL10n.text("已在 Warp 打开项目目录；无法自动恢复会话，请复制命令运行。", "Opened the project folder in Warp. Copy the command to continue."),
             needsAutomationPermission: false,
             tty: nil,
             windowID: nil

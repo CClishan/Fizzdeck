@@ -8,8 +8,8 @@ enum HeatmapRange: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .weeks26: "26 周"
-        case .months12: "12 月"
+        case .weeks26: FizzL10n.text("26 周", "26 weeks")
+        case .months12: FizzL10n.text("12 月", "12 months")
         }
     }
 
@@ -95,15 +95,28 @@ enum CostBreakdownMode: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .byTool: "按工具"
-        case .byProject: "按项目"
+        case .byTool: FizzL10n.text("按工具", "By tool")
+        case .byProject: FizzL10n.text("按项目", "By project")
         }
     }
 }
 
 struct CostSegment: Identifiable, Equatable, Sendable {
+    enum Name: Equatable, Sendable {
+        case source(String), selfUsage, other
+
+        var title: String {
+            switch self {
+            case .source(let name): name
+            case .selfUsage: FizzL10n.text("FizzDeck 自身", "FizzDeck itself")
+            case .other: FizzL10n.text("其他", "Other")
+            }
+        }
+    }
+
     let id: String
-    let label: String
+    let name: Name
+    var label: String { name.title }
     let costUSD: Double
     let tokens: Double
     let fraction: Double
@@ -529,24 +542,25 @@ enum DashboardMetrics {
             buckets[key, default: (label, WeeklyRecapTotals())].totals.add(row.record)
         }
         var entries = buckets.map { key, value in
-            (id: key, label: value.label, cost: value.totals.cost.subtotal, tokens: value.totals.tokens)
+            (id: key, name: CostSegment.Name.source(value.label), cost: value.totals.cost.subtotal, tokens: value.totals.tokens)
         }
         if mode == .byTool,
            let selfUsage,
            (selfUsage.estimatedCostUSD > 0 || selfUsage.totalTokens > 0) {
-            entries.append(("fizzdeck-self", "FizzDeck 自身", selfUsage.estimatedCostUSD, Double(selfUsage.totalTokens)))
+            entries.append(("fizzdeck-self", .selfUsage, selfUsage.estimatedCostUSD, Double(selfUsage.totalTokens)))
         }
 
         let totalCost = entries.reduce(0.0) { $0 + $1.cost }
         let useCost = totalCost > 0
-        let sorted = entries.map { (id: $0.id, label: $0.label, cost: $0.cost, tokens: $0.tokens,
+        let sorted = entries.map { (id: $0.id, name: $0.name, cost: $0.cost, tokens: $0.tokens,
                                     metric: useCost ? $0.cost : $0.tokens) }
         .filter { $0.metric > 0 }
         .sorted { left, right in
             if left.metric != right.metric {
                 return left.metric > right.metric
             }
-            return left.label == right.label ? left.id < right.id : left.label < right.label
+            let lhs = left.name.title, rhs = right.name.title
+            return lhs == rhs ? left.id < right.id : lhs < rhs
         }
         let total = sorted.reduce(0.0) { $0 + $1.metric }
         guard total > 0 else { return [] }
@@ -554,7 +568,7 @@ enum DashboardMetrics {
         var result: [CostSegment] = sorted.prefix(5).map { item in
             CostSegment(
                 id: item.id,
-                label: item.label,
+                name: item.name,
                 costUSD: item.cost,
                 tokens: item.tokens,
                 fraction: item.metric / total
@@ -568,7 +582,7 @@ enum DashboardMetrics {
             let otherMetric = tail.reduce(0.0) { $0 + $1.metric }
             result.append(CostSegment(
                 id: "other",
-                label: "其他",
+                name: .other,
                 costUSD: otherCost,
                 tokens: otherTokens,
                 fraction: otherMetric / total
@@ -589,7 +603,7 @@ enum DashboardMetrics {
             guard let latest = resumable.max(by: { $0.modified < $1.modified }) else { continue }
             let toolTitle = HomeDashboardModel.toolTitle(latest.tool)
             let cleaned = SessionSummaryText.clean(latest.primaryIntent ?? "")
-            let summary = cleaned.isEmpty ? "\(toolTitle) 会话" : cleaned
+            let summary = cleaned.isEmpty ? FizzL10n.text("\(toolTitle) 会话", "\(toolTitle) session") : cleaned
             candidates.append(ContinueWorkItem(
                 id: "\(project.path)::\(latest.stableID)",
                 project: project,
@@ -614,7 +628,8 @@ enum DashboardMetrics {
         projects: [RepoProject],
         commitActivity: CommitActivitySnapshot,
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        copyMode: CopyMode = .pro
     ) -> [TimelineDayColumn] {
         let today = calendar.startOfDay(for: now)
         let start = calendar.date(byAdding: .day, value: -6, to: today) ?? today
@@ -649,6 +664,12 @@ enum DashboardMetrics {
         for (key, byPath) in commitGroups {
             for (path, group) in byPath {
                 guard let project = projectByPath[path] else { continue }
+                let detail: String
+                if copyMode == .plain {
+                    detail = FizzL10n.text("存了 \(group.count) 个版本", "\(SessionSummaryText.englishCount(group.count, "version")) saved")
+                } else {
+                    detail = group.count == 1 ? FizzL10n.text("提交", "Commit") : FizzL10n.text("\(group.count) 次提交", "\(group.count) commits")
+                }
                 blocksByDay[key, default: []].append(TimelineBlock(
                     id: "c:\(path):\(key)",
                     startHour: group.earliestHour,
@@ -656,7 +677,7 @@ enum DashboardMetrics {
                     projectName: project.displayName,
                     projectPath: path,
                     kind: .commit,
-                    detail: group.count == 1 ? "提交" : "\(group.count) 次提交"
+                    detail: detail
                 ))
             }
         }
@@ -680,13 +701,14 @@ enum DashboardMetrics {
                     projectName: project.displayName,
                     projectPath: project.path,
                     kind: .session,
-                    detail: "\(tool) 会话"
+                    detail: copyMode == .plain ? FizzL10n.text("\(tool) 对话", "\(tool) conversation") : FizzL10n.text("\(tool) 会话", "\(tool) session")
                 ))
             }
         }
 
         let weekdayFormatter = DateFormatter()
-        weekdayFormatter.locale = Locale(identifier: "zh_Hans")
+        weekdayFormatter.locale = FizzL10n.locale
+        weekdayFormatter.timeZone = calendar.timeZone
         weekdayFormatter.calendar = calendar
         weekdayFormatter.dateFormat = "E"
 
@@ -717,8 +739,8 @@ enum DashboardMetrics {
             alerts.append(HealthAlert(
                 id: "low-disk",
                 kind: .lowDisk,
-                title: "磁盘余量偏低",
-                detail: "仅剩 \(Format.bytes(freeDiskBytes)) 可用",
+                title: FizzL10n.text("磁盘余量偏低", "Low disk space"),
+                detail: FizzL10n.text("仅剩 \(Format.bytes(freeDiskBytes)) 可用", "Only \(Format.bytes(freeDiskBytes)) free"),
                 targetProjectPath: nil
             ))
         }
@@ -729,8 +751,8 @@ enum DashboardMetrics {
             alerts.append(HealthAlert(
                 id: "high-cleanup",
                 kind: .highCleanup,
-                title: "可清理空间较多",
-                detail: "可释放 \(Format.bytes(cleanupBytes))",
+                title: FizzL10n.text("可清理空间较多", "Space available to reclaim"),
+                detail: FizzL10n.text("可释放 \(Format.bytes(cleanupBytes))", "Reclaim \(Format.bytes(cleanupBytes))"),
                 targetProjectPath: nil
             ))
         }
@@ -741,8 +763,8 @@ enum DashboardMetrics {
                 alerts.append(HealthAlert(
                     id: "stale-dirty:\(project.path)",
                     kind: .staleDirty,
-                    title: "\(project.displayName) 有陈旧未提交改动",
-                    detail: "\(project.dirtyCount) 处改动 · \(Format.relative(recent))活跃",
+                    title: FizzL10n.text("\(project.displayName) 有陈旧未提交改动", "\(project.displayName) has old uncommitted changes"),
+                    detail: FizzL10n.text("\(project.dirtyCount) 处改动 · \(Format.relative(recent))活跃", "\(SessionSummaryText.englishCount(project.dirtyCount, "change")) · Last active \(Format.relative(recent))"),
                     targetProjectPath: project.path
                 ))
             }

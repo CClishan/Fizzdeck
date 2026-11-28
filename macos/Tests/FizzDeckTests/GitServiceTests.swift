@@ -1,7 +1,7 @@
 import XCTest
 @testable import FizzDeck
 
-final class GitServiceTests: XCTestCase {
+final class GitServiceTests: ChineseInterfaceTestCase {
     func testTrackingCountsUseBehindThenAhead() {
         XCTAssertEqual(
             GitService.trackingCounts("3\t5\n"),

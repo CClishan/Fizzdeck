@@ -30,11 +30,11 @@ struct ProjectListRow: View {
                     }
                     if project.dirtyCount > 0 {
                         TagChip(
-                            text: "\(project.dirtyCount) 处改动",
+                            text: FizzL10n.text("\(project.dirtyCount) 处改动", SessionSummaryText.englishCount(project.dirtyCount, "change")),
                             tint: FizzTheme.statusWarning,
                             compact: true
                         )
-                        .help("\(project.dirtyCount) 处未提交改动")
+                        .help(FizzL10n.text("\(project.dirtyCount) 处未提交改动", "\(project.dirtyCount) uncommitted \(project.dirtyCount == 1 ? "change" : "changes")"))
                     }
                 }
                 Text(secondaryText)
@@ -53,7 +53,8 @@ struct ProjectListRow: View {
             }
 
             Text(Format.relative(project.recent))
-                .frame(width: 66, alignment: .trailing)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(minWidth: 66, alignment: .trailing)
                 .foregroundStyle(.secondary)
             Group {
                 if project.sizeLoadState == .ready {
@@ -104,11 +105,11 @@ struct ProjectListRow: View {
             hovering = value
         }
         .help(selecting
-            ? (selected ? "取消选择 \(project.displayName)" : "选择 \(project.displayName)")
-            : "打开 \(project.displayName)")
+            ? (selected ? FizzL10n.text("取消选择 \(project.displayName)", "Deselect \(project.displayName)") : FizzL10n.text("选择 \(project.displayName)", "Select \(project.displayName)"))
+            : FizzL10n.text("打开 \(project.displayName)", "Open \(project.displayName)"))
         .accessibilityLabel(selecting
-            ? (selected ? "取消选择 \(project.displayName)" : "选择 \(project.displayName)")
-            : "打开 \(project.displayName)")
+            ? (selected ? FizzL10n.text("取消选择 \(project.displayName)", "Deselect \(project.displayName)") : FizzL10n.text("选择 \(project.displayName)", "Select \(project.displayName)"))
+            : FizzL10n.text("打开 \(project.displayName)", "Open \(project.displayName)"))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .contextMenu {
             ProjectGroupingMenu(project: project)
@@ -119,10 +120,10 @@ struct ProjectListRow: View {
     private var secondaryText: String {
         if !project.note.isEmpty { return project.note }
         if let subject = project.lastCommit?.subject { return subject }
-        return project.group
+        return project.groupTitle
     }
 
     private var firstStack: String? {
-        project.stacks.first?.items.first
+        project.stacks.first?.displayItems.first
     }
 }

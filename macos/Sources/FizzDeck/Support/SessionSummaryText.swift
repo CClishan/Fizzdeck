@@ -1,6 +1,10 @@
 import Foundation
 
 enum SessionSummaryText {
+    static func englishCount(_ count: Int, _ noun: String) -> String {
+        "\(count.formatted(.number.locale(FizzL10n.locale))) \(noun)\(count == 1 ? "" : "s")"
+    }
+
     static func clean(_ value: String) -> String {
         var text = value
 
